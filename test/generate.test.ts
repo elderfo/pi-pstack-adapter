@@ -273,6 +273,19 @@ test("an agent with an empty body is reported instead of registered", () => {
   assert.equal(result.diagnostics.find((d) => d.resource === "agent:hollow")?.level, "error");
 });
 
+test("an upstream name Pi would reject is skipped with a diagnostic", () => {
+  const root = makeTempDir("badname");
+  const pluginDir = writePluginFixture(root, {
+    skills: [{ name: "Shouty_Name", body: "b\n" }, { name: `a${"-b".repeat(40)}`, body: "b\n" }],
+  });
+  const result = run({ pluginDir, cacheRoot: join(root, "cache") });
+
+  assert.deepEqual(result.skills.map((s) => s.generatedName), ["pistack-status"]);
+  const problems = result.diagnostics.filter((d) => d.level === "error").map((d) => d.message);
+  assert.equal(problems.some((m) => m.includes("not lowercase letters")), true);
+  assert.equal(problems.some((m) => m.includes("over Pi's 64 character limit")), true);
+});
+
 test("a different upstream commit produces a separate output directory", () => {
   const root = makeTempDir("commits");
   const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });

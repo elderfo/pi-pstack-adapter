@@ -12,7 +12,7 @@ export const SKILL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   "blast-radius": { tier: "dependency-gated", capabilities: [], executables: ["git", "gh"], note: "Needs git and gh to read the diff, commits, and PR before any analysis." },
   "bro": { tier: "native", capabilities: [], executables: [] },
   "create-verification-skill": { tier: "adapted", capabilities: [], executables: [], note: "Only the generated skill's output path needs remapping to Pi's skill directory." },
-  "figure-it-out": { tier: "dependency-gated", capabilities: [], executables: [], note: "Phase B fan-out and the architect/arena routing require parallel subagents." },
+  "figure-it-out": { tier: "dependency-gated", capabilities: ["delegation"], executables: [], note: "Phase B fan-out and the architect/arena routing require parallel subagents." },
   "how": { tier: "dependency-gated", capabilities: ["delegation"], executables: [], note: "Every path spawns explorer or explainer subagents; nothing runs inline." },
   "interrogate": { tier: "dependency-gated", capabilities: ["delegation"], executables: ["git"], note: "Multi-model adversarial review is entirely one subagent per configured model." },
   "maintain-verification-skill": { tier: "dependency-gated", capabilities: ["delegation"], executables: [], note: "Source wave launches one read-only subagent per feature file." },
@@ -79,6 +79,22 @@ export const CAPABILITY_LABELS: Readonly<Record<CapabilityId, string>> = {
   "structured-question": "structured multiple-choice questions to the user",
 };
 
-export function entryFor(upstreamName: string): RegistryEntry {
+export const ADAPTER_OWNED = "(adapter-owned)";
+
+/** Model roles pstack workflows name. A role with no configured model inherits the parent. */
+export const MODEL_ROLES: readonly string[] = [
+  "feature",
+  "refactoring",
+  "bug-fix",
+  "perf-issue",
+  "hillclimb",
+  "judgment",
+  "strongest-judgment",
+];
+
+export function entryFor(upstreamName: string, generatedBareName?: string): RegistryEntry {
+  if (upstreamName === ADAPTER_OWNED && generatedBareName) {
+    return ADAPTER_SKILLS[generatedBareName] ?? UNKNOWN_SKILL_ENTRY;
+  }
   return SKILL_REGISTRY[upstreamName] ?? UNKNOWN_SKILL_ENTRY;
 }

@@ -33,6 +33,7 @@ Adapter commands.
 | command | does |
 | --- | --- |
 | `/pistack-status` | full report: versions, commit, trust, tiers, capabilities, diagnostics |
+| `/pistack-check <skill>` | prerequisites for one workflow, before it starts |
 | `/pistack-mode on\|off\|status` | Poteto Mode for the current session |
 | `/skill:pistack-setup` | assign a Pi model to each pstack role |
 | `/skill:pistack-status` | the same report, through the agent |
@@ -86,8 +87,11 @@ Each release certifies one pstack version and commit. You can select another, at
 ```
 
 A branch or tag is resolved to a commit once, during explicit setup, and recorded. Startup never
-advances a recorded commit and never checks upstream for updates. Untested refs warn. A custom
-repository warns harder, because its skills run with your full permissions.
+advances a recorded commit and never checks upstream for updates. Naming a `ref` or another
+`repo` without a `pinnedCommit` drops the certified pin, so you get what you asked for and a
+warning that it is untested. A custom repository warns harder, because its skills run with your
+full permissions. A repository string is rejected unless it is an https, ssh, git, scp-style, or
+filesystem source, so git transports that execute shell commands never reach git.
 
 Environment overrides win over both config files.
 

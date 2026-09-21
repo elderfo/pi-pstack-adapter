@@ -135,12 +135,24 @@ export function mergeConfig(layers: readonly ConfigLayer[]): AdapterConfig {
     ref: merged.ref ?? CERTIFIED.ref,
     pluginPath: merged.pluginPath ?? CERTIFIED.pluginPath,
     localPath,
-    pinnedCommit: merged.localPath ? undefined : (merged.pinnedCommit ?? CERTIFIED.commit),
+    pinnedCommit: merged.localPath ? undefined : resolvePin(merged),
     allowBootstrap: merged.allowBootstrap ?? false,
     cacheDir: merged.cacheDir,
     models: merged.models ?? {},
     sources,
   };
+}
+
+/**
+ * The certified commit is the default, not a floor. Naming a ref or a repository without a
+ * commit means the user asked for that ref, so the pin must get out of the way and trust
+ * must fall to `untested-*`.
+ */
+function resolvePin(merged: ConfigFile): string | undefined {
+  if (merged.pinnedCommit) return merged.pinnedCommit;
+  if (merged.ref) return undefined;
+  if (merged.repo && normalizeRepo(merged.repo) !== normalizeRepo(CERTIFIED.repo)) return undefined;
+  return CERTIFIED.commit;
 }
 
 function resolveLayerPath(value: string, layers: readonly ConfigLayer[]): string {

@@ -146,6 +146,18 @@ export default function (pi: ExtensionAPI) {
         pi.sendMessage({ customType: "pistack-status", content: await runAction({ action: "status" }, ctx), display: true });
       },
     });
+    pi.registerCommand(`${namespace}-check`, {
+      description: "Report whether this environment satisfies one pstack workflow's prerequisites",
+      getArgumentCompletions: (prefix) => {
+        const names = (state?.generation.skills ?? []).map((skill) => skill.generatedName);
+        const matches = names.filter((name) => name.startsWith(prefix)).map((value) => ({ value, label: value }));
+        return matches.length > 0 ? matches : null;
+      },
+      handler: async (args, ctx) => {
+        pi.sendMessage({ customType: "pistack-check", content: checkSkill(args.trim()), display: true });
+        if (args.trim() === "") ctx.ui.notify(`Usage: /${namespace}-check <skill>`, "info");
+      },
+    });
     pi.registerCommand(`${namespace}-mode`, {
       description: "Turn Poteto Mode on or off for this session, or show its state",
       getArgumentCompletions: (prefix) =>
@@ -225,7 +237,7 @@ export default function (pi: ExtensionAPI) {
     }
     return renderCheck(
       skill,
-      entryFor(skill.upstreamName),
+      entryFor(skill.upstreamName, skill.generatedName.slice(prefix.length)),
       checkPrerequisites(skill.capabilities, capabilities(), skill.executables, onPath),
     );
   }
@@ -305,7 +317,9 @@ function loadConfig(ctx: ExtensionContext): AdapterConfig {
   if (global) layers.push(global);
   if (ctx.isProjectTrusted()) {
     const project = readConfigFile(projectConfigPath(ctx.cwd));
-    if (project) layers.push(project);
+    // Command names are bound before trust resolves, so a project cannot move the namespace
+    // without desynchronizing `/<ns>-status` from the generated `<ns>-*` skills.
+    if (project) layers.push({ ...project, values: { ...project.values, namespace: undefined } });
   }
   layers.push(environmentLayer(process.env));
   return mergeConfig(layers);
@@ -346,6 +360,8 @@ async function bringUpUpstream(config: AdapterConfig, ctx: ExtensionContext): Pr
     namespace: config.namespace,
     cacheRoot: root,
     adapterVersion: ADAPTER_VERSION,
+    // A local checkout has uncommitted edits the digest cannot see, so never reuse its output.
+    force: source.selection.kind === "local",
   });
 
   return {

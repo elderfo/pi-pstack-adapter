@@ -1,5 +1,5 @@
 import { CERTIFIED } from "./certified.ts";
-import { CAPABILITY_LABELS, TIER_ORDER } from "./registry.ts";
+import { CAPABILITY_LABELS, MODEL_ROLES, TIER_ORDER } from "./registry.ts";
 import type { AdapterConfig } from "./config.ts";
 import { trustWarning } from "./config.ts";
 import type { PrerequisiteReport } from "./capabilities.ts";
@@ -76,6 +76,19 @@ export function renderStatus(input: StatusInput): string {
       ? CAPABILITY_LABELS[capability.id]
       : capability.recommendation;
     lines.push(`| ${capability.id} | ${capability.available ? "available" : "missing"} | ${note} |`);
+  }
+  lines.push("");
+
+  lines.push(`## Model roles`);
+  lines.push("");
+  lines.push(`| role | model |`);
+  lines.push(`| --- | --- |`);
+  for (const role of MODEL_ROLES) {
+    lines.push(`| ${role} | ${config.models[role] ?? "inherit (parent session model)"} |`);
+  }
+  const extra = Object.keys(config.models).filter((role) => !MODEL_ROLES.includes(role)).sort();
+  for (const role of extra) {
+    lines.push(`| ${role} | ${config.models[role]} |`);
   }
   lines.push("");
 

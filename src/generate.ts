@@ -1,9 +1,10 @@
 import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
+
 import { fileURLToPath } from "node:url";
 import { namespaced } from "./namespace.ts";
 import { digest, generatedDir } from "./paths.ts";
-import { ADAPTER_SKILLS, CAPABILITY_LABELS, SKILL_REGISTRY, entryFor } from "./registry.ts";
+import { ADAPTER_OWNED, ADAPTER_SKILLS, CAPABILITY_LABELS, SKILL_REGISTRY, entryFor } from "./registry.ts";
 import { discover, isDiagnostic, parseResource, readManifest } from "./manifest.ts";
 import type {
   Diagnostic,
@@ -35,17 +36,20 @@ export function generate(options: GenerateOptions): GenerationResult {
 
   const inputs = digest(
     generationFormatVersion,
+    options.adapterVersion,
     namespace,
+    relative(source.checkoutDir, source.pluginDir),
     source.commit || `local:${source.pluginDir}`,
     manifest.version,
     registryDigest(),
+    adapterBodyDigest(),
   );
   const outDir = generatedDir(cacheRoot, inputs);
   const skillsDir = join(outDir, "skills");
 
   const skills: GeneratedSkill[] = [];
   const agents: GeneratedAgent[] = [];
-  const stagingDir = `${outDir}.staging`;
+  const stagingDir = `${outDir}.staging.${process.pid}`;
 
   const reuse = !options.force && existsSync(join(outDir, COMPLETE_MARKER));
   const writeRoot = reuse ? undefined : stagingDir;
@@ -62,7 +66,7 @@ export function generate(options: GenerateOptions): GenerationResult {
     nameMap.push([resource.name, namespaced(namespace, entry.rename ?? resource.name)]);
   }
   for (const adapterName of Object.keys(ADAPTER_SKILLS).sort()) {
-    nameMap.push([`(adapter-owned)`, namespaced(namespace, adapterName)]);
+    nameMap.push([ADAPTER_OWNED, namespaced(namespace, adapterName)]);
   }
 
   if (writeRoot) {
@@ -99,6 +103,16 @@ export function generate(options: GenerateOptions): GenerationResult {
 
     const entry = entryFor(resource.name);
     const generatedName = namespaced(namespace, entry.rename ?? resource.name);
+    const invalid = skillNameProblem(generatedName);
+    if (invalid) {
+      diagnostics.push({
+        level: "error",
+        resource: `skill:${resource.name}`,
+        message: `Generated name \`${generatedName}\` ${invalid}, so Pi would reject it.`,
+        action: "Skipped. Shorten the namespace, or report the upstream directory name.",
+      });
+      continue;
+    }
     const body = entry.replacement ? readAdapterBody(entry.replacement) : parsed.body;
     const targetDir = join(skillsDir, generatedName);
 
@@ -141,7 +155,7 @@ export function generate(options: GenerateOptions): GenerationResult {
       writeFileSync(join(stageDir, "SKILL.md"), readAdapterSkill(entry.replacement as string, generatedName, namespace), "utf8");
     }
     skills.push({
-      upstreamName: "(adapter-owned)",
+      upstreamName: ADAPTER_OWNED,
       generatedName,
       tier: entry.tier,
       capabilities: entry.capabilities,
@@ -191,6 +205,28 @@ function coverageDiagnostics(upstreamSkillNames: readonly string[]): Diagnostic[
 
 /** Bump when the wrapper format changes so cached output is not reused across formats. */
 const generationFormatVersion = "wrapper-v1";
+
+/** Pi skill names: 1-64 chars, lowercase letters, digits, single interior hyphens. */
+const SKILL_NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+function skillNameProblem(name: string): string | undefined {
+  if (name.length > 64) return `is ${name.length} characters, over Pi's 64 character limit`;
+  if (!SKILL_NAME_PATTERN.test(name)) return "is not lowercase letters, digits, and single hyphens";
+  return undefined;
+}
+
+function adapterBodyDigest(): string {
+  const bodies = Object.values(ADAPTER_SKILLS)
+    .map((entry) => entry.replacement)
+    .filter((file): file is string => file !== undefined)
+    .concat(
+      Object.values(SKILL_REGISTRY)
+        .map((entry) => entry.replacement)
+        .filter((file): file is string => file !== undefined),
+    )
+    .sort();
+  return digest(...[...new Set(bodies)].flatMap((file) => [file, readAdapterBody(file)]));
+}
 
 function registryDigest(): string {
   const snapshot: Record<string, RegistryEntry> = {};
@@ -248,7 +284,9 @@ function header(input: WrapperInput): string {
   if (input.entry.note) parts.push(input.entry.note);
   if (input.entry.capabilities.length > 0) {
     const needs = input.entry.capabilities.map((id) => `\`${id}\` (${CAPABILITY_LABELS[id]})`).join(", ");
-    parts.push(`Requires host capabilities ${needs}. Run \`/${input.namespace}-check\` before starting if you are unsure they are present.`);
+    parts.push(
+      `Requires host capabilities ${needs}. Run \`/${input.namespace}-check ${input.generatedName}\` before starting if you are unsure they are present.`,
+    );
   }
   if (input.entry.executables.length > 0) {
     parts.push(`Requires these executables on PATH: ${input.entry.executables.map((name) => `\`${name}\``).join(", ")}.`);
@@ -298,6 +336,8 @@ function skillNameDocument(nameMap: readonly (readonly [string, string])[]): str
   return `# pstack skill names in Pi
 
 A pstack body that names another pstack skill means the Pi skill in the right column.
+A relative link of the form \`../<name>/SKILL.md\` in a body means \`../<pi-name>/SKILL.md\`,
+because generated skill directories carry the namespace prefix too.
 
 | upstream name | Pi command |
 | --- | --- |

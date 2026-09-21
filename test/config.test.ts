@@ -68,6 +68,26 @@ test("repository identity ignores a .git suffix and trailing slash", () => {
   assert.equal(trustOf(config), "tested");
 });
 
+test("naming a ref without a commit selects that ref and drops the certified pin", () => {
+  const config = mergeConfig([environmentLayer({ PISTACK_UPSTREAM_REF: "my-branch" } as NodeJS.ProcessEnv)]);
+  assert.equal(config.pinnedCommit, undefined);
+  assert.deepEqual(selectionOf(config), { kind: "git", repo: CERTIFIED.repo, ref: "my-branch" });
+  assert.equal(trustOf(config), "untested-ref");
+});
+
+test("naming a repository without a commit does not fetch the certified commit from it", () => {
+  const config = mergeConfig([environmentLayer({ PISTACK_UPSTREAM_REPO: "https://example.test/fork" } as NodeJS.ProcessEnv)]);
+  assert.equal(config.pinnedCommit, undefined);
+  assert.deepEqual(selectionOf(config), { kind: "git", repo: "https://example.test/fork", ref: CERTIFIED.ref });
+  assert.equal(trustOf(config), "untested-repo");
+});
+
+test("an explicit pinned commit still wins over a ref", () => {
+  const commit = "e".repeat(40);
+  const config = mergeConfig([layer("global", { ref: "my-branch", pinnedCommit: commit })]);
+  assert.deepEqual(selectionOf(config), { kind: "git", repo: CERTIFIED.repo, ref: commit });
+});
+
 test("a local checkout drops the pinned commit and selects the path", () => {
   const config = mergeConfig([layer("global", { localPath: "/tmp/pstack-dev" })]);
   assert.equal(config.pinnedCommit, undefined);

@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { mergeConfig } from "../src/config.ts";
 import { checkoutDir } from "../src/paths.ts";
-import { BootstrapRequiredError, resolveRefToCommit, resolveSource, systemGit } from "../src/upstream.ts";
+import {
+  BootstrapRequiredError,
+  resolveRefToCommit,
+  resolveSource,
+  systemGit,
+  validateRef,
+  validateRepo,
+} from "../src/upstream.ts";
 import { makeTempDir, writePluginFixture } from "./support/fixture.ts";
 
 function layer(values: Record<string, unknown>) {
@@ -136,6 +143,74 @@ test("a local checkout whose root is the plugin itself is accepted", async () =>
 test("a local path without a pstack manifest names what it looked for", async () => {
   const config = mergeConfig([layer({ localPath: makeTempDir("empty") })]);
   await assert.rejects(() => resolveSource({ config, mayBootstrap: false }), /No pstack manifest under/);
+});
+
+test("a git transport that executes a shell command is refused before git sees it", async () => {
+  for (const hostile of [
+    "ext::sh -c 'touch /tmp/pistack-pwned'",
+    "--upload-pack=touch /tmp/pistack-pwned",
+    "-u./payload",
+    "file:///etc && touch /tmp/x",
+  ]) {
+    assert.throws(() => validateRepo(hostile), /Refusing the upstream repository/, hostile);
+  }
+  assert.equal(validateRepo("https://github.com/cursor/plugins"), "https://github.com/cursor/plugins");
+  assert.equal(validateRepo("git@github.com:cursor/plugins"), "git@github.com:cursor/plugins");
+  assert.equal(validateRepo("/tmp/local-clone"), "/tmp/local-clone");
+
+  await assert.rejects(
+    () => resolveRefToCommit("ext::sh -c 'echo pwned'", "main"),
+    /Refusing the upstream repository/,
+  );
+});
+
+test("a ref that git would read as an option is refused", async () => {
+  for (const hostile of ["--upload-pack=sh", "-x", "main;rm -rf /", "a..b", "main branch"]) {
+    assert.throws(() => validateRef(hostile), /Refusing the upstream ref/, hostile);
+  }
+  assert.equal(validateRef("release/1.2"), "release/1.2");
+  assert.equal(validateRef("v1.0.0"), "v1.0.0");
+
+  const config = mergeConfig([layer({ repo: "https://example.test/x", pinnedCommit: undefined, ref: "--upload-pack=sh" })]);
+  await assert.rejects(() => resolveSource({ config, mayBootstrap: true }), /Refusing the upstream ref/);
+});
+
+test("an interrupted bootstrap repairs its worktree offline instead of wedging the cache", async () => {
+  const repo = makeUpstreamRepo("wedged");
+  const cacheDir = makeTempDir("cache");
+  const config = mergeConfig([layer({ repo: repo.path, pinnedCommit: repo.commit, cacheDir })]);
+
+  const first = await resolveSource({ config, mayBootstrap: true });
+  rmSync(join(first.checkoutDir, "pstack"), { recursive: true, force: true });
+
+  let networkAttempts = 0;
+  const offlineGit = async (args: readonly string[], cwd?: string) => {
+    if (args[0] === "fetch" || args[0] === "ls-remote" || args[0] === "clone") {
+      networkAttempts += 1;
+      return { code: 1, stdout: "", stderr: "network disabled in this test" };
+    }
+    return systemGit(args, cwd);
+  };
+
+  const repaired = await resolveSource({ config, mayBootstrap: false, git: offlineGit });
+  assert.equal(repaired.commit, repo.commit);
+  assert.equal(existsSync(join(repaired.pluginDir, ".cursor-plugin", "plugin.json")), true);
+  assert.equal(networkAttempts, 0);
+});
+
+test("a cache whose objects are gone falls back to bootstrap rather than failing forever", async () => {
+  const repo = makeUpstreamRepo("lost-objects");
+  const cacheDir = makeTempDir("cache");
+  const config = mergeConfig([layer({ repo: repo.path, pinnedCommit: repo.commit, cacheDir })]);
+
+  const first = await resolveSource({ config, mayBootstrap: true });
+  rmSync(join(first.checkoutDir, ".git", "objects"), { recursive: true, force: true });
+
+  await assert.rejects(() => resolveSource({ config, mayBootstrap: false }), BootstrapRequiredError);
+
+  const repaired = await resolveSource({ config, mayBootstrap: true });
+  assert.equal(repaired.commit, repo.commit);
+  assert.equal(existsSync(join(repaired.pluginDir, ".cursor-plugin", "plugin.json")), true);
 });
 
 test("each repository gets its own cache directory", () => {

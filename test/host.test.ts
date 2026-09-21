@@ -6,6 +6,7 @@ import { checkPrerequisites, detectCapabilities } from "../src/capabilities.ts";
 import { generate } from "../src/generate.ts";
 import { MODE_ENTRY_TYPE, modeFromEntries, modeInstruction } from "../src/mode.ts";
 import { mergeConfig } from "../src/config.ts";
+import { ADAPTER_OWNED, MODEL_ROLES, entryFor } from "../src/registry.ts";
 import { platformSupport, renderCheck, renderStatus } from "../src/status.ts";
 import type { GeneratedAgent, ResolvedSource } from "../src/types.ts";
 import { makeTempDir, writePluginFixture } from "./support/fixture.ts";
@@ -169,6 +170,23 @@ test("the mode instruction points at the generated skill and keeps host preceden
   assert.match(instruction, /\/pistack-mode off/);
 });
 
+test("an adapter-owned skill reports its own registry entry, not the unknown fallback", () => {
+  const output = renderCheck(
+    {
+      upstreamName: ADAPTER_OWNED,
+      generatedName: "pistack-status",
+      tier: "native",
+      capabilities: [],
+      executables: [],
+      path: "/cache/skills/pistack-status",
+    },
+    entryFor(ADAPTER_OWNED, "status"),
+    { ok: true, lines: [] },
+  );
+  assert.equal(output.includes("not in the adapter compatibility registry"), false);
+  assert.match(output, /Prerequisites satisfied/);
+});
+
 test("an unsupported workflow never gets a start-the-workflow verdict", () => {
   const output = renderCheck(
     {
@@ -277,6 +295,39 @@ test("the status report names both versions, the resolved commit, the tiers, and
   assert.match(report, /\| structured-question \| available \|/);
   assert.match(report, /\| dependency-gated \| 1 \| pistack-arena \|/);
   assert.match(report, /\| native \| 2 \| pistack-status, pistack-unslop \|/);
+});
+
+test("the status report shows every model role, configured or inherited", () => {
+  const root = makeTempDir("roles");
+  const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });
+  const source: ResolvedSource = {
+    selection: { kind: "local", path: root },
+    trust: "local",
+    commit: "",
+    checkoutDir: root,
+    pluginDir,
+  };
+  const report = renderStatus({
+    adapterVersion: "0.1.0",
+    config: mergeConfig([
+      { label: "global", values: { localPath: root, models: { feature: "anthropic/one", custom: "openai/two" } } } as never,
+    ]),
+    source,
+    upstreamVersion: "0.15.2",
+    generation: generate({ source, namespace: "pistack", cacheRoot: join(root, "cache"), adapterVersion: "0.1.0", force: true }),
+    capabilities: detectCapabilities([]),
+    platform: "supported",
+    platformName: "linux",
+    modeActive: false,
+    cacheRoot: join(root, "cache"),
+    bootstrapped: false,
+  });
+
+  assert.match(report, /\| feature \| anthropic\/one \|/);
+  assert.match(report, /\| custom \| openai\/two \|/);
+  for (const role of MODEL_ROLES.filter((name) => name !== "feature")) {
+    assert.match(report, new RegExp(`\\| ${role} \\| inherit \\(parent session model\\) \\|`));
+  }
 });
 
 test("an experimental platform is warned about rather than claimed as supported", () => {
