@@ -122,9 +122,17 @@ POSIX shell tools that Windows may not provide.
 
 ```bash
 npm install
-npm run check   # tsc --noEmit
-npm test        # node --test
+npm run check          # tsc --noEmit
+npm test               # module behavior, fixture upstreams, real local git repos
+npm run test:isolated  # clone, pack, install into a throwaway Pi config, assert what loaded
 ```
+
+`test:isolated` is the end-to-end check. It clones the current commit, packs it, installs only
+what the tarball ships with `npm install --omit=dev`, installs that into a throwaway
+`PI_CODING_AGENT_DIR` with no packages and no skills, and asserts what Pi actually loaded: zero
+skills when bootstrap is refused, 48 skills after explicit permission, the same 48 from cache
+with no network, and both capabilities correctly reported absent. It copies only `auth.json`
+from your real config directory, so a provider credential is required and nothing else leaks in.
 
 Point the adapter at a working copy of pstack with `PISTACK_UPSTREAM_PATH=/path/to/checkout`.
 
