@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { agentDir, cacheRoot } from "../src/paths.ts";
@@ -168,6 +168,51 @@ test("a sandboxed config root keeps its own cache instead of writing the real on
   } finally {
     if (original === undefined) delete process.env.PI_CODING_AGENT_DIR;
     else process.env.PI_CODING_AGENT_DIR = original;
+  }
+});
+
+test("a later layer naming a git source retires an earlier local checkout", () => {
+  const config = mergeConfig([
+    layer("global", { localPath: "/src/pstack" }),
+    environmentLayer({ PISTACK_UPSTREAM_REF: "topic" } as NodeJS.ProcessEnv),
+  ]);
+  assert.equal(config.localPath, undefined);
+  assert.deepEqual(selectionOf(config), { kind: "git", repo: CERTIFIED.repo, ref: "topic" });
+});
+
+test("a later layer naming a local checkout retires an earlier git source", () => {
+  const config = mergeConfig([
+    layer("global", { repo: "https://example.test/fork", ref: "topic" }),
+    layer("project", { localPath: "/src/pstack" }),
+  ]);
+  assert.deepEqual(selectionOf(config), { kind: "local", path: "/src/pstack" });
+});
+
+test("a config file cannot reach removed fields through __proto__", () => {
+  const poisoned = JSON.parse('{"__proto__":{"namespace":"pwned"},"ref":"topic"}') as Record<string, unknown>;
+  const config = mergeConfig([{ label: "project", values: poisoned } as never]);
+
+  assert.equal(config.namespace, "pistack");
+  assert.equal(({} as { namespace?: string }).namespace, undefined, "Object.prototype must be untouched");
+});
+
+test("every falsy spelling of PISTACK_ALLOW_BOOTSTRAP means no", () => {
+  for (const value of ["0", "false", "FALSE", "no", "off"]) {
+    const config = mergeConfig([environmentLayer({ PISTACK_ALLOW_BOOTSTRAP: value } as NodeJS.ProcessEnv)]);
+    assert.equal(config.allowBootstrap, false, value);
+  }
+  for (const value of ["1", "true", "yes"]) {
+    const config = mergeConfig([environmentLayer({ PISTACK_ALLOW_BOOTSTRAP: value } as NodeJS.ProcessEnv)]);
+    assert.equal(config.allowBootstrap, true, value);
+  }
+});
+
+test("the shipped VERSION and the package manifest version stay in step", () => {
+  const root = join(import.meta.dirname, "..");
+  const declared = (JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string; files: string[] });
+  assert.equal(readFileSync(join(root, "VERSION"), "utf8").trim(), declared.version);
+  for (const shipped of ["VERSION", "CHANGELOG.md"]) {
+    assert.equal(declared.files.includes(shipped), true, `${shipped} must ship in the package`);
   }
 });
 

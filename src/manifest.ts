@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { validateContainedPath } from "./paths.ts";
 import type { Diagnostic, ParsedResource, UpstreamManifest, UpstreamResource } from "./types.ts";
 
 export const MANIFEST_RELATIVE_PATH = join(".cursor-plugin", "plugin.json");
@@ -30,8 +31,9 @@ export function readManifest(pluginDir: string): UpstreamManifest {
   }
   const record = parsed as Record<string, unknown>;
   const name = requireString(record, "name", path);
-  const skillsDir = requireString(record, "skills", path);
-  const agentsDir = requireString(record, "agents", path);
+  // The upstream repository owns its own manifest, so these must stay inside the plugin.
+  const skillsDir = validateContainedPath(requireString(record, "skills", path), `the "skills" path in ${path}`);
+  const agentsDir = validateContainedPath(requireString(record, "agents", path), `the "agents" path in ${path}`);
   const version = typeof record.version === "string" ? record.version : "unknown";
   return { name, version, skillsDir, agentsDir };
 }

@@ -38,6 +38,8 @@ export interface ConfigLayer {
   readonly values: ConfigFile;
 }
 
+const NEGATIVE = new Set(["0", "false", "no", "off", ""]);
+
 const ENV = {
   namespace: "PISTACK_NAMESPACE",
   repo: "PISTACK_UPSTREAM_REPO",
@@ -103,7 +105,7 @@ export function environmentLayer(env: NodeJS.ProcessEnv): ConfigLayer {
   if (env[ENV.localPath]) values.localPath = env[ENV.localPath];
   if (env[ENV.pluginPath]) values.pluginPath = env[ENV.pluginPath];
   if (env[ENV.cacheDir]) values.cacheDir = env[ENV.cacheDir];
-  if (env[ENV.allowBootstrap]) values.allowBootstrap = env[ENV.allowBootstrap] !== "0";
+  if (env[ENV.allowBootstrap]) values.allowBootstrap = !NEGATIVE.has((env[ENV.allowBootstrap] as string).trim().toLowerCase());
   if (env[ENV.models]) values.models = parseModelRoles(env[ENV.models] as string);
   return { label: "environment", values };
 }
@@ -115,6 +117,16 @@ export function mergeConfig(layers: readonly ConfigLayer[]): AdapterConfig {
     let contributed = false;
     for (const [key, value] of Object.entries(layer.values)) {
       if (value === undefined) continue;
+      // `JSON.parse` yields `__proto__` as an own key, and a plain assignment would invoke the
+      // prototype setter, letting a config file reach fields the caller deliberately removed.
+      if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
+      // Source selection follows layer precedence: a later layer naming a git source retires an
+      // earlier local checkout, and vice versa.
+      if (key === "repo" || key === "ref") merged.localPath = undefined;
+      if (key === "localPath") {
+        merged.repo = undefined;
+        merged.ref = undefined;
+      }
       if (key === "models") {
         merged.models = { ...merged.models, ...(value as Record<string, string>) };
       } else {

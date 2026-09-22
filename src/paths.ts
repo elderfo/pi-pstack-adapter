@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 
 export const CONFIG_FILE_NAME = "pi-pstack-adapter.json";
 
@@ -45,4 +45,23 @@ export function generatedDir(root: string, inputsDigest: string): string {
 
 export function stateFile(root: string): string {
   return join(root, "state.json");
+}
+
+/**
+ * A relative location inside the checkout. An upstream manifest and a config layer both
+ * supply these, so neither may escape the directory the adapter controls.
+ */
+export function validateContainedPath(value: string, label: string): string {
+  const normalized = value.trim().replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/, "");
+  const escapes =
+    normalized === "" ||
+    isAbsolute(normalized) ||
+    /^[A-Za-z]:/.test(normalized) ||
+    normalized.split("/").some((segment) => segment === "..");
+  if (escapes) {
+    throw new Error(
+      `Refusing ${label} ${JSON.stringify(value)}. It must name a location inside the checkout, not an absolute or parent path.`,
+    );
+  }
+  return normalized;
 }

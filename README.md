@@ -86,8 +86,13 @@ Each release certifies one pstack version and commit. You can select another, at
 }
 ```
 
-A branch or tag is resolved to a commit once, during explicit setup, and recorded. Startup never
-advances a recorded commit and never checks upstream for updates. Naming a `ref` or another
+A branch or tag is resolved to a commit once and recorded, either by explicit setup or by the
+first bootstrap that used it. Startup reuses the recorded commit and never checks upstream for
+updates, so a moving ref does not advance underneath you.
+
+Changing the upstream source is a decision only you can make. The `set_source` action asks for
+confirmation and refuses outright without an interactive session, because an untrusted upstream
+skill body could otherwise talk the agent into repointing the adapter or reaching a chosen host. Naming a `ref` or another
 `repo` without a `pinnedCommit` drops the certified pin, so you get what you asked for and a
 warning that it is untested. A custom repository warns harder, because its skills run with your
 full permissions. A repository string is rejected unless it is an https, ssh, git, scp-style, or
@@ -107,10 +112,12 @@ Environment overrides win over both config files.
 
 ## Host precedence
 
-Every generated wrapper states, above the upstream body, that Pi policy, the host's safety rules,
-and your explicit instructions override any conflicting autonomy or permission instruction below.
-The upstream text is never edited or deleted, so you can audit adapter instructions separately
-from upstream instructions.
+Every generated wrapper states, both above and below the upstream body, that Pi policy, the
+host's safety rules, and your explicit instructions override any conflicting autonomy or
+permission instruction in it. The body sits between two markers and is reproduced exactly, so
+you can audit adapter instructions separately from upstream instructions, and a body cannot get
+the last word by ending with an override. Converted agents carry the same statement at the top
+of their system prompt.
 
 ## Platforms
 
@@ -130,9 +137,11 @@ npm run test:isolated  # clone, pack, install into a throwaway Pi config, assert
 `test:isolated` is the end-to-end check. It clones the current commit, packs it, installs only
 what the tarball ships with `npm install --omit=dev`, installs that into a throwaway
 `PI_CODING_AGENT_DIR` with no packages and no skills, and asserts what Pi actually loaded: zero
-skills when bootstrap is refused, 48 skills after explicit permission, the same 48 from cache
-with no network, and both capabilities correctly reported absent. It copies only `auth.json`
-from your real config directory, so a provider credential is required and nothing else leaks in.
+skills when bootstrap is refused, 48 skills after explicit permission, and the same 48 from a
+warm cache with bootstrap permission withdrawn. Both capabilities are correctly reported
+absent. It copies only `auth.json` from your real config directory, so a provider credential is
+required and nothing else leaks in. The offline claim is proven separately by the unit tests,
+which inject a git runner that fails every network command.
 
 Point the adapter at a working copy of pstack with `PISTACK_UPSTREAM_PATH=/path/to/checkout`.
 

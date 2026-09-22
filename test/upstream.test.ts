@@ -13,6 +13,7 @@ import {
   validateRef,
   validateRepo,
 } from "../src/upstream.ts";
+import { validateContainedPath } from "../src/paths.ts";
 import { makeTempDir, writePluginFixture } from "./support/fixture.ts";
 
 function layer(values: Record<string, unknown>) {
@@ -211,6 +212,54 @@ test("a cache whose objects are gone falls back to bootstrap rather than failing
   const repaired = await resolveSource({ config, mayBootstrap: true });
   assert.equal(repaired.commit, repo.commit);
   assert.equal(existsSync(join(repaired.pluginDir, ".cursor-plugin", "plugin.json")), true);
+});
+
+test("a branch reuses its recorded commit offline and does not advance when the branch moves", async () => {
+  const repo = makeUpstreamRepo("recorded");
+  const cacheDir = makeTempDir("cache");
+  const config = mergeConfig([layer({ repo: repo.path, ref: "trunk", cacheDir })]);
+
+  const first = await resolveSource({ config, mayBootstrap: true });
+  assert.equal(first.commit, repo.secondCommit);
+
+  git(["commit", "--quiet", "--allow-empty", "-m", "third"], repo.path);
+  const moved = git(["rev-parse", "HEAD"], repo.path).trim();
+  assert.notEqual(moved, repo.secondCommit);
+
+  let networkAttempts = 0;
+  const offlineGit = async (args: readonly string[], cwd?: string) => {
+    if (args[0] === "fetch" || args[0] === "ls-remote" || args[0] === "clone") {
+      networkAttempts += 1;
+      return { code: 1, stdout: "", stderr: "network disabled in this test" };
+    }
+    return systemGit(args, cwd);
+  };
+
+  const again = await resolveSource({ config, mayBootstrap: false, git: offlineGit });
+  assert.equal(again.commit, repo.secondCommit, "a recorded branch commit must not advance");
+  assert.equal(networkAttempts, 0, "a recorded branch commit must not require the network");
+});
+
+test("a cleartext or credential-bearing remote is refused", () => {
+  for (const hostile of [
+    "http://example.test/plugins",
+    "git://example.test/plugins",
+    "https://user:token@example.test/plugins",
+  ]) {
+    assert.throws(() => validateRepo(hostile), /Refusing the upstream repository/, hostile);
+  }
+  assert.equal(validateRepo("https://example.test/plugins"), "https://example.test/plugins");
+  assert.equal(validateRepo("https://example.test/a@b/plugins"), "https://example.test/a@b/plugins");
+});
+
+test("a plugin path that escapes the checkout is refused", async () => {
+  for (const hostile of ["../../etc", "/etc", "a/../../b", ""]) {
+    assert.throws(() => validateContainedPath(hostile, "the upstream plugin path"), /Refusing/, hostile);
+  }
+  assert.equal(validateContainedPath("./pstack/", "x"), "pstack");
+
+  const config = mergeConfig([layer({ repo: "https://example.test/x", pluginPath: "../../escape" })]);
+  await assert.rejects(() => resolveSource({ config, mayBootstrap: true }), /Refusing the upstream plugin path/);
 });
 
 test("each repository gets its own cache directory", () => {

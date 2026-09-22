@@ -15,8 +15,11 @@
 # The sandbox isolates configuration, not the working tree. Pointing it at a real project
 # gives Pi the same write access it normally has there, so use a branch you can throw away.
 # PISTACK_SANDBOX_WORK sets the default directory. Copies only auth.json and the default
-# model from your real config, plus your global AGENTS.md unless --no-agents-md.
-# Delete ~/.pistack-sandbox to revert the sandbox itself.
+# model from your real config, plus your global AGENTS.md unless --no-agents-md. The copied
+# credential is removed when Pi exits. Delete ~/.pistack-sandbox to revert the sandbox itself.
+#
+# Any pstack skill you run here has the same shell and file access Pi always has. The sandbox
+# separates configuration, not privilege.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -79,6 +82,7 @@ fi
 [ "$cold" -eq 1 ] && rm -rf "${PISTACK_CACHE_DIR:-$SANDBOX/cache/pi-pstack-adapter}"
 
 export PI_CODING_AGENT_DIR="$SANDBOX"
+umask 077
 mkdir -p "$SANDBOX"
 cp "$REAL_CONFIG/auth.json" "$SANDBOX/auth.json"
 
@@ -120,4 +124,9 @@ if [ "$WORK" != "$DEFAULT_WORK" ] && [ -d "$WORK/.git" ]; then
 fi
 
 cd "$WORK"
-exec pi "${skill_args[@]}" "$@"
+# Not `exec`: the copied credential is removed when Pi exits, so it does not sit at a
+# predictable path between sessions. `pi install` above already recorded the packages.
+trap 'rm -f "$SANDBOX/auth.json"' EXIT INT TERM
+status=0
+pi "${skill_args[@]}" "$@" || status=$?
+exit "$status"

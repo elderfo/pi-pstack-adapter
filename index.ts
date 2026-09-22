@@ -1,5 +1,6 @@
 import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import { platform } from "node:os";
+import { DEFAULT_NAMESPACE } from "./src/namespace.ts";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
@@ -22,6 +23,7 @@ import { CONFIG_FILE_NAME, agentDir, cacheRoot } from "./src/paths.ts";
 import { entryFor } from "./src/registry.ts";
 import { platformSupport, renderCheck, renderStatus } from "./src/status.ts";
 import { BootstrapRequiredError, resolveRefToCommit, resolveSource } from "./src/upstream.ts";
+import { normalizeRepo } from "./src/config.ts";
 import type { CapabilityStatus, Diagnostic, GenerationResult, ResolvedSource } from "./src/types.ts";
 
 const PACKAGE_ROOT = dirname(fileURLToPath(import.meta.url));
@@ -253,8 +255,11 @@ export default function (pi: ExtensionAPI) {
   function setModel(role: string | undefined, model: string | undefined, scope: "user" | "project", ctx: ExtensionContext): string {
     if (!role) return "set_model needs a `role`.";
     if (!model) return "set_model needs a `model`, or `inherit` to clear the role.";
-    const path = configPath(scope, ctx);
     const clearing = model.trim().toLowerCase() === "inherit";
+    if (!clearing && !ctx.modelRegistry.getAvailable().some((candidate) => `${candidate.provider}/${candidate.id}` === model)) {
+      return `No model \`${model}\` is available in this Pi installation. Call this tool with action "models" for real ids, or pass "inherit".`;
+    }
+    const path = configPath(scope, ctx);
     const current = readConfigFile(path)?.values.models ?? {};
     const models = { ...current };
     if (clearing) delete models[role];
@@ -271,20 +276,42 @@ export default function (pi: ExtensionAPI) {
     ctx: ExtensionContext,
   ): Promise<string> {
     const path = configPath(scope, ctx);
+    const scopeNote =
+      scope === "project" && !ctx.isProjectTrusted()
+        ? " This project is not trusted, so Pi will ignore the file until you trust it."
+        : "";
+
     if (params.localPath) {
-      updateConfigFile(path, { localPath: params.localPath, pinnedCommit: undefined });
-      return `Upstream source is now the local checkout ${params.localPath}, written to ${path}. Its contents are unverified. Restart Pi or run /reload to regenerate.`;
+      const target = params.localPath;
+      if (!(await approveSource(ctx, `Use the local pstack checkout ${target}? Every skill it contains becomes a Pi skill, unverified.`))) {
+        return "Upstream source unchanged.";
+      }
+      updateConfigFile(path, { localPath: target, pinnedCommit: undefined });
+      return `Upstream source is now the local checkout ${target}, written to ${path}.${scopeNote} Its contents are unverified. Restart Pi or run /reload to regenerate.`;
     }
+
     const repo = params.repo ?? state?.config.repo;
     if (!repo) return "set_source needs a `repo`, a `ref`, or a `localPath`.";
     if (!params.ref) return "set_source needs a `ref` when selecting a repository.";
+    const changingRepo = normalizeRepo(repo) !== normalizeRepo(state?.config.repo ?? repo);
+    const question = changingRepo
+      ? `Fetch pstack from ${repo}@${params.ref}? This repository is outside the tested trust boundary, and its skills run with your full permissions.`
+      : `Fetch pstack from ${repo}@${params.ref}? This revision is untested by this adapter release.`;
+    if (!(await approveSource(ctx, question))) return "Upstream source unchanged.";
+
     const commit = await resolveRefToCommit(repo, params.ref);
     updateConfigFile(path, { repo, ref: params.ref, pinnedCommit: commit, localPath: undefined });
-    const trustNote =
-      params.repo && params.repo !== state?.config.repo
-        ? " This repository is outside the tested trust boundary. Its skills run with your full permissions."
-        : " This revision is untested by this adapter release.";
-    return `Upstream source is now ${repo}@${params.ref}, recorded as commit ${commit} in ${path}.${trustNote} Restart Pi or run /reload to regenerate.`;
+    return `Upstream source is now ${repo}@${params.ref}, recorded as commit ${commit} in ${path}.${scopeNote} Restart Pi or run /reload to regenerate.`;
+  }
+
+  /**
+   * Changing the upstream source decides which third-party content becomes Pi skills and
+   * where the adapter reaches on the network. The model may propose it; only a person may
+   * approve it, because an untrusted upstream body can ask the model to propose anything.
+   */
+  async function approveSource(ctx: ExtensionContext, question: string): Promise<boolean> {
+    if (!ctx.hasUI) return false;
+    return ctx.ui.confirm("Change the pstack source?", question);
   }
 
   function disposeAgents(): void {
@@ -304,11 +331,17 @@ export default function (pi: ExtensionAPI) {
  * cannot rename another project's commands. Everything else honors the project layer.
  */
 function startupNamespace(): string {
-  const layers: ConfigLayer[] = [];
-  const global = readConfigFile(userConfigPath());
-  if (global) layers.push(global);
-  layers.push(environmentLayer(process.env));
-  return mergeConfig(layers).namespace;
+  try {
+    const layers: ConfigLayer[] = [];
+    const global = readConfigFile(userConfigPath());
+    if (global) layers.push(global);
+    layers.push(environmentLayer(process.env));
+    return mergeConfig(layers).namespace;
+  } catch {
+    // A broken config must not take the diagnostics commands down with it. session_start
+    // reloads the same config inside a try/catch and reports the real error there.
+    return DEFAULT_NAMESPACE;
+  }
 }
 
 function loadConfig(ctx: ExtensionContext): AdapterConfig {
@@ -342,9 +375,13 @@ async function bringUpUpstream(config: AdapterConfig, ctx: ExtensionContext): Pr
   let bootstrapped = false;
   let source: ResolvedSource;
   try {
-    source = await resolveSource({ config, mayBootstrap: config.allowBootstrap });
+    // Probe without permission first, so the report can tell a download apart from a reuse.
+    source = await resolveSource({ config, mayBootstrap: false });
   } catch (error) {
     if (!(error instanceof BootstrapRequiredError)) throw error;
+    if (config.allowBootstrap) {
+      return buildState(config, await resolveSource({ config, mayBootstrap: true }), root, true);
+    }
     if (!ctx.hasUI) throw error;
     const approved = await ctx.ui.confirm(
       "Download pstack?",
@@ -354,7 +391,15 @@ async function bringUpUpstream(config: AdapterConfig, ctx: ExtensionContext): Pr
     source = await resolveSource({ config, mayBootstrap: true });
     bootstrapped = true;
   }
+  return buildState(config, source, root, bootstrapped);
+}
 
+function buildState(
+  config: AdapterConfig,
+  source: ResolvedSource,
+  root: string,
+  bootstrapped: boolean,
+): AdapterState {
   const generation = generate({
     source,
     namespace: config.namespace,

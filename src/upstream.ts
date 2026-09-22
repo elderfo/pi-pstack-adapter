@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { MANIFEST_RELATIVE_PATH } from "./manifest.ts";
-import { cacheRoot, checkoutDir } from "./paths.ts";
+import { cacheRoot, checkoutDir, stateFile, validateContainedPath } from "./paths.ts";
 import type { AdapterConfig } from "./config.ts";
 import { selectionOf, trustOf } from "./config.ts";
 import type { ResolvedSource } from "./types.ts";
@@ -33,18 +33,24 @@ export const systemGit: GitRunner = async (args, cwd) => {
  * leading dash as an option. The adapter accepts a repository from model-callable configuration,
  * so both are rejected before any argv reaches git.
  */
-const ALLOWED_REPO = /^(https?:\/\/|ssh:\/\/|git:\/\/|git@[^\s]+:|\/|\.\/|\.\.\/)[^\s]*$/;
+const ALLOWED_REPO = /^(https:\/\/|ssh:\/\/|git@[^\s@]+:|\/|\.\/|\.\.\/)[^\s]*$/;
 const ALLOWED_REF = /^[A-Za-z0-9._][A-Za-z0-9._/-]*$/;
 
 export function validateRepo(repo: string): string {
   const value = repo.trim();
   if (!ALLOWED_REPO.test(value)) {
     throw new Error(
-      `Refusing the upstream repository ${JSON.stringify(repo)}. Use an https, ssh, git, scp-style, or filesystem path. Transports such as \`ext::\` execute shell commands and are never accepted.`,
+      `Refusing the upstream repository ${JSON.stringify(repo)}. Use an https, ssh, scp-style, or filesystem path. Cleartext transports and transports such as \`ext::\` are never accepted.`,
+    );
+  }
+  if (value.startsWith("https://") && value.slice(8).split("/")[0]?.includes("@")) {
+    throw new Error(
+      `Refusing the upstream repository ${JSON.stringify(repo)} because it embeds credentials in the URL. Use a credential helper or an ssh remote.`,
     );
   }
   return value;
 }
+
 
 export function validateRef(ref: string): string {
   const value = ref.trim();
@@ -93,17 +99,64 @@ export async function resolveSource(options: ResolveOptions): Promise<ResolvedSo
 
   const repo = validateRepo(config.repo);
   const wanted = validateRef(selection.ref);
+  const pluginPath = validateContainedPath(config.pluginPath, "the upstream plugin path");
   const root = cacheRoot(config.cacheDir);
   const dir = checkoutDir(root, repo);
 
-  const warm = await reuseCheckout(git, dir, wanted, config.pluginPath);
-  if (warm) return { selection, trust, commit: warm.commit, checkoutDir: dir, pluginDir: warm.pluginDir };
+  // A branch or tag name does not survive `fetch FETCH_HEAD`, so reuse the commit that the
+  // last successful bootstrap of this exact repo and ref resolved to. Without this a moving
+  // ref would refetch on every startup and silently advance.
+  const recorded = readRecordedCommit(root, repo, wanted);
+  for (const candidate of [wanted, recorded]) {
+    if (!candidate) continue;
+    const warm = await reuseCheckout(git, dir, candidate, pluginPath);
+    if (warm) {
+      recordCommit(root, repo, wanted, warm.commit);
+      return { selection, trust, commit: warm.commit, checkoutDir: dir, pluginDir: warm.pluginDir };
+    }
+  }
 
   if (!options.mayBootstrap) throw new BootstrapRequiredError(repo, wanted);
 
-  await bootstrap(git, dir, repo, wanted, config.pluginPath);
-  const pluginDir = locatePluginDir(dir, config.pluginPath);
-  return { selection, trust, commit: await headCommit(git, dir), checkoutDir: dir, pluginDir };
+  await bootstrap(git, dir, repo, wanted, pluginPath);
+  const pluginDir = locatePluginDir(dir, pluginPath);
+  const commit = await headCommit(git, dir);
+  recordCommit(root, repo, wanted, commit);
+  return { selection, trust, commit, checkoutDir: dir, pluginDir };
+}
+
+type CommitRecord = Record<string, string>;
+
+function recordKey(repo: string, ref: string): string {
+  return `${repo}#${ref}`;
+}
+
+function readRecordedCommit(root: string, repo: string, ref: string): string | undefined {
+  if (/^[0-9a-f]{40}$/i.test(ref)) return undefined;
+  try {
+    const parsed = JSON.parse(readFileSync(stateFile(root), "utf8")) as CommitRecord;
+    const commit = parsed[recordKey(repo, ref)];
+    return typeof commit === "string" && /^[0-9a-f]{40}$/i.test(commit) ? commit : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function recordCommit(root: string, repo: string, ref: string, commit: string): void {
+  if (!/^[0-9a-f]{40}$/i.test(commit) || /^[0-9a-f]{40}$/i.test(ref)) return;
+  let current: CommitRecord = {};
+  try {
+    current = JSON.parse(readFileSync(stateFile(root), "utf8")) as CommitRecord;
+  } catch {
+    current = {};
+  }
+  if (current[recordKey(repo, ref)] === commit) return;
+  try {
+    mkdirSync(root, { recursive: true });
+    writeFileSync(stateFile(root), `${JSON.stringify({ ...current, [recordKey(repo, ref)]: commit }, null, 2)}\n`, "utf8");
+  } catch {
+    // A read-only cache still works; it just refetches. Never fail startup over bookkeeping.
+  }
 }
 
 /**
@@ -119,7 +172,12 @@ async function reuseCheckout(
 ): Promise<{ commit: string; pluginDir: string } | undefined> {
   if (!existsSync(join(dir, ".git"))) return undefined;
   if ((await git(["cat-file", "-e", `${wanted}^{commit}`], dir)).code !== 0) return undefined;
-  if ((await git(["checkout", "--quiet", "--force", wanted], dir)).code !== 0) return undefined;
+
+  // Skipping a no-op checkout avoids contending on .git/index.lock with a concurrent session.
+  const head = await headCommit(git, dir);
+  if (head.toLowerCase() !== wanted.toLowerCase() || !existsSync(join(dir, pluginPath))) {
+    if ((await git(["checkout", "--quiet", "--force", wanted], dir)).code !== 0) return undefined;
+  }
 
   const commit = await headCommit(git, dir);
   if (/^[0-9a-f]{40}$/i.test(wanted) && commit.toLowerCase() !== wanted.toLowerCase()) return undefined;

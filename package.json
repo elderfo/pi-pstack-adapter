@@ -50,7 +50,9 @@
     "adapter-skills",
     "README.md",
     "LICENSE",
-    "docs"
+    "docs",
+    "VERSION",
+    "CHANGELOG.md"
   ],
   "dependencies": {
     "yaml": "^2.8.3"
