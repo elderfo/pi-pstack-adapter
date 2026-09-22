@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
+import { agentDir, cacheRoot } from "../src/paths.ts";
 import { test } from "node:test";
 import { CERTIFIED } from "../src/certified.ts";
 import {
@@ -151,6 +153,22 @@ test("a config file that is not JSON fails loudly with its path", () => {
   const path = join(root, "pi-pstack-adapter.json");
   writeFileSync(path, "{ nope", "utf8");
   assert.throws(() => readConfigFile(path), new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("a sandboxed config root keeps its own cache instead of writing the real one", () => {
+  const original = process.env.PI_CODING_AGENT_DIR;
+  try {
+    process.env.PI_CODING_AGENT_DIR = "/tmp/pistack-sandbox-config";
+    assert.equal(agentDir(), "/tmp/pistack-sandbox-config");
+    assert.equal(cacheRoot(), "/tmp/pistack-sandbox-config/cache/pi-pstack-adapter");
+
+    delete process.env.PI_CODING_AGENT_DIR;
+    assert.equal(agentDir(), join(homedir(), ".pi", "agent"));
+    assert.equal(cacheRoot("~/elsewhere"), join(homedir(), "elsewhere"));
+  } finally {
+    if (original === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = original;
+  }
 });
 
 test("a missing config file is simply absent", () => {

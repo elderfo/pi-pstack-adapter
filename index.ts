@@ -1,5 +1,5 @@
 import { accessSync, constants, existsSync, readFileSync } from "node:fs";
-import { homedir, platform } from "node:os";
+import { platform } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
@@ -18,7 +18,7 @@ import {
 } from "./src/config.ts";
 import { generate } from "./src/generate.ts";
 import { MODE_ENTRY_TYPE, modeFromEntries, modeInstruction } from "./src/mode.ts";
-import { CONFIG_FILE_NAME, cacheRoot } from "./src/paths.ts";
+import { CONFIG_FILE_NAME, agentDir, cacheRoot } from "./src/paths.ts";
 import { entryFor } from "./src/registry.ts";
 import { platformSupport, renderCheck, renderStatus } from "./src/status.ts";
 import { BootstrapRequiredError, resolveRefToCommit, resolveSource } from "./src/upstream.ts";
@@ -330,7 +330,7 @@ function configPath(scope: "user" | "project", ctx: ExtensionContext): string {
 }
 
 function userConfigPath(): string {
-  return join(homedir(), ".pi", "agent", CONFIG_FILE_NAME);
+  return join(agentDir(), CONFIG_FILE_NAME);
 }
 
 function projectConfigPath(cwd: string): string {

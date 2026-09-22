@@ -12,9 +12,18 @@ export function expandHome(value: string): string {
   return value;
 }
 
+/**
+ * Mirrors Pi's own `getAgentDir()`, so a sandboxed `PI_CODING_AGENT_DIR` keeps its cache
+ * beside its own config instead of writing into the real one.
+ */
+export function agentDir(): string {
+  const override = process.env.PI_CODING_AGENT_DIR;
+  return override ? resolve(expandHome(override)) : join(homedir(), ".pi", "agent");
+}
+
 export function cacheRoot(override?: string): string {
   if (override) return resolve(expandHome(override));
-  return join(homedir(), ".pi", "agent", "cache", "pi-pstack-adapter");
+  return join(agentDir(), "cache", "pi-pstack-adapter");
 }
 
 export function digest(...parts: string[]): string {
