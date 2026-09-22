@@ -3,23 +3,18 @@
 Use Cursor's official [pstack](https://github.com/cursor/plugins/tree/main/pstack) plugin in
 [Pi](https://pi.dev) without modifying the upstream checkout.
 
-The adapter downloads a certified pstack commit and generates Pi skill wrappers and agent
-definitions. It registers them under the `pistack` namespace. Upstream pstack remains the source
-of truth.
-
-> Review this adapter and the upstream pstack source before you install them. Pi extensions run
-> with your user permissions. Skills can direct the agent to run commands or edit files.
+The adapter downloads a tested pstack commit and makes its skills and agents available in Pi
+under the `pistack` namespace.
 
 ## Requirements
 
-- Pi
-- Git
-- Linux or macOS
+Install Pi and Git on Linux or macOS. Windows support is experimental because pstack skills use
+POSIX shell tools.
 
-Windows support is experimental because upstream pstack skills use POSIX shell tools.
+### Optional workflow providers
 
-Some workflows need delegation or structured questions. Install the recommended providers to
-use those workflows:
+Some workflows need delegation or structured questions. Install these providers to use those
+workflows:
 
 ```bash
 pi install npm:pi-subagents
@@ -76,13 +71,9 @@ The adapter also adds these commands:
 | `/skill:pistack-setup` | Assigns Pi models to pstack roles or changes the upstream source. |
 | `/skill:pistack-status` | Requests the status report through the agent. |
 
-The model can call the `pstack_adapter` tool with the `status`, `check`, `models`, `set_model`,
-or `set_source` action.
-
 ## Read the support tiers
 
-Each generated skill includes a support tier in its frontmatter. `/pistack-status` reports the
-same tier.
+`/pistack-status` reports a support tier for each skill:
 
 | Tier | Meaning |
 | --- | --- |
@@ -92,8 +83,8 @@ same tier.
 | `experimental` | Part of the workflow has no direct Pi equivalent. |
 | `unsupported` | Pi cannot provide a required host feature. |
 
-See [the compatibility registry](docs/compatibility.md) for every certified skill and the
-evidence required to change a tier.
+See [the compatibility registry](docs/compatibility.md) for the tier and requirements of every
+skill.
 
 ## Configure model roles
 
@@ -119,27 +110,15 @@ Each adapter release certifies one pstack version and commit. `/pistack-status` 
 certified commit and the commit in use.
 
 Use `/skill:pistack-setup` to select a branch, tag, commit, repository, or local checkout. The
-`set_source` action asks for confirmation before it changes the source. Restart Pi or run
-`/reload` after the change.
+adapter asks for confirmation before it changes the source. Restart Pi or run `/reload` after
+the change.
 
-You can write a user config at `~/.pi/agent/pi-pstack-adapter.json` or a project config at
-`.pi/pi-pstack-adapter.json`:
+A branch or tag resolves to one commit. The adapter records that commit and does not advance it
+on later starts. `/pistack-status` marks a custom repository or an untested revision with a
+warning.
 
-```json
-{
-  "ref": "main",
-  "pinnedCommit": "6ed0f7a9504f577d7529064103cecce9be7dfc5e",
-  "models": {
-    "feature": "provider/model"
-  }
-}
-```
-
-A branch or tag resolves to a commit when you select it through the adapter. The adapter records
-that commit and does not advance it on later starts. The status report marks a custom repository
-or an unpinned ref as untested. Skills from a custom repository run with your user permissions.
-
-Environment variables override both config files:
+The setup skill writes user settings to `~/.pi/agent/pi-pstack-adapter.json` or project settings
+to `.pi/pi-pstack-adapter.json`. Environment variables override both files:
 
 | Variable | Effect |
 | --- | --- |
@@ -152,53 +131,13 @@ Environment variables override both config files:
 | `PISTACK_CACHE_DIR` | Changes the cache directory. |
 | `PISTACK_MODELS` | Assigns models as comma-separated `role=provider/model` pairs. |
 
-## How the adapter handles upstream instructions
+## Trust upstream sources
 
-The adapter copies each upstream skill body without edits. It places Pi-specific instructions
-before and after the body. Pi policy, host safety rules, and your instructions take precedence
-over conflicting text in an upstream skill. Converted agent prompts include the same rule.
+Pi skills run with your user permissions. The adapter asks for confirmation before it downloads
+or changes the pstack source. Review a custom repository before you select it.
 
-The adapter replaces the upstream `setup-pstack` body because that skill only writes Cursor
-configuration. All other source bodies remain available for comparison with the upstream
-checkout.
-
-## Develop and test
-
-Install dependencies and run the checks:
-
-```bash
-npm install
-npm run check
-npm test
-npm run test:isolated
-```
-
-`npm run test:isolated` packs the current commit and installs it into a temporary Pi
-configuration. The test verifies a refused bootstrap, an allowed bootstrap, and reuse of a warm
-cache.
-
-To use a local pstack checkout during development, set `PISTACK_UPSTREAM_PATH`:
-
-```bash
-PISTACK_UPSTREAM_PATH=/path/to/checkout pi
-```
-
-To test the adapter with an isolated Pi configuration, run:
-
-```bash
-./pi-sandbox.sh
-```
-
-Pass a project directory to test workflows against that project. Add `--project-skills` to load
-its `.agents/skills` and `.pi/skills` directories. Use `--cold` to test the download prompt. Use
-`--reset` to rebuild the sandbox.
-
-```bash
-./pi-sandbox.sh /path/to/project --project-skills
-```
-
-The sandbox isolates Pi configuration, not the working tree. Pi can still edit the project, so
-use a disposable branch.
+The adapter preserves each upstream skill body for inspection. Pi policy, host safety rules, and
+your instructions take precedence over conflicting text in a pstack skill.
 
 ## License
 

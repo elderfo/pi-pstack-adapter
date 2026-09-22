@@ -43,6 +43,11 @@ A support tier is a verification claim. Follow the evidence rules in `docs/compa
 Unknown upstream skills remain `experimental` until an end-to-end Pi run supports a stronger
 claim.
 
+## Keep documentation audiences separate
+
+Keep `README.md` focused on installation, use, configuration, and user-facing trust decisions.
+Keep contributor workflow, architecture, and verification instructions in this file.
+
 ## Write TypeScript for this repository
 
 Use Node ESM imports with explicit `.ts` suffixes. Keep the strict compiler settings in
