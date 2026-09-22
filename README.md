@@ -136,11 +136,15 @@ from your real config directory, so a provider credential is required and nothin
 
 Point the adapter at a working copy of pstack with `PISTACK_UPSTREAM_PATH=/path/to/checkout`.
 
-For hands-on testing, `./pi-sandbox.sh` launches Pi against a throwaway `PI_CODING_AGENT_DIR`
-holding only this adapter, `pi-subagents`, and `pi-ask-user`. It hides `~/.agents/skills`,
-which `PI_CODING_AGENT_DIR` does not cover, so an unprefixed pstack copy on your machine cannot
-mask a missing wrapper. Use `--cold` to retest the first-run download dialog and `--reset` to
-rebuild the sandbox. Delete `~/.pistack-sandbox` and `~/.pistack-sandbox-work` to revert.
+For hands-on testing, `./pi-sandbox.sh [dir]` launches Pi against a throwaway
+`PI_CODING_AGENT_DIR` holding only this adapter, `pi-subagents`, and `pi-ask-user`. Pass a
+project directory to try pstack workflows on real code; add `--project-skills` to keep that
+project's own skills. It hides `~/.agents/skills`, which `PI_CODING_AGENT_DIR` does not cover,
+so an unprefixed pstack copy on your machine cannot mask a missing wrapper. Use `--cold` to
+retest the first-run download dialog and `--reset` to rebuild the sandbox.
+
+The sandbox isolates configuration, not the working tree. Pi has the same write access in that
+project it always has, so point it at a branch you can throw away.
 
 ## License
 
