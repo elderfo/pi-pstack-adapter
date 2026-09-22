@@ -72,22 +72,19 @@ export default function (pi: ExtensionAPI) {
 
     const result = registerAgents(pi.events, state.generation.agents, state.config.namespace);
     registrations = result.registrations;
-    agentDiagnostics = [
-      ...result.diagnostics,
-      ...result.registrations.length > 0
-        ? [
-            {
-              level: "info" as const,
-              resource: "agents",
-              message: `${result.registrations.length} pstack agents registered with the installed delegation provider.`,
-            },
-          ]
-        : [],
-    ];
+    const diagnostics: Diagnostic[] = [...result.diagnostics];
+    if (result.registrations.length > 0) {
+      diagnostics.push({
+        level: "info",
+        resource: "agents",
+        message: `${result.registrations.length} pstack agents registered with the installed delegation provider.`,
+      });
+    }
+    agentDiagnostics = diagnostics;
+
     for (const diagnostic of result.diagnostics) {
       if (ctx.hasUI && diagnostic.level === "error") ctx.ui.notify(`pstack adapter: ${diagnostic.message}`, "error");
     }
-
   });
 
   pi.on("resources_discover", async () => {

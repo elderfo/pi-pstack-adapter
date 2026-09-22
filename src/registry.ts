@@ -52,7 +52,8 @@ export const SKILL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   "technical-writing": { tier: "native", capabilities: [], executables: [] },
   "typescript-best-practices": { tier: "native", capabilities: [], executables: [] },
   "unslop": { tier: "native", capabilities: [], executables: [] },
-  "why": { tier: "dependency-gated", capabilities: ["delegation"], executables: ["git", "gh"], note: "Default posture spawns one investigator subagent per evidence category plus a synthesizer." },};
+  "why": { tier: "dependency-gated", capabilities: ["delegation"], executables: ["git", "gh"], note: "Default posture spawns one investigator subagent per evidence category plus a synthesizer." },
+};
 
 /** Adapter-owned skills with no upstream counterpart. Keyed by unprefixed generated name. */
 export const ADAPTER_SKILLS: Readonly<Record<string, RegistryEntry>> = {
