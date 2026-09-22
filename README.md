@@ -1,161 +1,206 @@
-# pi-pstack-adapter
+# Pi pstack adapter
 
-Run Cursor's official [pstack](https://github.com/cursor/plugins/tree/main/pstack) plugin inside
-[Pi](https://pi.dev), from an unmodified upstream checkout.
+Use Cursor's official [pstack](https://github.com/cursor/plugins/tree/main/pstack) plugin in
+[Pi](https://pi.dev) without modifying the upstream checkout.
 
-This is not a port. The adapter downloads a pinned pstack revision, leaves it untouched, and
-generates Pi skill wrappers and agent definitions from it at startup. Upstream stays the source
-of truth, so a new pstack release needs a new certified commit, not a re-port.
+The adapter downloads a certified pstack commit and generates Pi skill wrappers and agent
+definitions. It registers them under the `pistack` namespace. Upstream pstack remains the source
+of truth.
 
-## Install
+> Review this adapter and the upstream pstack source before you install them. Pi extensions run
+> with your user permissions. Skills can direct the agent to run commands or edit files.
+
+## Requirements
+
+- Pi
+- Git
+- Linux or macOS
+
+Windows support is experimental because upstream pstack skills use POSIX shell tools.
+
+Some workflows need delegation or structured questions. Install the recommended providers to
+use those workflows:
 
 ```bash
-pi install git:github.com/cgetsfred/pi-pstack-adapter
+pi install npm:pi-subagents
+pi install npm:pi-ask-user
 ```
 
-The first interactive session asks before downloading pstack into
-`~/.pi/agent/cache/pi-pstack-adapter/`. Later sessions reuse that cache and need no network.
-A noninteractive run with an empty cache refuses to reach the network until you set
-`PISTACK_ALLOW_BOOTSTRAP=1`.
+With `pi-subagents` installed, the upstream agents register as `pistack-comment-sicko` and
+`pistack-poteto-agent`.
 
-## Use
+Run `/pistack-check <skill>` to find missing providers and executables before a workflow starts.
 
-Every pstack skill is registered under the `pistack` namespace.
+## Install the adapter
 
+```bash
+pi install git:github.com/elderfo/pi-pstack-adapter
 ```
+
+On the first interactive start, the adapter asks before it downloads pstack into
+`~/.pi/agent/cache/pi-pstack-adapter/`. Later sessions reuse the cached commit without network
+access.
+
+A noninteractive session cannot download pstack unless you set `PISTACK_ALLOW_BOOTSTRAP=1`:
+
+```bash
+PISTACK_ALLOW_BOOTSTRAP=1 pi
+```
+
+## Run a pstack skill
+
+Pi exposes generated skills as `/skill:pistack-*` commands:
+
+```text
 /skill:pistack-how
 /skill:pistack-unslop
 /skill:pistack-poteto-mode
 ```
 
-Adapter commands.
+Check a workflow before you run it:
 
-| command | does |
+```text
+/pistack-check how
+```
+
+The check reports the workflow's support tier, required Pi capabilities, and required
+executables.
+
+The adapter also adds these commands:
+
+| Command | Result |
 | --- | --- |
-| `/pistack-status` | full report: versions, commit, trust, tiers, capabilities, diagnostics |
-| `/pistack-check <skill>` | prerequisites for one workflow, before it starts |
-| `/pistack-mode on\|off\|status` | Poteto Mode for the current session |
-| `/skill:pistack-setup` | assign a Pi model to each pstack role |
-| `/skill:pistack-status` | the same report, through the agent |
+| `/pistack-status` | Shows versions, the resolved commit, trust, capabilities, support tiers, and diagnostics. |
+| `/pistack-check <skill>` | Checks one workflow's requirements. |
+| `/pistack-mode on\|off\|status` | Controls Poteto Mode for the current session. |
+| `/skill:pistack-setup` | Assigns Pi models to pstack roles or changes the upstream source. |
+| `/skill:pistack-status` | Requests the status report through the agent. |
 
-The model can also call the `pstack_adapter` tool directly with `status`, `check`, `models`,
-`set_model`, or `set_source`.
+The model can call the `pstack_adapter` tool with the `status`, `check`, `models`, `set_model`,
+or `set_source` action.
 
-## Support tiers
+## Read the support tiers
 
-Each generated skill publishes a tier in its frontmatter and in the status report.
+Each generated skill includes a support tier in its frontmatter. `/pistack-status` reports the
+same tier.
 
-| tier | meaning |
+| Tier | Meaning |
 | --- | --- |
-| `native` | adapter-owned content, written for Pi |
-| `adapted` | upstream body works once you apply the host mapping |
-| `dependency-gated` | needs a capability or executable that may be absent |
-| `experimental` | depends on host behavior with no clean Pi equivalent |
-| `unsupported` | needs something Pi cannot provide |
+| `native` | The skill needs no Pi-specific changes, or the adapter supplies a Pi version. |
+| `adapted` | The upstream body works with the host mappings in its wrapper. |
+| `dependency-gated` | The workflow needs a capability or executable that may be missing. |
+| `experimental` | Part of the workflow has no direct Pi equivalent. |
+| `unsupported` | Pi cannot provide a required host feature. |
 
-Run `pstack_adapter` with `action: "check"` before starting a workflow. It reports the
-capabilities and executables that workflow needs, and whether this environment has them, before
-the workflow does any work.
+See [the compatibility registry](docs/compatibility.md) for every certified skill and the
+evidence required to change a tier.
 
-See [docs/compatibility.md](docs/compatibility.md) for the tier of every skill and for how a
-tier changes.
+## Configure model roles
 
-## Capabilities
+pstack names model roles such as `feature`, `bug-fix`, and `judgment`. An unset role uses the
+current Pi session model.
 
-The adapter detects capabilities, not package names.
+Run the setup skill to list the models available in your Pi installation and assign them to
+roles:
 
-| capability | what it needs | recommended provider |
-| --- | --- | --- |
-| `delegation` | a `subagent` tool taking `agent`, `task`, `async`, and `model` | [`pi-subagents`](https://www.npmjs.com/package/pi-subagents) |
-| `structured-question` | an `ask_user` tool taking `question` and `options` | [`pi-ask-user`](https://www.npmjs.com/package/pi-ask-user) |
+```text
+/skill:pistack-setup
+```
 
-pstack's two agents, `comment-sicko` and `poteto-agent`, register at session start with whichever
-installed extension owns the pi-subagents runtime registration contract. They appear as
-`pistack-comment-sicko` and `pistack-poteto-agent`. The adapter installs nothing on your behalf.
+For a noninteractive session, set role assignments with `PISTACK_MODELS`:
 
-## Selecting another upstream revision
+```bash
+PISTACK_MODELS='feature=provider/model,bug-fix=provider/other-model' pi
+```
 
-Each release certifies one pstack version and commit. You can select another, at your own risk.
+## Select another pstack source
 
-```jsonc
-// ~/.pi/agent/pi-pstack-adapter.json, or .pi/pi-pstack-adapter.json for one project
+Each adapter release certifies one pstack version and commit. `/pistack-status` shows both the
+certified commit and the commit in use.
+
+Use `/skill:pistack-setup` to select a branch, tag, commit, repository, or local checkout. The
+`set_source` action asks for confirmation before it changes the source. Restart Pi or run
+`/reload` after the change.
+
+You can write a user config at `~/.pi/agent/pi-pstack-adapter.json` or a project config at
+`.pi/pi-pstack-adapter.json`:
+
+```json
 {
   "ref": "main",
   "pinnedCommit": "6ed0f7a9504f577d7529064103cecce9be7dfc5e",
-  "models": { "feature": "anthropic/claude-sonnet-4-5" }
+  "models": {
+    "feature": "provider/model"
+  }
 }
 ```
 
-A branch or tag is resolved to a commit once and recorded, either by explicit setup or by the
-first bootstrap that used it. Startup reuses the recorded commit and never checks upstream for
-updates, so a moving ref does not advance underneath you.
+A branch or tag resolves to a commit when you select it through the adapter. The adapter records
+that commit and does not advance it on later starts. The status report marks a custom repository
+or an unpinned ref as untested. Skills from a custom repository run with your user permissions.
 
-Changing the upstream source is a decision only you can make. The `set_source` action asks for
-confirmation and refuses outright without an interactive session, because an untrusted upstream
-skill body could otherwise talk the agent into repointing the adapter or reaching a chosen host. Naming a `ref` or another
-`repo` without a `pinnedCommit` drops the certified pin, so you get what you asked for and a
-warning that it is untested. A custom repository warns harder, because its skills run with your
-full permissions. A repository string is rejected unless it is an https, ssh, git, scp-style, or
-filesystem source, so git transports that execute shell commands never reach git.
+Environment variables override both config files:
 
-Environment overrides win over both config files.
-
-| variable | effect |
+| Variable | Effect |
 | --- | --- |
-| `PISTACK_NAMESPACE` | replace `pistack` in every generated identifier |
-| `PISTACK_UPSTREAM_REPO` | select another repository |
-| `PISTACK_UPSTREAM_REF` | select a branch, tag, or commit |
-| `PISTACK_UPSTREAM_PATH` | use a local pstack checkout |
-| `PISTACK_ALLOW_BOOTSTRAP` | permit a noninteractive download |
-| `PISTACK_CACHE_DIR` | relocate the cache |
-| `PISTACK_MODELS` | `role=provider/model,role2=provider/model2` |
+| `PISTACK_NAMESPACE` | Replaces `pistack` in generated skill and command names. |
+| `PISTACK_UPSTREAM_REPO` | Selects another Git repository. |
+| `PISTACK_UPSTREAM_REF` | Selects a branch, tag, or commit. |
+| `PISTACK_UPSTREAM_PATH` | Uses a local pstack checkout. |
+| `PISTACK_UPSTREAM_PLUGIN_PATH` | Selects the plugin directory inside the checkout. |
+| `PISTACK_ALLOW_BOOTSTRAP` | Allows a noninteractive first download. |
+| `PISTACK_CACHE_DIR` | Changes the cache directory. |
+| `PISTACK_MODELS` | Assigns models as comma-separated `role=provider/model` pairs. |
 
-## Host precedence
+## How the adapter handles upstream instructions
 
-Every generated wrapper states, both above and below the upstream body, that Pi policy, the
-host's safety rules, and your explicit instructions override any conflicting autonomy or
-permission instruction in it. The body sits between two markers and is reproduced exactly, so
-you can audit adapter instructions separately from upstream instructions, and a body cannot get
-the last word by ending with an override. Converted agents carry the same statement at the top
-of their system prompt.
+The adapter copies each upstream skill body without edits. It places Pi-specific instructions
+before and after the body. Pi policy, host safety rules, and your instructions take precedence
+over conflicting text in an upstream skill. Converted agent prompts include the same rule.
 
-## Platforms
+The adapter replaces the upstream `setup-pstack` body because that skill only writes Cursor
+configuration. All other source bodies remain available for comparison with the upstream
+checkout.
 
-Linux and macOS are supported. Windows loads in experimental mode with a warning. Adapter-owned
-code uses portable Node APIs and never creates symbolic links, but upstream pstack skills call
-POSIX shell tools that Windows may not provide.
+## Develop and test
 
-## Development
+Install dependencies and run the checks:
 
 ```bash
 npm install
-npm run check          # tsc --noEmit
-npm test               # module behavior, fixture upstreams, real local git repos
-npm run test:isolated  # clone, pack, install into a throwaway Pi config, assert what loaded
+npm run check
+npm test
+npm run test:isolated
 ```
 
-`test:isolated` is the end-to-end check. It clones the current commit, packs it, installs only
-what the tarball ships with `npm install --omit=dev`, installs that into a throwaway
-`PI_CODING_AGENT_DIR` with no packages and no skills, and asserts what Pi actually loaded: zero
-skills when bootstrap is refused, 48 skills after explicit permission, and the same 48 from a
-warm cache with bootstrap permission withdrawn. Both capabilities are correctly reported
-absent. It copies only `auth.json` from your real config directory, so a provider credential is
-required and nothing else leaks in. The offline claim is proven separately by the unit tests,
-which inject a git runner that fails every network command.
+`npm run test:isolated` packs the current commit and installs it into a temporary Pi
+configuration. The test verifies a refused bootstrap, an allowed bootstrap, and reuse of a warm
+cache.
 
-Point the adapter at a working copy of pstack with `PISTACK_UPSTREAM_PATH=/path/to/checkout`.
+To use a local pstack checkout during development, set `PISTACK_UPSTREAM_PATH`:
 
-For hands-on testing, `./pi-sandbox.sh [dir]` launches Pi against a throwaway
-`PI_CODING_AGENT_DIR` holding only this adapter, `pi-subagents`, and `pi-ask-user`. Pass a
-project directory to try pstack workflows on real code; add `--project-skills` to keep that
-project's own skills. It hides `~/.agents/skills`, which `PI_CODING_AGENT_DIR` does not cover,
-so an unprefixed pstack copy on your machine cannot mask a missing wrapper. Use `--cold` to
-retest the first-run download dialog and `--reset` to rebuild the sandbox.
+```bash
+PISTACK_UPSTREAM_PATH=/path/to/checkout pi
+```
 
-The sandbox isolates configuration, not the working tree. Pi has the same write access in that
-project it always has, so point it at a branch you can throw away.
+To test the adapter with an isolated Pi configuration, run:
+
+```bash
+./pi-sandbox.sh
+```
+
+Pass a project directory to test workflows against that project. Add `--project-skills` to load
+its `.agents/skills` and `.pi/skills` directories. Use `--cold` to test the download prompt. Use
+`--reset` to rebuild the sandbox.
+
+```bash
+./pi-sandbox.sh /path/to/project --project-skills
+```
+
+The sandbox isolates Pi configuration, not the working tree. Pi can still edit the project, so
+use a disposable branch.
 
 ## License
 
-MIT. Upstream pstack is MIT, copyright its authors, and is neither vendored nor modified by this
-package.
+This adapter is available under the [MIT License](LICENSE). Upstream pstack is also MIT-licensed
+and remains copyright its authors.
