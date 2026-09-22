@@ -9,12 +9,14 @@
 #   ./pi-sandbox.sh --cold             also clear the pstack cache, to retest first-run download
 #   ./pi-sandbox.sh --project-skills   also load the project's own .agents/skills and .pi/skills
 #   ./pi-sandbox.sh --global-skills    also load ~/.agents/skills, hidden by default
+#   ./pi-sandbox.sh --no-agents-md     start without your global AGENTS.md instructions
 #   ./pi-sandbox.sh <dir> -- <pi args> pass the rest through to pi, e.g. -- -p "hi"
 #
 # The sandbox isolates configuration, not the working tree. Pointing it at a real project
 # gives Pi the same write access it normally has there, so use a branch you can throw away.
 # PISTACK_SANDBOX_WORK sets the default directory. Copies only auth.json and the default
-# model from your real config. Delete ~/.pistack-sandbox to revert the sandbox itself.
+# model from your real config, plus your global AGENTS.md unless --no-agents-md.
+# Delete ~/.pistack-sandbox to revert the sandbox itself.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,13 +28,15 @@ WORK="$DEFAULT_WORK"
 reset=0
 cold=0
 skills=hidden
+agents_md=1
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    -h|--help) sed -n '2,17p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,19p' "${BASH_SOURCE[0]}"; exit 0 ;;
     --reset) reset=1; shift ;;
     --cold) cold=1; shift ;;
     --global-skills) skills=global; shift ;;
+    --no-agents-md) agents_md=0; shift ;;
     --project-skills) skills=project; shift ;;
     --work) WORK="${2:?--work needs a directory}"; shift 2 ;;
     --) shift; break ;;
@@ -77,6 +81,16 @@ fi
 export PI_CODING_AGENT_DIR="$SANDBOX"
 mkdir -p "$SANDBOX"
 cp "$REAL_CONFIG/auth.json" "$SANDBOX/auth.json"
+
+# Refreshed every run so edits to your real instructions reach the sandbox. These files point
+# at ~/.agents/AGENTS.md by absolute path, which the config override does not move.
+if [ "$agents_md" -eq 1 ]; then
+  for name in AGENTS.md AGENTS.override.md CLAUDE.md; do
+    [ -f "$REAL_CONFIG/$name" ] && cp "$REAL_CONFIG/$name" "$SANDBOX/$name"
+  done
+else
+  rm -f "$SANDBOX/AGENTS.md" "$SANDBOX/AGENTS.override.md" "$SANDBOX/CLAUDE.md"
+fi
 
 # Only seed settings on a fresh sandbox. Rewriting it would drop packages that `pi install`
 # recorded and any `pi config` choice made by hand.
