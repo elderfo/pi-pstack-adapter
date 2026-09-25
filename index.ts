@@ -5,6 +5,7 @@ import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { registerDelegationActivation } from "./src/activation.ts";
 import { registerAgents, type RuntimeRegistration } from "./src/agents.ts";
 import { checkPrerequisites, detectCapabilities, type ToolDescriptor } from "./src/capabilities.ts";
 import {
@@ -90,6 +91,11 @@ export default function (pi: ExtensionAPI) {
   pi.on("resources_discover", async () => {
     if (!state) return {};
     return { skillPaths: [state.generation.skillsDir] };
+  });
+
+  registerDelegationActivation(pi, {
+    skills: () => state?.generation.skills ?? [],
+    modeActive: () => modeActive && state !== undefined,
   });
 
   pi.on("before_agent_start", async (event) => {
