@@ -4,6 +4,8 @@ All notable changes to this VERSION-based module are documented here.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-24
+
 ### Added
 
 - Run Cursor's official pstack plugin in Pi from an unmodified upstream checkout. The adapter downloads a pinned pstack revision, never edits it, and generates Pi skill wrappers and agent definitions from it. This release certifies pstack `0.15.2` at commit `6ed0f7a9504f577d7529064103cecce9be7dfc5e`.
