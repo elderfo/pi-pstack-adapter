@@ -22,7 +22,10 @@ pi install npm:pi-ask-user
 ```
 
 With `pi-subagents` installed, the upstream agents register as `pistack-comment-sicko` and
-`pistack-poteto-agent`.
+`pistack-poteto-agent`. `pi-subagents` hides its `subagent` tool until something enables it.
+The adapter enables that tool when a delegating workflow starts. This happens when you run its
+`/skill:` command, when the agent opens the skill on its own, and on every prompt while Poteto
+Mode is on.
 
 Run `/pistack-check <skill>` to find missing providers and executables before a workflow starts.
 
