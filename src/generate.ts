@@ -320,7 +320,7 @@ function header(input: WrapperInput): string {
   }
   if (input.entry.capabilities.includes("delegation")) {
     parts.push(
-      `This skill delegates. The adapter activates the \`${DELEGATION_TOOL}\` tool when the skill starts. If \`${DELEGATION_TOOL}\` is still missing from your tools and \`${DELEGATION_LOADER}\` is present, call \`${DELEGATION_LOADER}({})\` before you delegate, then call \`${DELEGATION_TOOL}({ action: "list" })\` to see the available agents. Skip both if the user told you not to delegate.`,
+      `This skill delegates. When a delegation provider is installed, the adapter tries to activate its \`${DELEGATION_TOOL}\` tool as the skill starts. If \`${DELEGATION_TOOL}\` is still missing from your tools and \`${DELEGATION_LOADER}\` is present, call \`${DELEGATION_LOADER}({})\` before you delegate, then call \`${DELEGATION_TOOL}({ action: "list" })\` to see the available agents. Skip both if the user told you not to delegate.`,
     );
   }
   if (input.entry.executables.length > 0) {
