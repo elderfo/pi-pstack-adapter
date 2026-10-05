@@ -1,7 +1,7 @@
-import { accessSync, constants, existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { platform } from "node:os";
 import { DEFAULT_NAMESPACE } from "./src/namespace.ts";
-import { delimiter, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -21,8 +21,9 @@ import {
 import { generate } from "./src/generate.ts";
 import { MODE_ENTRY_TYPE, modeFromEntries, modeInstruction } from "./src/mode.ts";
 import { CONFIG_FILE_NAME, agentDir, cacheRoot } from "./src/paths.ts";
+import { bashToolContext, probeExecutables } from "./src/executables.ts";
 import { entryFor } from "./src/registry.ts";
-import { platformSupport, renderCheck, renderStatus } from "./src/status.ts";
+import { platformSupport, renderCheck, renderStatus, shellDiagnostics, type ShellState } from "./src/status.ts";
 import { BootstrapRequiredError, resolveRefToCommit, resolveSource } from "./src/upstream.ts";
 import { normalizeRepo } from "./src/config.ts";
 import type { CapabilityStatus, Diagnostic, GenerationResult, ResolvedSource } from "./src/types.ts";
@@ -69,6 +70,9 @@ export default function (pi: ExtensionAPI) {
         `pstack adapter: ${platform()} is experimental. Upstream pstack skills expect POSIX tools that may be missing.`,
         "warning",
       );
+    }
+    for (const diagnostic of shellDiagnostics(shellState(ctx, pi.getActiveTools()))) {
+      if (ctx.hasUI && diagnostic.level === "error") ctx.ui.notify(`pstack adapter: ${diagnostic.message}`, "error");
     }
 
     const result = registerAgents(pi.events, state.generation.agents, state.config.namespace);
@@ -159,7 +163,7 @@ export default function (pi: ExtensionAPI) {
         return matches.length > 0 ? matches : null;
       },
       handler: async (args, ctx) => {
-        pi.sendMessage({ customType: "pistack-check", content: checkSkill(args.trim()), display: true });
+        pi.sendMessage({ customType: "pistack-check", content: checkSkill(args.trim(), ctx), display: true });
         if (args.trim() === "") ctx.ui.notify(`Usage: /${namespace}-check <skill>`, "info");
       },
     });
@@ -211,10 +215,10 @@ export default function (pi: ExtensionAPI) {
           modeActive,
           cacheRoot: state.cacheRoot,
           bootstrapped: state.bootstrapped,
-          runtimeDiagnostics: agentDiagnostics,
+          runtimeDiagnostics: [...agentDiagnostics, ...shellDiagnostics(probedShellState(ctx, pi.getActiveTools()))],
         });
       case "check":
-        return checkSkill(params.skill ?? "");
+        return checkSkill(params.skill ?? "", ctx);
       case "models":
         return renderModels(ctx);
       case "set_model":
@@ -230,7 +234,7 @@ export default function (pi: ExtensionAPI) {
     return detectCapabilities(pi.getAllTools() as unknown as ToolDescriptor[]);
   }
 
-  function checkSkill(requested: string): string {
+  function checkSkill(requested: string, ctx: ExtensionContext): string {
     if (!state) return "The pstack adapter has not resolved its upstream checkout yet.";
     const prefix = `${state.config.namespace}-`;
     const bare = requested.startsWith(prefix) ? requested.slice(prefix.length) : requested;
@@ -240,10 +244,16 @@ export default function (pi: ExtensionAPI) {
     if (!skill) {
       return `No pstack skill named ${JSON.stringify(requested)}. Run the adapter tool with action "status" for the full list.`;
     }
+    const resolved = shellState(ctx, pi.getActiveTools());
+    // An inactive bash tool or an unresolved shell is already a blocker, so do not spawn anything.
+    const usable = resolved.bashToolActive && resolved.shellError === undefined;
+    const executables = probeExecutables(skill.executables, usable ? () => sessionBashContext(ctx) : undefined);
+    const shell: ShellState = { ...resolved, runError: executables.shellFailure };
+    const shellProblems = shellDiagnostics(shell).map((diagnostic) => `${diagnostic.message} ${diagnostic.action ?? ""}`.trim());
     return renderCheck(
       skill,
       entryFor(skill.upstreamName, skill.generatedName.slice(prefix.length)),
-      checkPrerequisites(skill.capabilities, capabilities(), skill.executables, onPath),
+      checkPrerequisites(skill.capabilities, capabilities(), skill.executables, executables.has, shellProblems),
     );
   }
 
@@ -422,6 +432,27 @@ function buildState(
   };
 }
 
+function sessionBashContext(ctx: ExtensionContext) {
+  return bashToolContext(ctx.cwd, agentDir(), ctx.isProjectTrusted());
+}
+
+function shellState(ctx: ExtensionContext, activeTools: readonly string[]): ShellState {
+  let shellError: string | undefined;
+  try {
+    sessionBashContext(ctx);
+  } catch (error) {
+    shellError = (error as Error).message;
+  }
+  return { shellError, bashToolActive: activeTools.includes("bash") };
+}
+
+/** `shellState` plus one real command, for reports that can afford to start the shell. */
+function probedShellState(ctx: ExtensionContext, activeTools: readonly string[]): ShellState {
+  const resolved = shellState(ctx, activeTools);
+  if (!resolved.bashToolActive || resolved.shellError !== undefined) return resolved;
+  return { ...resolved, runError: probeExecutables([], () => sessionBashContext(ctx)).shellFailure };
+}
+
 function upstreamVersion(pluginDir: string): string {
   try {
     const raw = JSON.parse(readFileSync(join(pluginDir, ".cursor-plugin", "plugin.json"), "utf8")) as { version?: string };
@@ -438,22 +469,4 @@ function readAdapterVersion(): string {
   } catch {
     return "0.0.0";
   }
-}
-
-export function onPath(command: string): boolean {
-  const paths = (process.env.PATH ?? "").split(delimiter).filter((entry) => entry !== "");
-  const extensions = platform() === "win32" ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";") : [""];
-  for (const directory of paths) {
-    for (const extension of extensions) {
-      const candidate = join(directory, `${command}${extension}`);
-      if (!existsSync(candidate)) continue;
-      try {
-        accessSync(candidate, constants.X_OK);
-        return true;
-      } catch {
-        // Not executable by this user. Keep looking.
-      }
-    }
-  }
-  return false;
 }

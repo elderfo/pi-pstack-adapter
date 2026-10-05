@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { mergeConfig } from "../src/config.ts";
@@ -250,6 +250,168 @@ test("a cleartext or credential-bearing remote is refused", () => {
   }
   assert.equal(validateRepo("https://example.test/plugins"), "https://example.test/plugins");
   assert.equal(validateRepo("https://example.test/a@b/plugins"), "https://example.test/a@b/plugins");
+});
+
+/** Runs `body` with a global git config that converts LF to CRLF on checkout, as Git for Windows ships. */
+async function withGlobalAutocrlf(body: () => Promise<void>): Promise<void> {
+  const original = process.env.GIT_CONFIG_GLOBAL;
+  const config = join(makeTempDir("crlf-config"), "gitconfig");
+  writeFileSync(config, "[core]\n\tautocrlf = true\n", "utf8");
+  process.env.GIT_CONFIG_GLOBAL = config;
+  try {
+    await body();
+  } finally {
+    if (original === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+    else process.env.GIT_CONFIG_GLOBAL = original;
+  }
+}
+
+function upstreamSkillFile(pluginDir: string): string {
+  return readFileSync(join(pluginDir, "skills", "unslop", "SKILL.md"), "utf8");
+}
+
+/**
+ * Recreates what an earlier adapter left under Git for Windows: no local line-ending override,
+ * and CRLF copies checked out by Git itself, so their index entries are stat-clean. A file
+ * rewritten by hand would be stat-dirty, which hides the case where `checkout --force` does nothing.
+ */
+function makeLegacyCrlfCache(checkoutDir: string): void {
+  git(["config", "--local", "--unset", "core.autocrlf"], checkoutDir);
+  git(["config", "--local", "--unset", "core.eol"], checkoutDir);
+  git(["-c", "core.autocrlf=true", "rm", "-r", "--cached", "--quiet", "--", "pstack"], checkoutDir);
+  rmSync(join(checkoutDir, "pstack"), { recursive: true, force: true });
+  git(["-c", "core.autocrlf=true", "checkout", "--quiet", "HEAD", "--", "pstack"], checkoutDir);
+  // Age the files so the index records them as clean rather than racily clean.
+  const past = new Date(Date.now() - 60_000);
+  for (const file of git(["ls-files", "-z", "--", "pstack"], checkoutDir).split("\0").filter(Boolean)) {
+    utimesSync(join(checkoutDir, file), past, past);
+  }
+  git(["-c", "core.autocrlf=true", "update-index", "--refresh", "-q"], checkoutDir);
+  assert.match(git(["ls-files", "--eol", "--", "pstack/skills/unslop/SKILL.md"], checkoutDir), /i\/lf\s+w\/crlf/);
+}
+
+const offlineGit = async (args: readonly string[], cwd?: string) =>
+  args[0] === "fetch" || args[0] === "ls-remote" || args[0] === "clone"
+    ? { code: 1, stdout: "", stderr: "network disabled in this test" }
+    : systemGit(args, cwd);
+
+test("a global core.autocrlf does not rewrite upstream files in the cache checkout", async () => {
+  const repo = makeUpstreamRepo("crlf");
+  await withGlobalAutocrlf(async () => {
+    const config = mergeConfig([layer({ repo: repo.path, pinnedCommit: repo.commit, cacheDir: makeTempDir("cache") })]);
+    const resolved = await resolveSource({ config, mayBootstrap: true });
+    assert.equal(upstreamSkillFile(resolved.pluginDir).includes("\r"), false);
+  });
+});
+
+test("a cache checked out with CRLF before line endings were pinned is repaired offline", async () => {
+  const repo = makeUpstreamRepo("crlf-repair");
+  const cacheDir = makeTempDir("cache");
+  const config = mergeConfig([layer({ repo: repo.path, pinnedCommit: repo.commit, cacheDir })]);
+  const first = await resolveSource({ config, mayBootstrap: true });
+  makeLegacyCrlfCache(first.checkoutDir);
+
+  await withGlobalAutocrlf(async () => {
+    const repaired = await resolveSource({ config, mayBootstrap: false, git: offlineGit });
+    assert.equal(repaired.commit, repo.commit);
+    assert.equal(upstreamSkillFile(repaired.pluginDir).includes("\r"), false);
+    assert.equal(git(["status", "--porcelain"], repaired.checkoutDir), "", "the repaired cache must match HEAD");
+  });
+});
+
+test("a repair interrupted after dropping index entries is finished on the next start", async () => {
+  const repo = makeUpstreamRepo("crlf-interrupted");
+  const config = mergeConfig([layer({ repo: repo.path, pinnedCommit: repo.commit, cacheDir: makeTempDir("cache") })]);
+  const first = await resolveSource({ config, mayBootstrap: true });
+  makeLegacyCrlfCache(first.checkoutDir);
+
+  // The first start drops the stale entries, then dies before checking the files out again.
+  const dyingGit = async (args: readonly string[], cwd?: string) =>
+    args.includes("checkout") && args.includes("HEAD")
+      ? { code: 1, stdout: "", stderr: "killed" }
+      : offlineGit(args, cwd);
+  await assert.rejects(() => resolveSource({ config, mayBootstrap: false, git: dyingGit }), /could not repair them: killed/);
+
+  const repaired = await resolveSource({ config, mayBootstrap: false, git: offlineGit });
+  assert.equal(upstreamSkillFile(repaired.pluginDir).includes("\r"), false);
+  assert.equal(git(["status", "--porcelain"], repaired.checkoutDir), "");
+});
+
+test("a cache whose line endings cannot be checked is refused rather than trusted", async () => {
+  const repo = makeUpstreamRepo("crlf-unverifiable");
+  const config = mergeConfig([layer({ repo: repo.path, pinnedCommit: repo.commit, cacheDir: makeTempDir("cache") })]);
+  await resolveSource({ config, mayBootstrap: true });
+  const lockedGit = async (args: readonly string[], cwd?: string) =>
+    args.includes("ls-files") ? { code: 128, stdout: "", stderr: "index.lock exists" } : offlineGit(args, cwd);
+  await assert.rejects(
+    () => resolveSource({ config, mayBootstrap: false, git: lockedGit }),
+    /could not verify the line endings of its cache .*index\.lock exists/,
+  );
+});
+
+test("a cache that cannot be repaired refuses to serve converted bytes and says how to recover", async () => {
+  const repo = makeUpstreamRepo("crlf-readonly");
+  const cacheDir = makeTempDir("cache");
+  const config = mergeConfig([layer({ repo: repo.path, pinnedCommit: repo.commit, cacheDir })]);
+  const first = await resolveSource({ config, mayBootstrap: true });
+  makeLegacyCrlfCache(first.checkoutDir);
+
+  // A cache whose config cannot be written and whose files cannot be rewritten.
+  const readOnlyGit = async (args: readonly string[], cwd?: string) =>
+    (args[0] === "config" && !args.includes("--get")) || args.includes("checkout") || args.includes("rm") || args[0] === "fetch"
+      ? { code: 1, stdout: "", stderr: "read-only file system" }
+      : systemGit(args, cwd);
+  await assert.rejects(
+    () => resolveSource({ config, mayBootstrap: false, git: readOnlyGit }),
+    (error: Error) => {
+      assert.match(error.message, /converted line endings, such as pstack\/skills\/unslop\/SKILL\.md/);
+      assert.match(error.message, /read-only file system/);
+      assert.match(error.message, /delete .* and start Pi again/);
+      return true;
+    },
+  );
+});
+
+test("files upstream itself marks eol=crlf are upstream's bytes and are kept", async () => {
+  const root = makeTempDir("crlf-upstream");
+  writePluginFixture(root, { skills: [{ name: "unslop", body: "one\n", files: { "run.bat": "echo hi\n" } }], version: "1.0.0" });
+  writeFileSync(join(root, ".gitattributes"), "*.bat text eol=crlf\n", "utf8");
+  git(["init", "--quiet", "--initial-branch", "trunk", "."], root);
+  git(["add", "-A"], root);
+  git(["commit", "--quiet", "-m", "first"], root);
+  const commit = git(["rev-parse", "HEAD"], root).trim();
+
+  const config = mergeConfig([layer({ repo: root, pinnedCommit: commit, cacheDir: makeTempDir("cache") })]);
+  const first = await resolveSource({ config, mayBootstrap: true });
+  const again = await resolveSource({ config, mayBootstrap: false });
+  assert.equal(again.commit, commit);
+  assert.equal(readFileSync(join(first.pluginDir, "skills", "unslop", "run.bat"), "utf8"), "echo hi\r\n");
+});
+
+test("a Windows drive or relative path is a filesystem repository only on win32", () => {
+  for (const path of ["C:\\Users\\me\\plugins", "c:/src/plugins", ".\\plugins", "..\\plugins"]) {
+    assert.equal(validateRepo(path, "win32"), path);
+    assert.throws(() => validateRepo(path, "linux"), /Refusing the upstream repository/, path);
+  }
+  for (const hostile of [
+    "\\\\attacker\\share\\plugins",
+    "//attacker/share/plugins",
+    "C:",
+    "ext::cmd /c calc",
+    "-uC:\\payload",
+    "C:/dev/plugins::x",
+    "C:/dev/aux",
+    "C:/dev/con.txt/plugins",
+    "C:\\dev\\LPT1",
+    "C:/dev/x./plugins",
+    "C:/dev/x /plugins",
+    "C:/dev/x\u0001/plugins",
+    "C:\\dev\\plu|gins",
+    "\\\\?\\C:\\plugins",
+    "\\\\.\\pipe\\plugins",
+  ]) {
+    assert.throws(() => validateRepo(hostile, "win32"), /Refusing the upstream repository/, hostile);
+  }
 });
 
 test("a plugin path that escapes the checkout is refused", async () => {

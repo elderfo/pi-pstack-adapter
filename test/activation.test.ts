@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { test } from "node:test";
 import {
   activateDelegation,
@@ -62,6 +63,38 @@ test("a read of a generated SKILL.md resolves to its skill from any path form Pi
 
   const home = [skill("pistack-arena", true)].map((entry) => ({ ...entry, path: join(homedir(), "skills", entry.generatedName) }));
   assert.equal(skillFromReadPath("~/skills/pistack-arena/SKILL.md", "/work", home)?.generatedName, "pistack-arena");
+});
+
+test("on Windows a read resolves through Git Bash drive paths, either slash, and any letter case", () => {
+  const windows = [{ ...skill("pistack-arena", true), path: "C:\\Users\\me\\.pi\\cache\\skills\\pistack-arena" }];
+  const cwd = "C:\\Users\\me\\work";
+  for (const path of [
+    "C:\\Users\\me\\.pi\\cache\\skills\\pistack-arena\\SKILL.md",
+    "@C:\\Users\\me\\.pi\\cache\\skills\\pistack-arena\\SKILL.md",
+    "c:/users/ME/.pi/cache/skills/pistack-arena/skill.md",
+    "/c/Users/me/.pi/cache/skills/pistack-arena/SKILL.md",
+    "/mnt/c/Users/me/.pi/cache/skills/pistack-arena/SKILL.md",
+    "/cygdrive/c/Users/me/.pi/cache/skills/pistack-arena/SKILL.md",
+    "..\\.pi\\cache\\skills\\pistack-arena\\SKILL.md",
+  ]) {
+    assert.equal(skillFromReadPath(path, cwd, windows, "win32")?.generatedName, "pistack-arena", path);
+  }
+  assert.equal(skillFromReadPath("../.pi/cache/skills/pistack-arena/SKILL.md", "/c/Users/me/work", windows, "win32")?.generatedName, "pistack-arena");
+  assert.equal(skillFromReadPath("D:\\Users\\me\\.pi\\cache\\skills\\pistack-arena\\SKILL.md", cwd, windows, "win32"), undefined);
+});
+
+test("the base directory is normalized as Pi normalizes it, and Unicode spaces match", () => {
+  const home = [{ ...skill("pistack-arena", true), path: join(homedir(), "my skills", "pistack-arena") }];
+  assert.equal(skillFromReadPath("my skills/pistack-arena/SKILL.md", "~", home)?.generatedName, "pistack-arena");
+  assert.equal(skillFromReadPath("my\u00A0skills/pistack-arena/SKILL.md", homedir(), home)?.generatedName, "pistack-arena");
+  assert.equal(skillFromReadPath("my skills/pistack-arena/SKILL.md", pathToFileURL(homedir()).href, home)?.generatedName, "pistack-arena");
+  assert.equal(skillFromReadPath(pathToFileURL(join(homedir(), "my skills", "pistack-arena", "SKILL.md")).href, "/work", home)?.generatedName, "pistack-arena");
+});
+
+test("on POSIX a read stays case-sensitive and a Git Bash drive path is an ordinary path", () => {
+  const posix = [{ ...skill("pistack-arena", true), path: "/c/Users/me/skills/pistack-arena" }];
+  assert.equal(skillFromReadPath("/c/Users/me/skills/pistack-arena/SKILL.md", "/work", posix, "linux")?.generatedName, "pistack-arena");
+  assert.equal(skillFromReadPath("/c/users/me/skills/pistack-arena/SKILL.md", "/work", posix, "linux"), undefined);
 });
 
 test("a read of a support file or an unrelated SKILL.md starts nothing", () => {

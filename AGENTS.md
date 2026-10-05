@@ -88,5 +88,23 @@ Run `npm run test:isolated` when a change affects installation, package contents
 resource discovery, cache reuse, or startup behavior. The isolated test requires configured Pi
 provider credentials.
 
+## Keep every certified platform working
+
+Linux, macOS, and native Windows are certified. CI in `.github/workflows/ci.yml` runs the check
+and the unit suite on all three. Do not drop a platform from that matrix without also dropping
+its claim in `src/status.ts`, `README.md`, and `docs/compatibility.md`.
+
+Windows needs the most care in adapter-owned code:
+
+- Build paths with `node:path`. Never compare a path as a string before resolving both sides.
+  Windows paths are case-insensitive, and Pi's tools also accept Git Bash forms such as `/c/x`.
+- A test that needs a POSIX-only feature, such as the executable bit or unprivileged symbolic
+  links, must state why it narrows on Windows rather than fail there.
+- Upstream bytes must not depend on the user's Git line-ending settings.
+
+Run `npm run test:isolated` from Git Bash on Windows. If Pi gets its provider from an extension
+rather than `auth.json`, the isolated config cannot reach a model. Copy that provider's config
+into the sandbox and pass its extension with `-e` in a local copy of the script.
+
 Inspect `git diff --check` and the final diff. The task is complete when the relevant regression
 test passes, the type check passes, and certification or compatibility docs match the code.

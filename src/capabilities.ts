@@ -66,8 +66,10 @@ export function checkPrerequisites(
   statuses: readonly CapabilityStatus[],
   executables: readonly string[],
   hasExecutable: (name: string) => boolean,
+  /** Session problems that stop every workflow, such as a missing Bash shell. */
+  blockers: readonly string[] = [],
 ): PrerequisiteReport {
-  const lines: string[] = [];
+  const lines: string[] = [...blockers];
   for (const id of required) {
     const status = statuses.find((candidate) => candidate.id === id);
     if (!status || !status.available) {

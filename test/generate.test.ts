@@ -40,7 +40,7 @@ test("the generated wrapper ends with the upstream body byte for byte", () => {
   assert.match(wrapper, /^---\nname: pistack-unslop\n/);
 });
 
-test("support files are copied byte for byte and keep the executable bit", () => {
+test("support files are copied byte for byte and keep the executable bit", (t) => {
   const root = makeTempDir("support");
   const pluginDir = writePluginFixture(root, {
     skills: [
@@ -63,7 +63,11 @@ test("support files are copied byte for byte and keep the executable bit", () =>
     readFileSync(join(generatedDir, "references/notes.md"), "utf8"),
     readFileSync(join(pluginDir, "skills/tooling/references/notes.md"), "utf8"),
   );
-  assert.equal((lstatSync(join(generatedDir, "scripts/run.sh")).mode & 0o111) !== 0, true);
+  if (process.platform === "win32") {
+    t.diagnostic("Windows file systems have no executable bit, so only the bytes are checked.");
+  } else {
+    assert.equal((lstatSync(join(generatedDir, "scripts/run.sh")).mode & 0o111) !== 0, true);
+  }
 });
 
 test("generation is deterministic for the same inputs", () => {
@@ -201,12 +205,21 @@ test("a registry skill missing from the upstream revision is reported", () => {
   }
 });
 
-test("symbolic links are never created and are reported instead", () => {
+test("symbolic links are never created and are reported instead", (t) => {
   const root = makeTempDir("symlink");
   const pluginDir = writePluginFixture(root, {
     skills: [{ name: "linky", body: "b\n", files: { "real.txt": "real\n" } }],
   });
-  symlinkSync(join(pluginDir, "skills", "linky", "real.txt"), join(pluginDir, "skills", "linky", "alias.txt"));
+  try {
+    symlinkSync(join(pluginDir, "skills", "linky", "real.txt"), join(pluginDir, "skills", "linky", "alias.txt"), "file");
+  } catch (error) {
+    // Windows only lets an administrator or Developer Mode create symbolic links. CI runners can.
+    if (process.platform === "win32" && (error as NodeJS.ErrnoException).code === "EPERM") {
+      t.skip("creating a symbolic link needs Developer Mode or an administrator on Windows");
+      return;
+    }
+    throw error;
+  }
 
   const result = run({ pluginDir, cacheRoot: join(root, "cache") });
   const generatedDir = join(result.skillsDir, "pistack-linky");

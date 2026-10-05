@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { posix, win32 } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { GeneratedSkill } from "./types.ts";
 
@@ -41,9 +42,15 @@ export function skillFromReadPath(
   path: string,
   cwd: string,
   skills: readonly GeneratedSkill[],
+  platform: NodeJS.Platform = process.platform,
 ): GeneratedSkill | undefined {
-  const target = resolveToolPath(path, cwd);
-  return skills.find((skill) => join(skill.path, "SKILL.md") === target);
+  const paths = platform === "win32" ? win32 : posix;
+  // Windows file systems are case-insensitive, so `c:\x` and `C:\X` name the same SKILL.md.
+  const key = (value: string) => (platform === "win32" ? value.toLowerCase() : value);
+  const resolved = resolveToolPath(path, cwd, platform);
+  if (resolved === undefined) return undefined;
+  const target = key(resolved);
+  return skills.find((skill) => key(paths.resolve(skill.path, "SKILL.md")) === target);
 }
 
 /**
@@ -94,10 +101,44 @@ export function registerDelegationActivation(pi: ActivationHost, sources: Activa
   });
 }
 
-/** Mirrors the `@` and `~` handling of Pi's `resolveToCwd`. Other forms simply do not match. */
-function resolveToolPath(path: string, cwd: string): string {
-  const stripped = path.startsWith("@") ? path.slice(1) : path;
-  if (stripped === "~") return homedir();
-  if (stripped.startsWith("~/")) return join(homedir(), stripped.slice(2));
-  return isAbsolute(stripped) ? resolve(stripped) : resolve(cwd, stripped);
+const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
+
+/**
+ * Mirrors `resolveToCwd` in Pi 0.86 through 1.0 (`utils/paths.js`), which the `read` tool uses: Unicode
+ * spaces, the `@` prefix, Git Bash drive paths on Windows, `~`, and `file://` URLs. Pi does not
+ * export it, so a change there needs a matching change here. Other forms simply do not match.
+ */
+function resolveToolPath(path: string, cwd: string, platform: NodeJS.Platform): string | undefined {
+  const paths = platform === "win32" ? win32 : posix;
+  const value = normalizeToolPath(path.replace(UNICODE_SPACES, " ").replace(/^@/, ""), platform);
+  // Pi normalizes the base the same way, without the space and `@` handling.
+  const base = normalizeToolPath(cwd, platform);
+  if (value === undefined || base === undefined) return undefined;
+  return paths.isAbsolute(value) ? paths.resolve(value) : paths.resolve(base, value);
+}
+
+/** Pi's `normalizePath`: Git Bash drive paths on Windows, `~`, and `file://` URLs. */
+function normalizeToolPath(input: string, platform: NodeJS.Platform): string | undefined {
+  const paths = platform === "win32" ? win32 : posix;
+  const value = platform === "win32" ? windowsShellPath(input) : input;
+  if (value === "~") return homedir();
+  if (value.startsWith("~/") || (platform === "win32" && value.startsWith("~\\"))) {
+    return paths.join(homedir(), value.slice(2));
+  }
+  if (value.startsWith("file://")) {
+    try {
+      return fileURLToPath(value);
+    } catch {
+      return undefined;
+    }
+  }
+  return value;
+}
+
+/** Pi's `normalizeWindowsShellPath`: `/c/x`, `/mnt/c/x`, and `/cygdrive/c/x` become `C:\x`. */
+function windowsShellPath(value: string): string {
+  if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return value;
+  const match = value.match(/^\/(?:mnt\/|cygdrive\/)?([a-z])(?:\/(.*))?$/i);
+  if (!match) return value;
+  return `${match[1]!.toUpperCase()}:\\${match[2]?.replaceAll("/", "\\") ?? ""}`;
 }

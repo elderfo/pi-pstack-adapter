@@ -7,7 +7,7 @@ import { generate } from "../src/generate.ts";
 import { MODE_ENTRY_TYPE, modeFromEntries, modeInstruction } from "../src/mode.ts";
 import { mergeConfig } from "../src/config.ts";
 import { ADAPTER_OWNED, MODEL_ROLES, entryFor } from "../src/registry.ts";
-import { platformSupport, renderCheck, renderStatus } from "../src/status.ts";
+import { platformSupport, renderCheck, renderStatus, shellDiagnostics } from "../src/status.ts";
 import type { GeneratedAgent, ResolvedSource } from "../src/types.ts";
 import { makeTempDir, writePluginFixture } from "./support/fixture.ts";
 
@@ -242,10 +242,54 @@ test("a satisfied dependency-gated workflow is cleared to start", () => {
   assert.match(output, /Prerequisites satisfied\. Start the workflow\./);
 });
 
-test("Linux and macOS are supported, everything else is experimental", () => {
+test("Linux, macOS, and Windows are supported, everything else is experimental", () => {
   assert.equal(platformSupport("linux"), "supported");
   assert.equal(platformSupport("darwin"), "supported");
-  assert.equal(platformSupport("win32"), "experimental");
+  assert.equal(platformSupport("win32"), "supported");
+  assert.equal(platformSupport("freebsd"), "experimental");
+  assert.equal(platformSupport("aix"), "experimental");
+});
+
+test("a session with a Bash shell and an active bash tool reports no shell problem", () => {
+  assert.deepEqual(shellDiagnostics({ bashToolActive: true }), []);
+});
+
+test("a missing Bash shell is an error that says how to install one", () => {
+  const [diagnostic, ...rest] = shellDiagnostics({
+    shellError: "No bash shell found. Options:\n  1. Install Git for Windows",
+    bashToolActive: true,
+  });
+  assert.equal(rest.length, 0);
+  assert.equal(diagnostic?.level, "error");
+  assert.equal(diagnostic?.resource, "shell");
+  assert.match(diagnostic?.message ?? "", /No bash shell found\. Options:$/);
+  assert.match(diagnostic?.action ?? "", /Git for Windows.*shellPath/);
+});
+
+test("a bash tool replaced by PowerShell is reported, because skill bodies are Bash", () => {
+  const [diagnostic, ...rest] = shellDiagnostics({ bashToolActive: false });
+  assert.equal(rest.length, 0);
+  assert.equal(diagnostic?.level, "warning");
+  assert.match(diagnostic?.message ?? "", /PowerShell does not run them/);
+  // Pi 0.86 reads `defaultTools` entries literally, so the advice must not use `+bash`.
+  assert.match(diagnostic?.action ?? "", /Add `"bash"` to the `defaultTools` list/);
+  assert.doesNotMatch(diagnostic?.action ?? "", /\+bash/);
+});
+
+test("a shell that resolves but cannot run a command is an error in the status report", () => {
+  const [diagnostic, ...rest] = shellDiagnostics({ bashToolActive: true, runError: "Pi's bash shell x could not run a command" });
+  assert.equal(rest.length, 0);
+  assert.equal(diagnostic?.level, "error");
+  assert.equal(diagnostic?.resource, "shell");
+  assert.match(diagnostic?.message ?? "", /could not run a command/);
+});
+
+test("a shell problem stops every workflow at the prerequisite check, even with all executables present", () => {
+  const statuses = detectCapabilities([SUBAGENT_TOOL]);
+  const [blocker] = shellDiagnostics({ bashToolActive: false }).map((d) => `${d.message} ${d.action}`);
+  const report = checkPrerequisites(["delegation"], statuses, ["git"], () => true, [blocker!]);
+  assert.equal(report.ok, false);
+  assert.match(report.lines.join("\n"), /PowerShell does not run them/);
 });
 
 test("the status report names both versions, the resolved commit, the tiers, and the capabilities", () => {
@@ -330,7 +374,7 @@ test("the status report shows every model role, configured or inherited", () => 
   }
 });
 
-test("an experimental platform is warned about rather than claimed as supported", () => {
+test("an uncertified platform is warned about rather than claimed as supported", () => {
   const root = makeTempDir("winstatus");
   const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });
   const source: ResolvedSource = {
@@ -348,14 +392,14 @@ test("an experimental platform is warned about rather than claimed as supported"
     generation: generate({ source, namespace: "pistack", cacheRoot: join(root, "cache"), adapterVersion: "0.1.0", force: true }),
     capabilities: detectCapabilities([]),
     platform: "experimental",
-    platformName: "win32",
+    platformName: "freebsd",
     modeActive: false,
     cacheRoot: join(root, "cache"),
     bootstrapped: true,
   });
 
-  assert.match(report, /win32 is experimental for this release/);
-  assert.match(report, /Nothing here claims Windows support/);
+  assert.match(report, /freebsd is experimental for this release/);
+  assert.match(report, /Only Linux, macOS, and Windows are certified/);
   assert.match(report, /\| resolved commit \| \(not a git checkout\) \|/);
   assert.match(report, /\| cache state \| downloaded this session \|/);
 });
