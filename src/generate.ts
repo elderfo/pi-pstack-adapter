@@ -44,6 +44,7 @@ export function generate(options: GenerateOptions): GenerationResult {
     manifest.version,
     registryDigest(),
     adapterBodyDigest(),
+    hostMappingDocument(namespace),
   );
   const outDir = generatedDir(cacheRoot, inputs);
   const skillsDir = join(outDir, "skills");
@@ -349,8 +350,11 @@ that names a Cursor tool, path, or model.
 | \`run_in_background: true\` | \`async: true\` on a \`subagent\` call. |
 | \`AskUserQuestion\`, \`AskQuestion\` | the \`ask_user\` tool. |
 | \`TodoWrite\`, \`TaskCreate\`, \`TaskUpdate\` | no Pi equivalent. Keep an uncommitted \`todo.md\` checklist instead. |
-| \`claude-opus-5\`, \`claude-fable-5-1\`, other Cursor model slugs | the role models configured by \`/skill:${namespace}-setup\`. Call the \`pstack_adapter\` tool with \`action: "status"\` to read the current role table. An unconfigured role inherits the parent model, so omit \`model\`. |
+| \`claude-opus-5-5-max\`, \`gpt-5.6-sol-max\`, \`grok-4.7-xhigh-fast\`, other Cursor model slugs | the role models configured by \`/skill:${namespace}-setup\`. Call the \`pstack_adapter\` tool with \`action: "status"\` to read the current role table. An unconfigured role inherits the parent model, so omit \`model\`. |
+| a role line valued \`auto\` or \`inherit-parent\` | an unconfigured role. Omit \`model\` so the subagent runs on the parent model. |
 | \`~/.cursor/rules/pstack-models.mdc\` | adapter configuration written by \`/skill:${namespace}-setup\`. |
+| role lines \`feature, refactoring\`, \`bug-fix\`, \`perf-issue\`, \`hillclimb\`, \`judgment and prose\`, \`hardest tasks\` | adapter roles \`feature\` or \`refactoring\`, \`bug-fix\`, \`perf-issue\`, \`hillclimb\`, \`judgment\`, and \`strongest-judgment\`. |
+| any other role line, such as \`how explorer\`, \`arena runners\`, or \`interrogate reviewers\` | no adapter role. Omit \`model\` so the subagent runs on the parent model. |
 | \`~/.cursor/skills/\`, \`.cursor/skills/\` | Pi skill locations, \`~/.pi/agent/skills/\` and \`.pi/skills/\`. |
 | \`~/.cursor/projects/*/agent-transcripts\` | no Pi equivalent. Pi sessions live under \`~/.pi/agent/sessions/\`, in a different format. |
 | Cursor built-in skills such as \`run\` and \`verify\` | not installed. Use the project's own scripts, or say the check could not be run. |

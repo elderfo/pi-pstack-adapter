@@ -4,7 +4,7 @@ The compatibility registry in `src/registry.ts` assigns one support tier to ever
 certified pstack revision. Generation reads it, the wrapper frontmatter publishes it, and
 `/pistack-status` reports it.
 
-Certified revision: pstack `0.15.2` at `6ed0f7a9504f577d7529064103cecce9be7dfc5e` in
+Certified revision: pstack `0.15.9` at `e43c7ee26e0038c6c1fa8380dd34ce86ff94cb2a` in
 `https://github.com/cursor/plugins`.
 
 ## Tiers
@@ -33,7 +33,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 
 ## Registry
 
-### native (29)
+### native (30)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
@@ -44,6 +44,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `principle-encode-lessons-in-structure` | `/skill:pistack-principle-encode-lessons-in-structure` | - | - | - |
 | `principle-exhaust-the-design-space` | `/skill:pistack-principle-exhaust-the-design-space` | - | - | - |
 | `principle-experience-first` | `/skill:pistack-principle-experience-first` | - | - | - |
+| `principle-explain-the-number` | `/skill:pistack-principle-explain-the-number` | - | - | For a performance number it hands off to benchmark-checklist, which needs uptime and nproc. Check that skill first. |
 | `principle-fix-root-causes` | `/skill:pistack-principle-fix-root-causes` | - | - | - |
 | `principle-foundational-thinking` | `/skill:pistack-principle-foundational-thinking` | - | - | - |
 | `principle-guard-the-context-window` | `/skill:pistack-principle-guard-the-context-window` | - | - | - |
@@ -73,13 +74,15 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | --- | --- | --- | --- | --- |
 | `create-verification-skill` | `/skill:pistack-create-verification-skill` | - | - | Only the generated skill's output path needs remapping to Pi's skill directory. |
 
-### dependency-gated (11)
+### dependency-gated (13)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
 | `architect` | `/skill:pistack-architect` | `delegation` | - | Phase B delegates to arena runners, so it cannot run without parallel subagents. |
 | `arena` | `/skill:pistack-arena` | `delegation` | `git` | The whole skill is spawning N candidate subagents plus a judge. |
+| `benchmark-checklist` | `/skill:pistack-benchmark-checklist` | - | `uptime`, `nproc` | Its setup step checks load with `uptime` and cores with `nproc`. macOS has no `nproc` without GNU coreutils. |
 | `blast-radius` | `/skill:pistack-blast-radius` | - | `git`, `gh` | Needs git and gh to read the diff, commits, and PR before any analysis. |
+| `correct` | `/skill:pistack-correct` | - | `git` | Mines commit history, then commits fixes and edits lint, CI, and agent instruction files. Run it on a branch you will review. |
 | `figure-it-out` | `/skill:pistack-figure-it-out` | `delegation` | - | Phase B fan-out and the architect/arena routing require parallel subagents. |
 | `how` | `/skill:pistack-how` | `delegation` | - | Every path spawns explorer or explainer subagents; nothing runs inline. |
 | `interrogate` | `/skill:pistack-interrogate` | `delegation` | `git` | Multi-model adversarial review is entirely one subagent per configured model. |
