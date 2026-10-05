@@ -27,7 +27,7 @@ export const SKILL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   "principle-encode-lessons-in-structure": { tier: "native", capabilities: [], executables: [] },
   "principle-exhaust-the-design-space": { tier: "native", capabilities: [], executables: [] },
   "principle-experience-first": { tier: "native", capabilities: [], executables: [] },
-  "principle-explain-the-number": { tier: "native", capabilities: [], executables: [] },
+  "principle-explain-the-number": { tier: "native", capabilities: [], executables: [], note: "For a performance number it hands off to benchmark-checklist, which needs uptime and nproc. Check that skill first." },
   "principle-fix-root-causes": { tier: "native", capabilities: [], executables: [] },
   "principle-foundational-thinking": { tier: "native", capabilities: [], executables: [] },
   "principle-guard-the-context-window": { tier: "native", capabilities: [], executables: [] },

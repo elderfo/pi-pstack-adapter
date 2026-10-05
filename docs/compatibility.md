@@ -44,7 +44,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `principle-encode-lessons-in-structure` | `/skill:pistack-principle-encode-lessons-in-structure` | - | - | - |
 | `principle-exhaust-the-design-space` | `/skill:pistack-principle-exhaust-the-design-space` | - | - | - |
 | `principle-experience-first` | `/skill:pistack-principle-experience-first` | - | - | - |
-| `principle-explain-the-number` | `/skill:pistack-principle-explain-the-number` | - | - | - |
+| `principle-explain-the-number` | `/skill:pistack-principle-explain-the-number` | - | - | For a performance number it hands off to benchmark-checklist, which needs uptime and nproc. Check that skill first. |
 | `principle-fix-root-causes` | `/skill:pistack-principle-fix-root-causes` | - | - | - |
 | `principle-foundational-thinking` | `/skill:pistack-principle-foundational-thinking` | - | - | - |
 | `principle-guard-the-context-window` | `/skill:pistack-principle-guard-the-context-window` | - | - | - |

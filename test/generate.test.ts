@@ -171,6 +171,10 @@ test("skills added in pstack 0.15.9 publish their reviewed tiers", () => {
   assert.equal(tierOf("benchmark-checklist"), "dependency-gated");
   assert.equal(tierOf("correct"), "dependency-gated");
   assert.equal(tierOf("principle-explain-the-number"), "native");
+  assert.match(
+    readFileSync(join(result.skillsDir, "pistack-principle-explain-the-number", "SKILL.md"), "utf8"),
+    /hands off to benchmark-checklist, which needs uptime and nproc/,
+  );
   assert.equal(result.diagnostics.some((d) => d.message.includes("new to this upstream revision")), false);
 });
 
