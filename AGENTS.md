@@ -57,6 +57,21 @@ unions for source, trust, tier, and diagnostic states.
 Keep diagnostics actionable. Name the failed resource, explain the failure, and give the next
 step when one exists. Preserve deterministic ordering in generated files and reports.
 
+## Release through release-please
+
+release-please owns `CHANGELOG.md`, `VERSION`, and the `version` fields in `package.json` and
+`package-lock.json`. Do not edit them by hand.
+
+PRs merge by squash, so the PR title becomes the commit on `main` that release-please reads.
+Write the title as a Conventional Commit. A `feat` title produces a minor release, a `fix` title
+produces a patch release, and `chore`, `ci`, `docs`, `refactor`, and `test` titles produce no release.
+While the version is below 1.0.0, a breaking change (`feat!` or a `BREAKING CHANGE:` footer)
+produces a minor release.
+
+After each push to `main`, the `release-please` workflow opens or updates a release PR. Merging
+that PR tags `vX.Y.Z` and publishes the GitHub release. The configuration lives in
+`release-please-config.json` and `.release-please-manifest.json`.
+
 ## Verify the change
 
 Run both checks before completion:

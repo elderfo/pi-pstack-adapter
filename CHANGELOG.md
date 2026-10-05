@@ -1,8 +1,6 @@
 # Changelog
 
-All notable changes to this VERSION-based module are documented here.
-
-## [Unreleased]
+All notable changes to this project are documented here. release-please writes new entries from Conventional Commit PR titles.
 
 ## [0.2.0] - 2026-10-05
 
