@@ -3,6 +3,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileS
 import { join } from "node:path";
 import { test } from "node:test";
 import { extractUpstreamBody, generate } from "../src/generate.ts";
+import { CERTIFIED } from "../src/certified.ts";
 import { ADAPTER_SKILLS, SKILL_REGISTRY } from "../src/registry.ts";
 import type { ResolvedSource } from "../src/types.ts";
 import { makeTempDir, readTree, writePluginFixture } from "./support/fixture.ts";
@@ -144,6 +145,43 @@ test("a skill directory without SKILL.md is reported rather than dropped silentl
   const result = run({ pluginDir, cacheRoot: join(root, "cache") });
   const reported = result.diagnostics.find((d) => d.resource === "skill:hollow");
   assert.equal(reported?.level, "error");
+});
+
+test("the registry classifies every skill in the certified revision", () => {
+  assert.equal(
+    Object.keys(SKILL_REGISTRY).length,
+    CERTIFIED.skillCount,
+    "certifying a revision means classifying each of its skills in src/registry.ts",
+  );
+});
+
+test("skills added in pstack 0.15.9 publish their reviewed tiers", () => {
+  const root = makeTempDir("tiers-0159");
+  const pluginDir = writePluginFixture(root, {
+    skills: [
+      { name: "benchmark-checklist", body: "b\n" },
+      { name: "correct", body: "b\n" },
+      { name: "principle-explain-the-number", body: "b\n" },
+    ],
+  });
+  const result = run({ pluginDir, cacheRoot: join(root, "cache") });
+  const tierOf = (name: string) =>
+    /pistack-support-tier: (\S+)/.exec(readFileSync(join(result.skillsDir, `pistack-${name}`, "SKILL.md"), "utf8"))?.[1];
+
+  assert.equal(tierOf("benchmark-checklist"), "native");
+  assert.equal(tierOf("correct"), "dependency-gated");
+  assert.equal(tierOf("principle-explain-the-number"), "native");
+  assert.equal(result.diagnostics.some((d) => d.message.includes("new to this upstream revision")), false);
+});
+
+test("the host mapping tells the model an auto or inherit-parent role omits model", () => {
+  const root = makeTempDir("host-mapping");
+  const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });
+  const result = run({ pluginDir, cacheRoot: join(root, "cache") });
+  const mapping = readFileSync(join(result.outDir, "adapter", "host-mapping.md"), "utf8");
+
+  assert.match(mapping, /\| a role line valued `auto` or `inherit-parent` \| an unconfigured role\. Omit `model`/);
+  assert.match(mapping, /`grok-4\.7-xhigh-fast`, other Cursor model slugs/);
 });
 
 test("a registry skill missing from the upstream revision is reported", () => {

@@ -94,8 +94,15 @@ PISTACK_ALLOW_BOOTSTRAP=1 run_probe warm
 echo "== reuse without permission"
 run_probe reuse
 
+EXPECTED_SKILLS="$(REPO="$REPO" node --experimental-strip-types --no-warnings --input-type=module -e '
+const { CERTIFIED } = await import(`${process.env.REPO}/src/certified.ts`);
+const { ADAPTER_SKILLS } = await import(`${process.env.REPO}/src/registry.ts`);
+console.log(CERTIFIED.skillCount + Object.keys(ADAPTER_SKILLS).length);
+')"
+
 node -e '
 const { readFileSync } = require("node:fs");
+const expectedSkills = Number(process.argv[2]);
 const read = (name) => JSON.parse(readFileSync(`${process.argv[1]}/${name}.json`, "utf8"));
 const fail = [];
 const check = (ok, message) => { if (!ok) fail.push(message); };
@@ -108,7 +115,7 @@ check(!cold.tools.includes("ask_user"), "isolated config must not provide a stru
 check(cold.tools.includes("pstack_adapter"), "the adapter tool must be registered");
 
 const warm = read("warm");
-check(warm.skills.length === 48, `warm run registered ${warm.skills.length} skills, expected 48`);
+check(warm.skills.length === expectedSkills, `warm run registered ${warm.skills.length} skills, expected ${expectedSkills}`);
 check(warm.skills.includes("pistack-setup"), "pistack-setup must replace the Cursor setup skill");
 check(warm.skills.includes("pistack-status"), "pistack-status must be generated");
 check(!warm.skills.includes("pistack-setup-pstack"), "the Cursor setup skill must not be exposed verbatim");
@@ -128,4 +135,4 @@ if (fail.length > 0) {
   process.exit(1);
 }
 console.log(`PASS: ${warm.skills.length} skills, commands ${warm.commands.join(" ")}, delegation and structured-question correctly absent`);
-' "$ROOT"
+' "$ROOT" "$EXPECTED_SKILLS"
