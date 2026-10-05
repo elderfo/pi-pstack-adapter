@@ -12,7 +12,7 @@ export const SKILL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   "benchmark-checklist": { tier: "dependency-gated", capabilities: [], executables: ["uptime", "nproc"], note: "Its setup step checks load with `uptime` and cores with `nproc`. macOS has no `nproc` without GNU coreutils." },
   "blast-radius": { tier: "dependency-gated", capabilities: [], executables: ["git", "gh"], note: "Needs git and gh to read the diff, commits, and PR before any analysis." },
   "bro": { tier: "native", capabilities: [], executables: [] },
-  "correct": { tier: "dependency-gated", capabilities: [], executables: ["git"], note: "Mines commit history and reverts, then lands one commit per mistake class." },
+  "correct": { tier: "dependency-gated", capabilities: [], executables: ["git"], note: "Mines commit history, then commits fixes and edits lint, CI, and agent instruction files. Run it on a branch you will review." },
   "create-verification-skill": { tier: "adapted", capabilities: [], executables: [], note: "Only the generated skill's output path needs remapping to Pi's skill directory." },
   "figure-it-out": { tier: "dependency-gated", capabilities: ["delegation"], executables: [], note: "Phase B fan-out and the architect/arena routing require parallel subagents." },
   "how": { tier: "dependency-gated", capabilities: ["delegation"], executables: [], note: "Every path spawns explorer or explainer subagents; nothing runs inline." },

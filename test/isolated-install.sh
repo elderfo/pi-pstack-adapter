@@ -95,8 +95,11 @@ echo "== reuse without permission"
 run_probe reuse
 
 EXPECTED_SKILLS="$(PKG="$ROOT/pkg" node --experimental-strip-types --no-warnings --input-type=module -e '
-const { CERTIFIED } = await import(`${process.env.PKG}/src/certified.ts`);
-const { ADAPTER_SKILLS } = await import(`${process.env.PKG}/src/registry.ts`);
+const { join } = await import("node:path");
+const { pathToFileURL } = await import("node:url");
+const load = (file) => import(pathToFileURL(join(process.env.PKG, file)).href);
+const { CERTIFIED } = await load("src/certified.ts");
+const { ADAPTER_SKILLS } = await load("src/registry.ts");
 console.log(CERTIFIED.skillCount + Object.keys(ADAPTER_SKILLS).length);
 ')"
 
