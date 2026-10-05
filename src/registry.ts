@@ -9,7 +9,7 @@ export const SKILL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   "architect": { tier: "dependency-gated", capabilities: ["delegation"], executables: [], note: "Phase B delegates to arena runners, so it cannot run without parallel subagents." },
   "arena": { tier: "dependency-gated", capabilities: ["delegation"], executables: ["git"], note: "The whole skill is spawning N candidate subagents plus a judge." },
   "automate-me": { tier: "experimental", capabilities: ["delegation", "structured-question"], executables: ["git", "gh"], note: "Mining step depends on Cursor transcript files and the built-in create-skill skill, with no Pi equivalent." },
-  "benchmark-checklist": { tier: "native", capabilities: [], executables: [], note: "The profilers and counters it names are examples with alternatives, not requirements." },
+  "benchmark-checklist": { tier: "dependency-gated", capabilities: [], executables: ["uptime", "nproc"], note: "Its setup step checks load with `uptime` and cores with `nproc`. macOS has no `nproc` without GNU coreutils." },
   "blast-radius": { tier: "dependency-gated", capabilities: [], executables: ["git", "gh"], note: "Needs git and gh to read the diff, commits, and PR before any analysis." },
   "bro": { tier: "native", capabilities: [], executables: [] },
   "correct": { tier: "dependency-gated", capabilities: [], executables: ["git"], note: "Mines commit history and reverts, then lands one commit per mistake class." },

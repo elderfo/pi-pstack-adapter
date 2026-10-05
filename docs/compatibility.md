@@ -33,11 +33,10 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 
 ## Registry
 
-### native (31)
+### native (30)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
-| `benchmark-checklist` | `/skill:pistack-benchmark-checklist` | - | - | The profilers and counters it names are examples with alternatives, not requirements. |
 | `bro` | `/skill:pistack-bro` | - | - | - |
 | `principle-attack-the-premise` | `/skill:pistack-principle-attack-the-premise` | - | - | - |
 | `principle-boundary-discipline` | `/skill:pistack-principle-boundary-discipline` | - | - | - |
@@ -75,12 +74,13 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | --- | --- | --- | --- | --- |
 | `create-verification-skill` | `/skill:pistack-create-verification-skill` | - | - | Only the generated skill's output path needs remapping to Pi's skill directory. |
 
-### dependency-gated (12)
+### dependency-gated (13)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
 | `architect` | `/skill:pistack-architect` | `delegation` | - | Phase B delegates to arena runners, so it cannot run without parallel subagents. |
 | `arena` | `/skill:pistack-arena` | `delegation` | `git` | The whole skill is spawning N candidate subagents plus a judge. |
+| `benchmark-checklist` | `/skill:pistack-benchmark-checklist` | - | `uptime`, `nproc` | Its setup step checks load with `uptime` and cores with `nproc`. macOS has no `nproc` without GNU coreutils. |
 | `blast-radius` | `/skill:pistack-blast-radius` | - | `git`, `gh` | Needs git and gh to read the diff, commits, and PR before any analysis. |
 | `correct` | `/skill:pistack-correct` | - | `git` | Mines commit history and reverts, then lands one commit per mistake class. |
 | `figure-it-out` | `/skill:pistack-figure-it-out` | `delegation` | - | Phase B fan-out and the architect/arena routing require parallel subagents. |

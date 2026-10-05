@@ -168,7 +168,7 @@ test("skills added in pstack 0.15.9 publish their reviewed tiers", () => {
   const tierOf = (name: string) =>
     /pistack-support-tier: (\S+)/.exec(readFileSync(join(result.skillsDir, `pistack-${name}`, "SKILL.md"), "utf8"))?.[1];
 
-  assert.equal(tierOf("benchmark-checklist"), "native");
+  assert.equal(tierOf("benchmark-checklist"), "dependency-gated");
   assert.equal(tierOf("correct"), "dependency-gated");
   assert.equal(tierOf("principle-explain-the-number"), "native");
   assert.equal(result.diagnostics.some((d) => d.message.includes("new to this upstream revision")), false);
