@@ -182,6 +182,7 @@ test("the host mapping tells the model an auto or inherit-parent role omits mode
 
   assert.match(mapping, /\| a role line valued `auto` or `inherit-parent` \| an unconfigured role\. Omit `model`/);
   assert.match(mapping, /`grok-4\.7-xhigh-fast`, other Cursor model slugs/);
+  assert.match(mapping, /`hardest tasks` \| adapter roles .*`strongest-judgment`/);
 });
 
 test("a registry skill missing from the upstream revision is reported", () => {

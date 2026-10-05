@@ -10,7 +10,7 @@ All notable changes to this VERSION-based module are documented here.
 
 - Certify pstack `0.15.9` at commit `e43c7ee26e0038c6c1fa8380dd34ce86ff94cb2a`. The adapter now registers 50 upstream skills.
 - Classify the three skills new in this revision. `principle-explain-the-number` is `native`. `correct` is `dependency-gated` on `git`. `benchmark-checklist` is `dependency-gated` on `uptime` and `nproc`, because macOS has no `nproc` without GNU coreutils.
-- Map the role values `auto` and `inherit-parent` in the host mapping. Both mean the subagent runs on the parent model. The model slug examples now name the current upstream defaults.
+- Map the role values `auto` and `inherit-parent` in the host mapping. Both mean the subagent runs on the parent model. The mapping now names which upstream role lines correspond to adapter roles, such as `hardest tasks` to `strongest-judgment`. The model slug examples now name the current upstream defaults.
 
 ### Fixed
 

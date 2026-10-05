@@ -94,9 +94,9 @@ PISTACK_ALLOW_BOOTSTRAP=1 run_probe warm
 echo "== reuse without permission"
 run_probe reuse
 
-EXPECTED_SKILLS="$(REPO="$REPO" node --experimental-strip-types --no-warnings --input-type=module -e '
-const { CERTIFIED } = await import(`${process.env.REPO}/src/certified.ts`);
-const { ADAPTER_SKILLS } = await import(`${process.env.REPO}/src/registry.ts`);
+EXPECTED_SKILLS="$(PKG="$ROOT/pkg" node --experimental-strip-types --no-warnings --input-type=module -e '
+const { CERTIFIED } = await import(`${process.env.PKG}/src/certified.ts`);
+const { ADAPTER_SKILLS } = await import(`${process.env.PKG}/src/registry.ts`);
 console.log(CERTIFIED.skillCount + Object.keys(ADAPTER_SKILLS).length);
 ')"
 
