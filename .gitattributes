@@ -1,0 +1,3 @@
+# Check out text files with LF on every platform, so a Windows install ships the same bytes as
+# Linux and macOS. Git for Windows otherwise converts them to CRLF through core.autocrlf.
+* text=auto eol=lf

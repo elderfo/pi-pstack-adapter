@@ -34,11 +34,23 @@ export const systemGit: GitRunner = async (args, cwd) => {
  * so both are rejected before any argv reaches git.
  */
 const ALLOWED_REPO = /^(https:\/\/|ssh:\/\/|git@[^\s@]+:|\/|\.\/|\.\.\/)[^\s]*$/;
+/**
+ * Windows filesystem paths: a drive letter (`C:\x`, `C:/x`) or a `.\`/`..\` relative path. The
+ * characters Windows forbids in a path are refused, because Git for Windows reads such a string
+ * as an ssh remote instead (`C:/x::y` connects to a host named `c`).
+ * Git reads `C:/x` as an scp-style host on POSIX, so these are accepted only on win32. UNC
+ * paths (`\\host\share`) stay refused because opening one can send Windows credentials to a
+ * remote SMB host.
+ */
+const ALLOWED_WINDOWS_REPO = /^([A-Za-z]:[\\/]|\.\\|\.\.\\)[^\s<>:"|?*]*$/;
 const ALLOWED_REF = /^[A-Za-z0-9._][A-Za-z0-9._/-]*$/;
 
-export function validateRepo(repo: string): string {
+export function validateRepo(repo: string, platform: NodeJS.Platform = process.platform): string {
   const value = repo.trim();
-  if (!ALLOWED_REPO.test(value)) {
+  const windows = platform === "win32";
+  const unc = windows && /^[\\/]{2}/.test(value);
+  const allowed = !unc && (ALLOWED_REPO.test(value) || (windows && ALLOWED_WINDOWS_REPO.test(value)));
+  if (!allowed) {
     throw new Error(
       `Refusing the upstream repository ${JSON.stringify(repo)}. Use an https, ssh, scp-style, or filesystem path. Cleartext transports and transports such as \`ext::\` are never accepted.`,
     );
@@ -173,6 +185,13 @@ async function reuseCheckout(
   if (!existsSync(join(dir, ".git"))) return undefined;
   if ((await git(["cat-file", "-e", `${wanted}^{commit}`], dir)).code !== 0) return undefined;
 
+  // A read-only cache cannot take the setting. That is fine while its files are already LF, and
+  // the line-ending check below refuses it otherwise.
+  const pinError = await pinLineEndings(git, dir).then(
+    () => undefined,
+    (error: Error) => error,
+  );
+
   // Skipping a no-op checkout avoids contending on .git/index.lock with a concurrent session.
   const head = await headCommit(git, dir);
   if (head.toLowerCase() !== wanted.toLowerCase() || !existsSync(join(dir, pluginPath))) {
@@ -181,10 +200,62 @@ async function reuseCheckout(
 
   const commit = await headCommit(git, dir);
   if (/^[0-9a-f]{40}$/i.test(wanted) && commit.toLowerCase() !== wanted.toLowerCase()) return undefined;
+  let pluginDir: string;
   try {
-    return { commit, pluginDir: locatePluginDir(dir, pluginPath) };
+    pluginDir = locatePluginDir(dir, pluginPath);
   } catch {
     return undefined;
+  }
+  await ensureUpstreamBytes(git, dir, pluginPath, pinError);
+  return { commit, pluginDir };
+}
+
+/**
+ * A cache checked out before line endings were pinned can hold CRLF copies of LF files, and a
+ * whole-tree checkout leaves them alone because their index entries look clean. A path-limited
+ * checkout rewrites them in place, so readers never see the plugin tree disappear.
+ */
+async function ensureUpstreamBytes(
+  git: GitRunner,
+  dir: string,
+  pluginPath: string,
+  pinError: Error | undefined,
+): Promise<void> {
+  if ((await convertedFiles(git, dir, pluginPath)).length === 0) return;
+  if (!pinError) {
+    await git(["checkout", "--quiet", "--force", "HEAD", "--", pluginPath], dir);
+  }
+  const remaining = await convertedFiles(git, dir, pluginPath);
+  if (remaining.length === 0) return;
+  throw new Error(
+    `The pstack adapter cache at ${dir} holds upstream files with converted line endings, such as ${remaining[0]}, and could not repair them` +
+      `${pinError ? `: ${pinError.message}` : "."} Make the cache writable, or delete ${dir} and start Pi again to download a fresh copy.`,
+  );
+}
+
+/** Plugin files whose working copy is CRLF while the committed blob is LF and upstream did not ask for CRLF. */
+async function convertedFiles(git: GitRunner, dir: string, pluginPath: string): Promise<string[]> {
+  const listing = await git(["ls-files", "--eol", "--", pluginPath], dir);
+  if (listing.code !== 0) return [];
+  return listing.stdout
+    .split("\n")
+    .map((line) => line.match(/^i\/(\S*)\s+w\/(\S*)\s+attr\/(.*?)\t(.+)$/))
+    .filter((match): match is RegExpMatchArray => match !== null)
+    .filter(([, index, worktree, attr]) => index === "lf" && worktree !== "lf" && worktree !== "" && !/eol=crlf/.test(attr ?? ""))
+    .map(([, , , , file]) => file!);
+}
+
+/**
+ * Upstream files must reach generation byte for byte. Git for Windows installs with a system-wide
+ * `core.autocrlf=true`, which would rewrite every text file to CRLF, so the cache repository
+ * overrides it locally. An upstream `.gitattributes` `eol` setting still applies, because that
+ * is upstream's own choice.
+ */
+async function pinLineEndings(git: GitRunner, dir: string): Promise<void> {
+  for (const [key, value] of [["core.autocrlf", "false"], ["core.eol", "lf"]] as const) {
+    const current = await git(["config", "--local", "--get", key], dir);
+    if (current.code === 0 && current.stdout.trim() === value) continue;
+    await expect(git(["config", "--local", key, value], dir), `set ${key} in the adapter cache checkout`);
   }
 }
 
@@ -204,6 +275,7 @@ async function bootstrap(git: GitRunner, dir: string, repo: string, ref: string,
     await expect(git(["init", "--quiet", "."], dir), "initialize the adapter cache checkout");
     await expect(git(["remote", "add", "origin", repo], dir), `add ${repo} as the cache remote`);
   }
+  await pinLineEndings(git, dir);
   await expect(git(["config", "core.sparseCheckout", "true"], dir), "enable sparse checkout");
   mkdirSync(join(dir, ".git", "info"), { recursive: true });
   writeFileSync(join(dir, ".git", "info", "sparse-checkout"), `/${pluginPath}/\n`, "utf8");

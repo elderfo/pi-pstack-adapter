@@ -7,6 +7,39 @@ certified pstack revision. Generation reads it, the wrapper frontmatter publishe
 Certified revision: pstack `0.15.9` at `e43c7ee26e0038c6c1fa8380dd34ce86ff94cb2a` in
 `https://github.com/cursor/plugins`.
 
+## Platforms
+
+| platform | status | shell the skills run in |
+| --- | --- | --- |
+| Linux, including Pi inside WSL | supported | Bash |
+| macOS | supported | Bash |
+| Windows, native | supported | Git Bash, Pi's default `bash` tool shell |
+| anything else | experimental | whatever Pi resolves |
+
+The tiers below apply on every supported platform. Per-skill executables are checked in the
+shell the skills run in. On Windows, `/pistack-check` asks Git Bash, with Pi's
+`shellCommandPrefix` applied, because its `PATH` adds `/usr/bin` and `/mingw64/bin` to the
+`PATH` Pi started with.
+
+Windows evidence at the certified revision, on Windows 11 with Git for Windows 2.53, Node 22,
+and Pi 1.0.2:
+
+- The unit suite passes, and `npm run test:isolated` passes against the adapter commit that
+  introduced Windows support. Pi registers all 51 skills, and a later run reuses the cache
+  without the network. CI runs the unit suite on Windows for every change.
+- Every upstream helper script ran in Git Bash: `show-me-your-work/scripts/log.sh`,
+  `poteto-mode/scripts/check-plan.mjs`, `worktree-audit.sh`, `watch-pr`, and `orch.ts`.
+- Git for Windows bundles `git`, `curl`, `nproc`, and the POSIX tools the skill bodies call,
+  but not `uptime`, so `benchmark-checklist` reports it missing. `gh`, `tailscale`, and `sudo`
+  are separate installs on Windows, as on the other platforms.
+- The adapter checks out upstream with `core.autocrlf=false`. Git for Windows enables
+  `autocrlf` system-wide, which would otherwise rewrite every upstream file to CRLF. A cache
+  written before that setting existed is repaired on the next start, or refused with a recovery
+  step when it cannot be written.
+
+A session that replaces the `bash` tool with `powershell` cannot run the skills.
+`/pistack-status` reports it, and `/pistack-check` refuses to clear any workflow.
+
 ## Tiers
 
 | tier | meaning |
@@ -80,7 +113,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | --- | --- | --- | --- | --- |
 | `architect` | `/skill:pistack-architect` | `delegation` | - | Phase B delegates to arena runners, so it cannot run without parallel subagents. |
 | `arena` | `/skill:pistack-arena` | `delegation` | `git` | The whole skill is spawning N candidate subagents plus a judge. |
-| `benchmark-checklist` | `/skill:pistack-benchmark-checklist` | - | `uptime`, `nproc` | Its setup step checks load with `uptime` and cores with `nproc`. macOS has no `nproc` without GNU coreutils. |
+| `benchmark-checklist` | `/skill:pistack-benchmark-checklist` | - | `uptime`, `nproc` | Its setup step checks load with `uptime` and cores with `nproc`. macOS has no `nproc` without GNU coreutils, and Git Bash on Windows has no `uptime`. |
 | `blast-radius` | `/skill:pistack-blast-radius` | - | `git`, `gh` | Needs git and gh to read the diff, commits, and PR before any analysis. |
 | `correct` | `/skill:pistack-correct` | - | `git` | Mines commit history, then commits fixes and edits lint, CI, and agent instruction files. Run it on a branch you will review. |
 | `figure-it-out` | `/skill:pistack-figure-it-out` | `delegation` | - | Phase B fan-out and the architect/arena routing require parallel subagents. |

@@ -62,7 +62,7 @@ export function renderStatus(input: StatusInput): string {
   }
   if (input.platform === "experimental") {
     lines.push(
-      `> Warning. ${input.platformName} is experimental for this release. Adapter-owned code is portable, but upstream pstack skills call POSIX shell tools that this platform may not provide. Nothing here claims Windows support.`,
+      `> Warning. ${input.platformName} is experimental for this release. Adapter-owned code is portable, but upstream pstack skills call POSIX shell tools that this platform may not provide. Only Linux, macOS, and Windows are certified.`,
     );
     lines.push("");
   }
@@ -172,6 +172,39 @@ export function renderCheck(
   return parts.join("\n\n");
 }
 
+/** Platforms a release certifies. Windows means native Windows with Pi's Git Bash `bash` tool. */
 export function platformSupport(platform: string): PlatformSupport {
-  return platform === "linux" || platform === "darwin" ? "supported" : "experimental";
+  return platform === "linux" || platform === "darwin" || platform === "win32" ? "supported" : "experimental";
+}
+
+export interface ShellState {
+  /** Why Pi could not resolve the shell its `bash` tool runs, or undefined when it can. */
+  readonly shellError?: string;
+  /** Whether the `bash` tool is in the active tool set, for example not replaced by `powershell`. */
+  readonly bashToolActive: boolean;
+}
+
+/**
+ * Upstream skill bodies are written as Bash commands for Pi's `bash` tool, so a session without
+ * that tool or its shell cannot run them. On Windows that shell is Git Bash.
+ */
+export function shellDiagnostics(state: ShellState): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  if (state.shellError !== undefined) {
+    diagnostics.push({
+      level: "error",
+      resource: "shell",
+      message: `Pi cannot find the Bash shell its \`bash\` tool runs, and pstack skills run their commands there. ${state.shellError.split("\n")[0]}`,
+      action: "Install Git for Windows, or set `shellPath` in Pi settings to a Bash executable, then run /reload.",
+    });
+  }
+  if (!state.bashToolActive) {
+    diagnostics.push({
+      level: "warning",
+      resource: "shell",
+      message: "The `bash` tool is not active in this session. pstack skill bodies are written as Bash commands, and PowerShell does not run them.",
+      action: "Add `\"bash\"` to the `defaultTools` list in Pi settings, or remove that setting, then restart Pi.",
+    });
+  }
+  return diagnostics;
 }

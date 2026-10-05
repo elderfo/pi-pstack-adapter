@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { agentDir, cacheRoot } from "../src/paths.ts";
 import { test } from "node:test";
@@ -158,9 +158,10 @@ test("a config file that is not JSON fails loudly with its path", () => {
 test("a sandboxed config root keeps its own cache instead of writing the real one", () => {
   const original = process.env.PI_CODING_AGENT_DIR;
   try {
-    process.env.PI_CODING_AGENT_DIR = "/tmp/pistack-sandbox-config";
-    assert.equal(agentDir(), "/tmp/pistack-sandbox-config");
-    assert.equal(cacheRoot(), "/tmp/pistack-sandbox-config/cache/pi-pstack-adapter");
+    const sandbox = join(tmpdir(), "pistack-sandbox-config");
+    process.env.PI_CODING_AGENT_DIR = sandbox;
+    assert.equal(agentDir(), sandbox);
+    assert.equal(cacheRoot(), join(sandbox, "cache", "pi-pstack-adapter"));
 
     delete process.env.PI_CODING_AGENT_DIR;
     assert.equal(agentDir(), join(homedir(), ".pi", "agent"));

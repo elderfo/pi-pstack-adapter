@@ -8,8 +8,13 @@ under the `pistack` namespace.
 
 ## Requirements
 
-Install Pi and Git on Linux or macOS. Windows support is experimental because pstack skills use
-POSIX shell tools.
+Install Pi and Git on Linux, macOS, or Windows.
+
+On native Windows, pstack skills run their commands through Pi's `bash` tool, which uses Git
+Bash. [Git for Windows](https://git-scm.com/download/win) provides both. Keep the `bash` tool
+active. Replacing it with Pi's `powershell` tool breaks pstack workflows, because the skills are
+written as Bash commands. `/pistack-status` reports a missing Bash shell or an inactive `bash`
+tool. Pi inside WSL counts as Linux.
 
 ### Optional workflow providers
 
