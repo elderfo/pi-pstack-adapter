@@ -75,6 +75,17 @@ must allow GitHub Actions to create pull requests. Merging
 that PR tags `vX.Y.Z` and publishes the GitHub release. The configuration lives in
 `release-please-config.json` and `.release-please-manifest.json`.
 
+When a release is created, the `publish-npm` job in the same workflow checks out the tag, runs
+the check and the unit suite, and runs `npm publish`. It authenticates through npm trusted
+publishing (OIDC), so the repository stores no npm token. The npm package settings must list
+`elderfo/pi-pstack-adapter` with workflow file `release-please.yml` as a trusted publisher. OIDC
+cannot create a package, so the first version on npm must be published by hand with
+`npm publish` before the trusted publisher can be configured.
+
+The `pi-package` keyword in `package.json` lists the package in the
+[Pi package gallery](https://pi.dev/packages), which indexes npm. Keep that keyword, the `pi`
+manifest, and the `files` list in sync with the resources the extension loads.
+
 ## Verify the change
 
 Run both checks before completion:

@@ -4,16 +4,27 @@
   "description": "Run Cursor's official pstack plugin inside Pi from an unmodified upstream checkout",
   "type": "module",
   "license": "MIT",
+  "author": "Chris 'Freddy' Getsfred (https://github.com/elderfo)",
   "keywords": [
     "pi-package",
     "pi",
     "pi-coding-agent",
+    "pi-extension",
     "pstack",
+    "cursor",
+    "skills",
     "adapter"
   ],
+  "homepage": "https://github.com/elderfo/pi-pstack-adapter#readme",
+  "bugs": {
+    "url": "https://github.com/elderfo/pi-pstack-adapter/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cgetsfred/pi-pstack-adapter.git"
+    "url": "git+https://github.com/elderfo/pi-pstack-adapter.git"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "pi": {
     "extensions": [
