@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { accessSync, constants, existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { getShellConfig, SettingsManager } from "@earendil-works/pi-coding-agent";
@@ -65,8 +66,11 @@ export function onPath(command: string, platform: NodeJS.Platform = process.plat
   return false;
 }
 
-// The trailing `exit 0` keeps a missing last name from looking like a shell that failed to run.
-const PROBE_SCRIPT = 'for name in "$@"; do command -v -- "$name" >/dev/null 2>&1 && printf "%s\\n" "$name"; done; exit 0';
+// `$1` is a per-run nonce. Only lines carrying it count, so output from Pi's `shellCommandPrefix`
+// cannot fake a result, and the closing `done` line proves the script ran to the end: a program
+// that exits 0 without being a shell, or a prefix that exits early, never prints it.
+const PROBE_SCRIPT =
+  'nonce=$1; shift; for name in "$@"; do command -v -- "$name" >/dev/null 2>&1 && printf "%s found %s\\n" "$nonce" "$name"; done; printf "%s done\\n" "$nonce"; exit 0';
 
 export type ShellProbe =
   | { readonly kind: "ran"; readonly found: ReadonlySet<string> }
@@ -83,9 +87,10 @@ export function shellExecutables(context: BashToolContext, names: readonly strin
   // With `-c` the word after the script is `$0`; with `-s` the script arrives on stdin, and `--`
   // stops bash from reading a name as an option.
   const stdin = context.shell.commandTransport === "stdin";
+  const nonce = `pistack-probe-${randomBytes(12).toString("hex")}`;
   const args = stdin
-    ? [...context.shell.args, "--", ...names]
-    : [...context.shell.args, script, "pistack-probe", ...names];
+    ? [...context.shell.args, "--", nonce, ...names]
+    : [...context.shell.args, script, "pistack-probe", nonce, ...names];
   const result = spawnSync(context.shell.shell, args, {
     cwd: context.cwd,
     env: context.env,
@@ -99,7 +104,13 @@ export function shellExecutables(context: BashToolContext, names: readonly strin
     const detail = (result.stderr ?? "").trim().split(/\r?\n/)[0];
     return { kind: "failed", reason: `it exited ${result.status ?? result.signal}${detail ? `: ${detail}` : ""}` };
   }
-  return { kind: "ran", found: new Set(result.stdout.split(/\r?\n/).filter((line) => names.includes(line))) };
+  const lines = result.stdout.split(/\r?\n/);
+  if (!lines.includes(`${nonce} done`)) {
+    return { kind: "failed", reason: "it exited without running the probe command" };
+  }
+  const marker = `${nonce} found `;
+  const found = lines.filter((line) => line.startsWith(marker)).map((line) => line.slice(marker.length));
+  return { kind: "ran", found: new Set(found.filter((name) => names.includes(name))) };
 }
 
 export interface ExecutableReport {

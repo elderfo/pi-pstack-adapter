@@ -79,6 +79,26 @@ test("a shell that resolves but cannot run a command is reported, even when a sk
   assert.match(probeExecutables([], () => missing).shellFailure ?? "", /could not run a command/);
 });
 
+test("a probe that exits cleanly without running is a failure, not an empty result", () => {
+  // A program that exits 0 but is not a shell, and a prefix that stops the command early.
+  const exitsZero = piContext({ shell: { shell: process.execPath, args: ["-e", "process.exit(0)", "--"] } });
+  const earlyExit = piContext({ prefix: "exit 0" });
+  for (const [label, context] of [["non-shell", exitsZero], ["early exit", earlyExit]] as const) {
+    for (const names of [[], ["sh"]]) {
+      const report = probeExecutables(names, () => context);
+      assert.match(report.shellFailure ?? "", /exited without running the probe command/, `${label} ${JSON.stringify(names)}`);
+    }
+  }
+});
+
+test("prefix output cannot make a missing executable look installed", () => {
+  const noisy = piContext({ prefix: "printf 'pistack-no-such-command\\n'; echo pistack-probe found pistack-no-such-command" });
+  const report = probeExecutables(["pistack-no-such-command", "sh"], () => noisy);
+  assert.equal(report.shellFailure, undefined);
+  assert.equal(report.has("pistack-no-such-command"), false);
+  assert.equal(report.has("sh"), true);
+});
+
 test("without a usable bash context the check falls back to a PATH scan and spawns nothing", () => {
   assert.equal(probeExecutables(["pistack-no-such-command"], undefined).has("pistack-no-such-command"), false);
   const unresolved = probeExecutables(["pistack-no-such-command"], () => {
