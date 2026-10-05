@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. release-please writes new entries from Conventional Commit PR titles.
 
+## [0.3.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.2.0...v0.3.0) (2026-10-05)
+
+
+### Features
+
+* certify native Windows support ([#5](https://github.com/elderfo/pi-pstack-adapter/issues/5)) ([0ebcd76](https://github.com/elderfo/pi-pstack-adapter/commit/0ebcd76d0c24e8918ac16bdf2bda8672fe154e30))
+
 ## [0.2.0] - 2026-10-05
 
 ### Added
