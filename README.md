@@ -24,10 +24,10 @@ the agent reads.
 2. Start Pi. On the first interactive start, the adapter asks before it downloads pstack. Answer
    yes.
 
-3. Run a workflow:
+3. Run a workflow. `unslop` needs no other packages:
 
    ```text
-   /skill:pistack-how
+   /skill:pistack-unslop
    ```
 
 To see everything the adapter loaded, run `/pistack-status`.
@@ -89,8 +89,7 @@ Before you run a workflow, check what it needs:
 /pistack-check how
 ```
 
-The check reports the workflow's support tier, the Pi capabilities it uses, and the executables
-it calls.
+The check reports the workflow's support tier and any missing capabilities or executables.
 
 The adapter also adds these commands:
 
@@ -134,13 +133,13 @@ In a noninteractive session, set roles with `PISTACK_MODELS`:
 PISTACK_MODELS='feature=provider/model,bug-fix=provider/other-model' pi
 ```
 
-## Run Pi without a prompt
+## Run Pi noninteractively
 
-A noninteractive session cannot answer the download question. To allow the first download, set
-`PISTACK_ALLOW_BOOTSTRAP=1`:
+A noninteractive session, such as `pi --print`, cannot answer the download question. To allow
+the first download, set `PISTACK_ALLOW_BOOTSTRAP=1`:
 
 ```bash
-PISTACK_ALLOW_BOOTSTRAP=1 pi
+PISTACK_ALLOW_BOOTSTRAP=1 pi --print "Summarize this repository"
 ```
 
 The adapter caches pstack in `~/.pi/agent/cache/pi-pstack-adapter/`. Later sessions reuse the
