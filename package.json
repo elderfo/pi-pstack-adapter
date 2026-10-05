@@ -1,6 +1,6 @@
 {
   "name": "pi-pstack-adapter",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Run Cursor's official pstack plugin inside Pi from an unmodified upstream checkout",
   "type": "module",
   "license": "MIT",

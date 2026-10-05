@@ -4,6 +4,19 @@ All notable changes to this VERSION-based module are documented here.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-05
+
+### Added
+
+- Certify pstack `0.15.9` at commit `e43c7ee26e0038c6c1fa8380dd34ce86ff94cb2a`. The adapter now registers 50 upstream skills.
+- Classify the three skills new in this revision: `benchmark-checklist` and `principle-explain-the-number` as `native`, and `correct` as `dependency-gated` on `git`.
+- Map the role values `auto` and `inherit-parent` in the host mapping. Both mean the subagent runs on the parent model. The model slug examples now name the current upstream defaults.
+
+### Fixed
+
+- Regenerate cached wrappers when the host mapping text changes. Before this fix, an edit to the mapping did not change the cache key, so a cached revision kept serving the old mapping.
+- Derive the skill count in `npm run test:isolated` from the certified revision instead of a literal.
+
 ## [0.1.0] - 2026-09-24
 
 ### Added
