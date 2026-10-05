@@ -1,25 +1,53 @@
-# Pi pstack adapter
+# pi-pstack-adapter
 
-Use Cursor's official [pstack](https://github.com/cursor/plugins/tree/main/pstack) plugin in
-[Pi](https://pi.dev) without modifying the upstream checkout.
+[![npm](https://img.shields.io/npm/v/pi-pstack-adapter)](https://www.npmjs.com/package/pi-pstack-adapter)
+[![CI](https://github.com/elderfo/pi-pstack-adapter/actions/workflows/ci.yml/badge.svg)](https://github.com/elderfo/pi-pstack-adapter/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-The adapter downloads a tested pstack commit and makes its skills and agents available in Pi
-under the `pistack` namespace.
+Use Cursor's [pstack](https://github.com/cursor/plugins/tree/main/pstack) skills and agents in
+[Pi](https://pi.dev).
+
+pstack is Cursor's collection of engineering workflows: design reviews (`how`), prose cleanup
+(`unslop`), test-driven development (`tdd`), parallel fan-out (`swarm`), and the full Poteto Mode
+working style. This package downloads a tested pstack release and exposes every workflow as a
+Pi skill named `pistack-*`. The upstream files stay unmodified, so you can audit exactly what
+the agent reads.
+
+## Quick start
+
+1. Install the package:
+
+   ```bash
+   pi install npm:pi-pstack-adapter
+   ```
+
+2. Start Pi. On the first interactive start, the adapter asks before it downloads pstack. Answer
+   yes.
+
+3. Run a workflow:
+
+   ```text
+   /skill:pistack-how
+   ```
+
+To see everything the adapter loaded, run `/pistack-status`.
 
 ## Requirements
 
-Install Pi and Git on Linux, macOS, or Windows.
+- [Pi](https://pi.dev)
+- Git on your `PATH`
+- Linux, macOS, or Windows
 
-On native Windows, pstack skills run their commands through Pi's `bash` tool, which uses Git
-Bash. [Git for Windows](https://git-scm.com/download/win) provides both. Keep the `bash` tool
-active. Replacing it with Pi's `powershell` tool breaks pstack workflows, because the skills are
-written as Bash commands. `/pistack-status` reports a missing Bash shell or an inactive `bash`
-tool. Pi inside WSL counts as Linux.
+On native Windows, install [Git for Windows](https://git-scm.com/download/win). It provides both
+Git and the Git Bash shell that Pi's `bash` tool uses. pstack skills are written as Bash
+commands, so keep the `bash` tool active rather than switching to Pi's `powershell` tool.
+`/pistack-status` warns when Bash is missing or the `bash` tool is inactive. Pi inside WSL
+counts as Linux.
 
-### Optional workflow providers
+### Add optional providers for delegating workflows
 
-Some workflows need delegation or structured questions. Install these providers to use those
-workflows:
+Some workflows hand work to subagents or ask you multiple-choice questions. Install these two
+packages to enable them:
 
 ```bash
 pi install npm:pi-subagents
@@ -27,32 +55,27 @@ pi install npm:pi-ask-user
 ```
 
 With `pi-subagents` installed, the upstream agents register as `pistack-comment-sicko` and
-`pistack-poteto-agent`. `pi-subagents` hides its `subagent` tool until something enables it.
-The adapter enables that tool when a delegating workflow starts. This happens when you run its
-`/skill:` command, when the agent opens the skill on its own, and on every prompt while Poteto
-Mode is on.
+`pistack-poteto-agent`. The adapter turns on the `subagent` tool when a delegating workflow
+starts, whether you run its `/skill:` command or the agent opens the skill itself. While Poteto
+Mode is on, the adapter turns it on for every prompt.
 
-Run `/pistack-check <skill>` to find missing providers and executables before a workflow starts.
+To find missing providers or executables before you start a workflow, run
+`/pistack-check <skill>`.
 
-## Install the adapter
+## Install from Git instead of npm
+
+To track the repository directly, install from GitHub:
 
 ```bash
 pi install git:github.com/elderfo/pi-pstack-adapter
 ```
 
-On the first interactive start, the adapter asks before it downloads pstack into
-`~/.pi/agent/cache/pi-pstack-adapter/`. Later sessions reuse the cached commit without network
-access.
+To pin a release, add its tag, for example `git:github.com/elderfo/pi-pstack-adapter@v0.3.0`.
+For a pinned npm release, use `npm:pi-pstack-adapter@0.3.0`.
 
-A noninteractive session cannot download pstack unless you set `PISTACK_ALLOW_BOOTSTRAP=1`:
+## Run pstack workflows
 
-```bash
-PISTACK_ALLOW_BOOTSTRAP=1 pi
-```
-
-## Run a pstack skill
-
-Pi exposes generated skills as `/skill:pistack-*` commands:
+Each pstack skill appears as a `/skill:pistack-*` command:
 
 ```text
 /skill:pistack-how
@@ -60,28 +83,28 @@ Pi exposes generated skills as `/skill:pistack-*` commands:
 /skill:pistack-poteto-mode
 ```
 
-Check a workflow before you run it:
+Before you run a workflow, check what it needs:
 
 ```text
 /pistack-check how
 ```
 
-The check reports the workflow's support tier, required Pi capabilities, and required
-executables.
+The check reports the workflow's support tier, the Pi capabilities it uses, and the executables
+it calls.
 
 The adapter also adds these commands:
 
-| Command | Result |
+| Command | What it does |
 | --- | --- |
 | `/pistack-status` | Shows versions, the resolved commit, trust, capabilities, support tiers, and diagnostics. |
 | `/pistack-check <skill>` | Checks one workflow's requirements. |
-| `/pistack-mode on\|off\|status` | Controls Poteto Mode for the current session. |
+| `/pistack-mode on\|off\|status` | Turns Poteto Mode on or off for the current session. |
 | `/skill:pistack-setup` | Assigns Pi models to pstack roles or changes the upstream source. |
-| `/skill:pistack-status` | Requests the status report through the agent. |
+| `/skill:pistack-status` | Asks the agent to produce the status report. |
 
-## Read the support tiers
+## Check how well a workflow is supported
 
-`/pistack-status` reports a support tier for each skill:
+`/pistack-status` lists a support tier for each skill:
 
 | Tier | Meaning |
 | --- | --- |
@@ -91,42 +114,54 @@ The adapter also adds these commands:
 | `experimental` | Part of the workflow has no direct Pi equivalent. |
 | `unsupported` | Pi cannot provide a required host feature. |
 
-See [the compatibility registry](docs/compatibility.md) for the tier and requirements of every
+The [compatibility registry](docs/compatibility.md) lists the tier and requirements of every
 skill.
 
-## Configure model roles
+## Choose models for pstack roles
 
-pstack names model roles such as `feature`, `bug-fix`, and `judgment`. An unset role uses the
-current Pi session model.
+pstack assigns work to named model roles such as `feature`, `bug-fix`, and `judgment`. A role you
+leave unset uses the current Pi session model.
 
-Run the setup skill to list the models available in your Pi installation and assign them to
-roles:
+To list the models in your Pi installation and assign them to roles, run the setup skill:
 
 ```text
 /skill:pistack-setup
 ```
 
-For a noninteractive session, set role assignments with `PISTACK_MODELS`:
+In a noninteractive session, set roles with `PISTACK_MODELS`:
 
 ```bash
 PISTACK_MODELS='feature=provider/model,bug-fix=provider/other-model' pi
 ```
 
-## Select another pstack source
+## Run Pi without a prompt
+
+A noninteractive session cannot answer the download question. To allow the first download, set
+`PISTACK_ALLOW_BOOTSTRAP=1`:
+
+```bash
+PISTACK_ALLOW_BOOTSTRAP=1 pi
+```
+
+The adapter caches pstack in `~/.pi/agent/cache/pi-pstack-adapter/`. Later sessions reuse the
+cached commit without network access.
+
+## Use a different pstack version
 
 Each adapter release certifies one pstack version and commit. `/pistack-status` shows both the
 certified commit and the commit in use.
 
-Use `/skill:pistack-setup` to select a branch, tag, commit, repository, or local checkout. The
-adapter asks for confirmation before it changes the source. Restart Pi or run `/reload` after
-the change.
+To select a branch, tag, commit, repository, or local checkout, run `/skill:pistack-setup`. The
+adapter asks you to confirm before it changes the source. Restart Pi or run `/reload` afterward.
 
-A branch or tag resolves to one commit. The adapter records that commit and does not advance it
-on later starts. `/pistack-status` marks a custom repository or an untested revision with a
-warning.
+A branch or tag resolves to one commit when you select it. The adapter records that commit and
+does not move it on later starts. `/pistack-status` warns when you use a custom repository or a
+revision the adapter has not certified.
 
-The setup skill writes user settings to `~/.pi/agent/pi-pstack-adapter.json` or project settings
-to `.pi/pi-pstack-adapter.json`. Environment variables override both files:
+## Configuration reference
+
+The setup skill writes user settings to `~/.pi/agent/pi-pstack-adapter.json` and project
+settings to `.pi/pi-pstack-adapter.json`. Environment variables override both files:
 
 | Variable | Effect |
 | --- | --- |
@@ -139,13 +174,24 @@ to `.pi/pi-pstack-adapter.json`. Environment variables override both files:
 | `PISTACK_CACHE_DIR` | Changes the cache directory. |
 | `PISTACK_MODELS` | Assigns models as comma-separated `role=provider/model` pairs. |
 
-## Trust upstream sources
+## Security and trust
 
-Pi skills run with your user permissions. The adapter asks for confirmation before it downloads
-or changes the pstack source. Review a custom repository before you select it.
+Pi skills run with your user permissions, and a skill can tell the agent to run programs. The
+adapter asks before it downloads pstack or changes the source. Review a custom repository before
+you select it.
 
-The adapter preserves each upstream skill body for inspection. Pi policy, host safety rules, and
-your instructions take precedence over conflicting text in a pstack skill.
+The adapter keeps each upstream skill body byte-for-byte so you can inspect it. Every generated
+wrapper states that Pi policy, host safety rules, and your instructions override conflicting text
+in a pstack skill.
+
+## Uninstall
+
+```bash
+pi remove npm:pi-pstack-adapter
+```
+
+To reclaim disk space, delete `~/.pi/agent/cache/pi-pstack-adapter/` and, if you created it,
+`~/.pi/agent/pi-pstack-adapter.json`.
 
 ## License
 
