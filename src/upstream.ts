@@ -35,21 +35,39 @@ export const systemGit: GitRunner = async (args, cwd) => {
  */
 const ALLOWED_REPO = /^(https:\/\/|ssh:\/\/|git@[^\s@]+:|\/|\.\/|\.\.\/)[^\s]*$/;
 /**
- * Windows filesystem paths: a drive letter (`C:\x`, `C:/x`) or a `.\`/`..\` relative path. The
- * characters Windows forbids in a path are refused, because Git for Windows reads such a string
- * as an ssh remote instead (`C:/x::y` connects to a host named `c`).
+ * Windows filesystem paths: a drive letter (`C:\x`, `C:/x`) or a `.\`/`..\` relative path.
  * Git reads `C:/x` as an scp-style host on POSIX, so these are accepted only on win32. UNC
  * paths (`\\host\share`) stay refused because opening one can send Windows credentials to a
  * remote SMB host.
  */
 const ALLOWED_WINDOWS_REPO = /^([A-Za-z]:[\\/]|\.\\|\.\.\\)[^\s<>:"|?*]*$/;
+const RESERVED_WINDOWS_NAME = /^(con|prn|aux|nul|conin\$|conout\$|com[0-9\u00b9\u00b2\u00b3]|lpt[0-9\u00b9\u00b2\u00b3])(\..*)?$/i;
+
+/**
+ * Git for Windows treats a drive path as local only when Windows accepts every component.
+ * Otherwise it falls back to scp-style parsing and opens an ssh connection to a host named by
+ * the drive letter (`C:/x::y`, `C:/x/aux`, `C:/x./y` all do). Mirrors Git's `is_valid_win32_path`.
+ */
+function isValidWindowsPath(value: string): boolean {
+  return value
+    .split(/[\\/]/)
+    .slice(1)
+    .every(
+      (part) =>
+        part === "" ||
+        part === "." ||
+        part === ".." ||
+        (!/[\u0000-\u001f]/.test(part) && !/[. ]$/.test(part) && !RESERVED_WINDOWS_NAME.test(part)),
+    );
+}
 const ALLOWED_REF = /^[A-Za-z0-9._][A-Za-z0-9._/-]*$/;
 
 export function validateRepo(repo: string, platform: NodeJS.Platform = process.platform): string {
   const value = repo.trim();
   const windows = platform === "win32";
   const unc = windows && /^[\\/]{2}/.test(value);
-  const allowed = !unc && (ALLOWED_REPO.test(value) || (windows && ALLOWED_WINDOWS_REPO.test(value)));
+  const windowsPath = windows && ALLOWED_WINDOWS_REPO.test(value) && isValidWindowsPath(value);
+  const allowed = !unc && (ALLOWED_REPO.test(value) || windowsPath);
   if (!allowed) {
     throw new Error(
       `Refusing the upstream repository ${JSON.stringify(repo)}. Use an https, ssh, scp-style, or filesystem path. Cleartext transports and transports such as \`ext::\` are never accepted.`,
@@ -211,9 +229,12 @@ async function reuseCheckout(
 }
 
 /**
- * A cache checked out before line endings were pinned can hold CRLF copies of LF files, and a
- * whole-tree checkout leaves them alone because their index entries look clean. A path-limited
- * checkout rewrites them in place, so readers never see the plugin tree disappear.
+ * A cache checked out before line endings were pinned can hold CRLF copies of LF files. Git
+ * skips files whose index entries look clean, even with `--force`, so the repair drops those
+ * entries and checks the files out again. Each file is rewritten in place, so a concurrent
+ * reader never sees the plugin tree disappear. A repair interrupted between the two steps leaves
+ * the index behind HEAD, which the next start detects and finishes. When the cache cannot be
+ * verified or repaired, this throws rather than serve altered upstream bytes.
  */
 async function ensureUpstreamBytes(
   git: GitRunner,
@@ -221,28 +242,48 @@ async function ensureUpstreamBytes(
   pluginPath: string,
   pinError: Error | undefined,
 ): Promise<void> {
-  if ((await convertedFiles(git, dir, pluginPath)).length === 0) return;
+  const damaged = await filesNeedingRepair(git, dir, pluginPath);
+  if (damaged.length === 0) return;
+  let repairError = pinError?.message;
   if (!pinError) {
-    await git(["checkout", "--quiet", "--force", "HEAD", "--", pluginPath], dir);
+    const untracked = await git(["--literal-pathspecs", "rm", "-r", "--cached", "--quiet", "--ignore-unmatch", "--", ...damaged], dir);
+    const restored = untracked.code === 0
+      ? await git(["--literal-pathspecs", "checkout", "--quiet", "--force", "HEAD", "--", ...damaged], dir)
+      : untracked;
+    if (restored.code !== 0) repairError = restored.stderr.trim() || `git exited ${restored.code}`;
   }
-  const remaining = await convertedFiles(git, dir, pluginPath);
+  const remaining = await filesNeedingRepair(git, dir, pluginPath);
   if (remaining.length === 0) return;
   throw new Error(
     `The pstack adapter cache at ${dir} holds upstream files with converted line endings, such as ${remaining[0]}, and could not repair them` +
-      `${pinError ? `: ${pinError.message}` : "."} Make the cache writable, or delete ${dir} and start Pi again to download a fresh copy.`,
+      `${repairError ? `: ${repairError}` : "."} Make the cache writable, or delete ${dir} and start Pi again to download a fresh copy.`,
   );
 }
 
-/** Plugin files whose working copy is CRLF while the committed blob is LF and upstream did not ask for CRLF. */
-async function convertedFiles(git: GitRunner, dir: string, pluginPath: string): Promise<string[]> {
-  const listing = await git(["ls-files", "--eol", "--", pluginPath], dir);
-  if (listing.code !== 0) return [];
-  return listing.stdout
-    .split("\n")
-    .map((line) => line.match(/^i\/(\S*)\s+w\/(\S*)\s+attr\/(.*?)\t(.+)$/))
+/**
+ * Plugin files that are not upstream's bytes: a CRLF working copy of an LF blob that upstream
+ * did not mark `eol=crlf`, or an index entry that differs from HEAD after an interrupted repair.
+ */
+async function filesNeedingRepair(git: GitRunner, dir: string, pluginPath: string): Promise<string[]> {
+  const listing = await scan(git, dir, ["--literal-pathspecs", "ls-files", "-z", "--eol", "--", pluginPath]);
+  const converted = listing
+    .map((entry) => entry.match(/^i\/(\S*)\s+w\/(\S*)\s+attr\/([^\t]*)\t(.+)$/s))
     .filter((match): match is RegExpMatchArray => match !== null)
     .filter(([, index, worktree, attr]) => index === "lf" && worktree !== "lf" && worktree !== "" && !/eol=crlf/.test(attr ?? ""))
     .map(([, , , , file]) => file!);
+  const unstaged = await scan(git, dir, ["--literal-pathspecs", "diff", "--cached", "--name-only", "-z", "HEAD", "--", pluginPath]);
+  return [...new Set([...converted, ...unstaged])].sort();
+}
+
+async function scan(git: GitRunner, dir: string, args: readonly string[]): Promise<string[]> {
+  const result = await git(args, dir);
+  if (result.code !== 0) {
+    throw new Error(
+      `The pstack adapter could not verify the line endings of its cache at ${dir}: ${result.stderr.trim() || `git exited ${result.code}`}. ` +
+        `Close other Pi sessions and start Pi again, or delete ${dir} to download a fresh copy.`,
+    );
+  }
+  return result.stdout.split("\0").filter((entry) => entry !== "");
 }
 
 /**

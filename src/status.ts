@@ -180,6 +180,8 @@ export function platformSupport(platform: string): PlatformSupport {
 export interface ShellState {
   /** Why Pi could not resolve the shell its `bash` tool runs, or undefined when it can. */
   readonly shellError?: string;
+  /** Why the resolved shell could not run a command, when a probe ran and failed. */
+  readonly runError?: string;
   /** Whether the `bash` tool is in the active tool set, for example not replaced by `powershell`. */
   readonly bashToolActive: boolean;
 }
@@ -197,6 +199,9 @@ export function shellDiagnostics(state: ShellState): Diagnostic[] {
       message: `Pi cannot find the Bash shell its \`bash\` tool runs, and pstack skills run their commands there. ${state.shellError.split("\n")[0]}`,
       action: "Install Git for Windows, or set `shellPath` in Pi settings to a Bash executable, then run /reload.",
     });
+  }
+  if (state.runError !== undefined) {
+    diagnostics.push({ level: "error", resource: "shell", message: state.runError });
   }
   if (!state.bashToolActive) {
     diagnostics.push({

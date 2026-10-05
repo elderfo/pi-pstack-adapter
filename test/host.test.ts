@@ -276,6 +276,14 @@ test("a bash tool replaced by PowerShell is reported, because skill bodies are B
   assert.doesNotMatch(diagnostic?.action ?? "", /\+bash/);
 });
 
+test("a shell that resolves but cannot run a command is an error in the status report", () => {
+  const [diagnostic, ...rest] = shellDiagnostics({ bashToolActive: true, runError: "Pi's bash shell x could not run a command" });
+  assert.equal(rest.length, 0);
+  assert.equal(diagnostic?.level, "error");
+  assert.equal(diagnostic?.resource, "shell");
+  assert.match(diagnostic?.message ?? "", /could not run a command/);
+});
+
 test("a shell problem stops every workflow at the prerequisite check, even with all executables present", () => {
   const statuses = detectCapabilities([SUBAGENT_TOOL]);
   const [blocker] = shellDiagnostics({ bashToolActive: false }).map((d) => `${d.message} ${d.action}`);

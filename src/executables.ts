@@ -68,16 +68,24 @@ export function onPath(command: string, platform: NodeJS.Platform = process.plat
 // The trailing `exit 0` keeps a missing last name from looking like a shell that failed to run.
 const PROBE_SCRIPT = 'for name in "$@"; do command -v -- "$name" >/dev/null 2>&1 && printf "%s\\n" "$name"; done; exit 0';
 
+export type ShellProbe =
+  | { readonly kind: "ran"; readonly found: ReadonlySet<string> }
+  | { readonly kind: "failed"; readonly reason: string };
+
 /**
- * Returns the names `command -v` finds in the bash tool's context, or undefined when the shell
- * cannot run. Names travel as positional arguments, never inside the script text.
+ * Runs `command -v` for each name in the bash tool's context, with Pi's `shellCommandPrefix`
+ * first, exactly as the tool would run a command. It runs even with no names, because a shell
+ * that cannot run a command blocks every workflow. Names travel as positional arguments, never
+ * inside the script text.
  */
-export function shellExecutables(context: BashToolContext, names: readonly string[]): Set<string> | undefined {
-  if (names.length === 0) return new Set();
+export function shellExecutables(context: BashToolContext, names: readonly string[]): ShellProbe {
   const script = context.prefix ? `${context.prefix}\n${PROBE_SCRIPT}` : PROBE_SCRIPT;
-  // With `-c` the word after the script is `$0`; with `-s` the script arrives on stdin.
+  // With `-c` the word after the script is `$0`; with `-s` the script arrives on stdin, and `--`
+  // stops bash from reading a name as an option.
   const stdin = context.shell.commandTransport === "stdin";
-  const args = stdin ? [...context.shell.args, ...names] : [...context.shell.args, script, "pistack-probe", ...names];
+  const args = stdin
+    ? [...context.shell.args, "--", ...names]
+    : [...context.shell.args, script, "pistack-probe", ...names];
   const result = spawnSync(context.shell.shell, args, {
     cwd: context.cwd,
     env: context.env,
@@ -86,31 +94,46 @@ export function shellExecutables(context: BashToolContext, names: readonly strin
     timeout: 10_000,
     windowsHide: true,
   });
-  if (result.error || result.status !== 0) return undefined;
-  return new Set(result.stdout.split(/\r?\n/).filter((line) => names.includes(line)));
+  if (result.error) return { kind: "failed", reason: result.error.message };
+  if (result.status !== 0) {
+    const detail = (result.stderr ?? "").trim().split(/\r?\n/)[0];
+    return { kind: "failed", reason: `it exited ${result.status ?? result.signal}${detail ? `: ${detail}` : ""}` };
+  }
+  return { kind: "ran", found: new Set(result.stdout.split(/\r?\n/).filter((line) => names.includes(line))) };
+}
+
+export interface ExecutableReport {
+  readonly has: ExecutableCheck;
+  /** Set when Pi's bash shell resolved but could not run a command. */
+  readonly shellFailure?: string;
 }
 
 /**
- * Skill bodies run their commands through Pi's `bash` tool. On native Windows that is Git Bash,
- * whose PATH adds `/usr/bin` and `/mingw64/bin` and differs from the PATH Pi itself started with,
- * so a probe of Pi's PATH would disagree with what the model can run. There the check asks the
- * shell itself. Elsewhere the shell inherits Pi's PATH, so the cheaper PATH scan answers the same.
- * When the shell cannot be resolved or run, the PATH scan is the fallback, and the shell
- * diagnostics report the shell problem separately.
+ * Skill bodies run their commands through Pi's `bash` tool, so executables are looked up there:
+ * with Pi's `shellCommandPrefix` and its `bin` directory on every platform, and on native Windows
+ * inside Git Bash, whose PATH adds `/usr/bin` and `/mingw64/bin` to the PATH Pi started with.
+ * Pass no context when the tool is inactive or its shell cannot be resolved; the shell
+ * diagnostics report that, and the PATH scan answers for the executables.
  */
-export function executableCheck(
+export function probeExecutables(
   names: readonly string[],
-  platform: NodeJS.Platform,
-  resolveContext: () => BashToolContext,
-): ExecutableCheck {
-  if (platform !== "win32") return (name) => onPath(name, platform);
-  let found: Set<string> | undefined;
+  resolveContext: (() => BashToolContext) | undefined,
+  platform: NodeJS.Platform = process.platform,
+): ExecutableReport {
+  const scan: ExecutableCheck = (name) => onPath(name, platform);
+  if (!resolveContext) return { has: scan };
+  let context: BashToolContext;
   try {
-    found = shellExecutables(resolveContext(), names);
+    context = resolveContext();
   } catch {
-    found = undefined;
+    return { has: scan };
   }
-  if (!found) return (name) => onPath(name, platform);
-  const present = found;
-  return (name) => present.has(name);
+  const probe = shellExecutables(context, names);
+  if (probe.kind === "failed") {
+    return {
+      has: scan,
+      shellFailure: `Pi's bash shell ${context.shell.shell} could not run a command, so pstack skills cannot run here: ${probe.reason}. Fix the shell or \`shellCommandPrefix\` in Pi settings, or set \`shellPath\` to a working Bash executable, then restart Pi.`,
+    };
+  }
+  return { has: (name) => probe.found.has(name) };
 }

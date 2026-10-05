@@ -21,7 +21,7 @@ import {
 import { generate } from "./src/generate.ts";
 import { MODE_ENTRY_TYPE, modeFromEntries, modeInstruction } from "./src/mode.ts";
 import { CONFIG_FILE_NAME, agentDir, cacheRoot } from "./src/paths.ts";
-import { bashToolContext, executableCheck } from "./src/executables.ts";
+import { bashToolContext, probeExecutables } from "./src/executables.ts";
 import { entryFor } from "./src/registry.ts";
 import { platformSupport, renderCheck, renderStatus, shellDiagnostics, type ShellState } from "./src/status.ts";
 import { BootstrapRequiredError, resolveRefToCommit, resolveSource } from "./src/upstream.ts";
@@ -215,7 +215,7 @@ export default function (pi: ExtensionAPI) {
           modeActive,
           cacheRoot: state.cacheRoot,
           bootstrapped: state.bootstrapped,
-          runtimeDiagnostics: [...agentDiagnostics, ...shellDiagnostics(shellState(ctx, pi.getActiveTools()))],
+          runtimeDiagnostics: [...agentDiagnostics, ...shellDiagnostics(probedShellState(ctx, pi.getActiveTools()))],
         });
       case "check":
         return checkSkill(params.skill ?? "", ctx);
@@ -244,19 +244,16 @@ export default function (pi: ExtensionAPI) {
     if (!skill) {
       return `No pstack skill named ${JSON.stringify(requested)}. Run the adapter tool with action "status" for the full list.`;
     }
-    const shellProblems = shellDiagnostics(shellState(ctx, pi.getActiveTools())).map(
-      (diagnostic) => `${diagnostic.message} ${diagnostic.action ?? ""}`.trim(),
-    );
+    const resolved = shellState(ctx, pi.getActiveTools());
+    // An inactive bash tool or an unresolved shell is already a blocker, so do not spawn anything.
+    const usable = resolved.bashToolActive && resolved.shellError === undefined;
+    const executables = probeExecutables(skill.executables, usable ? () => sessionBashContext(ctx) : undefined);
+    const shell: ShellState = { ...resolved, runError: executables.shellFailure };
+    const shellProblems = shellDiagnostics(shell).map((diagnostic) => `${diagnostic.message} ${diagnostic.action ?? ""}`.trim());
     return renderCheck(
       skill,
       entryFor(skill.upstreamName, skill.generatedName.slice(prefix.length)),
-      checkPrerequisites(
-        skill.capabilities,
-        capabilities(),
-        skill.executables,
-        executableCheck(skill.executables, platform(), () => sessionBashContext(ctx)),
-        shellProblems,
-      ),
+      checkPrerequisites(skill.capabilities, capabilities(), skill.executables, executables.has, shellProblems),
     );
   }
 
@@ -447,6 +444,13 @@ function shellState(ctx: ExtensionContext, activeTools: readonly string[]): Shel
     shellError = (error as Error).message;
   }
   return { shellError, bashToolActive: activeTools.includes("bash") };
+}
+
+/** `shellState` plus one real command, for reports that can afford to start the shell. */
+function probedShellState(ctx: ExtensionContext, activeTools: readonly string[]): ShellState {
+  const resolved = shellState(ctx, activeTools);
+  if (!resolved.bashToolActive || resolved.shellError !== undefined) return resolved;
+  return { ...resolved, runError: probeExecutables([], () => sessionBashContext(ctx)).shellFailure };
 }
 
 function upstreamVersion(pluginDir: string): string {

@@ -16,10 +16,10 @@ Certified revision: pstack `0.15.9` at `e43c7ee26e0038c6c1fa8380dd34ce86ff94cb2a
 | Windows, native | supported | Git Bash, Pi's default `bash` tool shell |
 | anything else | experimental | whatever Pi resolves |
 
-The tiers below apply on every supported platform. Per-skill executables are checked in the
-shell the skills run in. On Windows, `/pistack-check` asks Git Bash, with Pi's
-`shellCommandPrefix` applied, because its `PATH` adds `/usr/bin` and `/mingw64/bin` to the
-`PATH` Pi started with.
+The tiers below apply on every supported platform. `/pistack-check` looks for per-skill
+executables in the shell the skills run in, with Pi's `shellCommandPrefix` applied. On Windows
+that matters most, because Git Bash adds `/usr/bin` and `/mingw64/bin` to the `PATH` Pi
+started with. A shell that is missing, inactive, or cannot run a command blocks every workflow.
 
 Windows evidence at the certified revision, on Windows 11 with Git for Windows 2.53, Node 22,
 and Pi 1.0.2:
