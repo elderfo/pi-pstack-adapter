@@ -38,6 +38,7 @@ and local Git repositories so the unit suite does not need network access.
 `src/certified.ts` defines the certified pstack version, commit, and resource counts. When that
 revision changes, inspect every upstream skill and agent before updating the certification.
 Update `src/registry.ts`, `docs/compatibility.md`, and the tests in the same change.
+Follow `.agents/skills/certify-pstack-revision/SKILL.md` for the full procedure.
 
 A support tier is a verification claim. Follow the evidence rules in `docs/compatibility.md`.
 Unknown upstream skills remain `experimental` until an end-to-end Pi run supports a stronger
