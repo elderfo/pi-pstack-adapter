@@ -7,9 +7,9 @@
 //   cacheRoot  a scratch directory; use a fresh one for each adapter state you compare
 // Exits 0 only when no body mismatches and generation reports no warning or error.
 // test/certify-probe.test.ts covers this script.
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { CERTIFIED } from "../../../../src/certified.ts";
 import { extractUpstreamBody, generate } from "../../../../src/generate.ts";
 import { discover, isDiagnostic, parseResource, readManifest } from "../../../../src/manifest.ts";
@@ -71,13 +71,33 @@ export function probe(pluginDir: string, commit: string, cacheRoot: string): Pro
   };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+function isEntryPoint(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  // Canonical paths, so a symlinked or differently cased entry path still runs the CLI.
+  const canonical = (path: string) => {
+    const real = realpathSync.native(path);
+    return process.platform === "win32" ? real.toLowerCase() : real;
+  };
+  try {
+    return canonical(fileURLToPath(import.meta.url)) === canonical(resolve(entry));
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint()) {
   const [pluginDir, commit, cacheRoot] = process.argv.slice(2);
   if (!pluginDir || !commit || !cacheRoot) {
     console.error("usage: probe.ts <pluginDir> <commit> <cacheRoot>");
     process.exit(2);
   }
-  const report = probe(resolve(pluginDir), commit, resolve(cacheRoot));
-  console.log(JSON.stringify(report, null, 1));
-  process.exitCode = report.ok ? 0 : 1;
+  try {
+    const report = probe(resolve(pluginDir), commit, resolve(cacheRoot));
+    console.log(JSON.stringify(report, null, 1));
+    process.exitCode = report.ok ? 0 : 1;
+  } catch (error) {
+    console.error(`probe failed: ${(error as Error).message}`);
+    process.exitCode = 1;
+  }
 }
