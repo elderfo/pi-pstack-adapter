@@ -182,6 +182,27 @@ test("skills added in pstack 0.15.9 publish their reviewed tiers", () => {
   assert.equal(result.diagnostics.some((d) => d.message.includes("new to this upstream revision")), false);
 });
 
+test("skills added in pstack 0.15.23 publish their reviewed tiers", () => {
+  const root = makeTempDir("tiers-01523");
+  const pluginDir = writePluginFixture(root, {
+    skills: [
+      { name: "in-your-own-words", body: "b\n" },
+      { name: "ketchup", body: "b\n" },
+      { name: "poteto-help", body: "b\n" },
+    ],
+  });
+  const result = run({ pluginDir, cacheRoot: join(root, "cache") });
+  const wrapperOf = (name: string) => readFileSync(join(result.skillsDir, `pistack-${name}`, "SKILL.md"), "utf8");
+  const tierOf = (name: string) => /pistack-support-tier: (\S+)/.exec(wrapperOf(name))?.[1];
+
+  assert.equal(tierOf("in-your-own-words"), "native");
+  assert.equal(tierOf("ketchup"), "adapted");
+  assert.equal(tierOf("poteto-help"), "experimental");
+  assert.match(wrapperOf("ketchup"), /Pi has no `\/visualize` skill/);
+  assert.match(wrapperOf("poteto-help"), /Custom Modes/);
+  assert.equal(result.diagnostics.some((d) => d.message.includes("new to this upstream revision")), false);
+});
+
 test("the host mapping tells the model an auto or inherit-parent role omits model", () => {
   const root = makeTempDir("host-mapping");
   const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });
@@ -191,6 +212,23 @@ test("the host mapping tells the model an auto or inherit-parent role omits mode
   assert.match(mapping, /\| a role line valued `auto` or `inherit-parent` \| an unconfigured role\. Omit `model`/);
   assert.match(mapping, /`grok-4\.7-xhigh-fast`, other Cursor model slugs/);
   assert.match(mapping, /`hardest tasks` \| adapter roles .*`strongest-judgment`/);
+});
+
+test("the host mapping covers Cursor vocabulary new in pstack 0.15.23", () => {
+  const root = makeTempDir("host-mapping-01523");
+  const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });
+  const result = run({ pluginDir, cacheRoot: join(root, "cache") });
+  const mapping = readFileSync(join(result.outDir, "adapter", "host-mapping.md"), "utf8");
+
+  assert.match(mapping, /\| `claude-opus-5-5-xhigh`, `grok-4\.7-xhigh-fast`, other Cursor model slugs \|/);
+  assert.doesNotMatch(mapping, /gpt-5\.6-sol-max/);
+  assert.match(mapping, /\| a Custom Mode, .* \| `\/pistack-mode on`/);
+  assert.match(mapping, /\| searching `~\/\.cursor\/plugins\/` .* `pistack-poteto-mode\/SKILL\.md` to any `pistack-poteto-agent`/);
+  assert.match(mapping, /\| `\/visualize`, a generated image \| not installed\. Draw a Mermaid diagram/);
+  assert.match(mapping, /the `generated skills` row of the `pstack_adapter` tool's `action: "status"` report/i);
+  assert.match(mapping, /\| a link that leaves the skill directory, such as `\.\.\/\.\.\/README\.md` .* under the `plugin directory` row/);
+  assert.match(mapping, /\| a public link to `https:\/\/github\.com\/cursor\/plugins\/blob\/main\/pstack\/` \| the same link with `main` replaced by the `resolved commit` row/);
+  assert.match(mapping, /`\.\.\/<pi-name>\/SKILL\.md` beside the current wrapper, where `<pi-name>` is its Pi name in \[skill names\]\(skill-names\.md\)/);
 });
 
 test("a registry skill missing from the upstream revision is reported", () => {
@@ -355,6 +393,26 @@ test("cached output is reused when the inputs have not changed", () => {
     force: true,
   });
   assert.notEqual(readFileSync(join(forced.outDir, "skills", "pistack-unslop", "SKILL.md"), "utf8"), "tampered\n");
+});
+
+test("an agent prompt names the generated poteto-mode path and forbids the Cursor plugin search", () => {
+  const root = makeTempDir("agent-location");
+  const pluginDir = writePluginFixture(root, {
+    skills: [{ name: "poteto-mode", body: "b\n" }],
+    agents: [{ name: "poteto-agent", body: "\nWith no path, search `~/.cursor/plugins/` for poteto-mode.\n" }],
+  });
+  const result = run({ pluginDir, cacheRoot: join(root, "cache") });
+  const prompt = result.agents[0]?.systemPrompt ?? "";
+  const potetoMode = join(result.skillsDir, "pistack-poteto-mode", "SKILL.md");
+
+  assert.ok(prompt.includes(`\`poteto-mode\` is ${potetoMode}.`));
+  assert.ok(prompt.includes("so `setup-pstack` is `pistack-setup`"), "a renamed skill must not be guessed from its upstream name");
+  assert.ok(prompt.includes(join(result.outDir, "adapter", "skill-names.md")));
+  assert.equal(existsSync(join(result.outDir, "adapter", "skill-names.md")), true);
+  assert.equal(existsSync(potetoMode), true);
+  assert.match(prompt, /Use these paths even when your parent gives none\. Never search `~\/\.cursor\/plugins\/`/);
+  assert.ok(prompt.indexOf("Never search") < prompt.indexOf("With no path, search"), "the adapter note precedes the upstream body");
+  assert.ok(prompt.endsWith("With no path, search `~/.cursor/plugins/` for poteto-mode."), "upstream text stays last and unchanged");
 });
 
 test("an agent system prompt is trimmed so a provider will accept it", () => {

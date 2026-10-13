@@ -35,7 +35,7 @@ Keep scratch work in `.work/`; ensure `.work/` is in `.git/info/exclude`. Leave 
    ```
    Count `pstack/skills/` and `pstack/agents/` at `$NEW`. Done when you can name every added, removed, and changed skill, agent, and support file.
 
-2. **Export the tree.** `rm -rf .work/inputs/pstack-new && mkdir -p .work/inputs/pstack-new && git -C "$U" archive "$NEW" pstack | tar -x -C .work/inputs/pstack-new`. Use `git archive`, not `git clone` from a partial clone; the clone fails with `fetch-pack: invalid index-pack output`.
+2. **Export the tree.** `rm -rf .work/inputs/pstack-new && mkdir -p .work/inputs/pstack-new && git -C "$U" -c core.autocrlf=false archive "$NEW" pstack | tar -x -C .work/inputs/pstack-new`. Use `git archive`, not `git clone` from a partial clone; the clone fails with `fetch-pack: invalid index-pack output`. Keep `-c core.autocrlf=false`: `git archive` applies `autocrlf`, which Git for Windows enables system-wide. Without it, the export is CRLF while the adapter's cache checkout is LF, so the probe and every comparison read bytes Pi never loads.
 
 3. **Baseline.** Run `npm ci` if `node_modules` is missing, then `npm run check` and `npm test`; both green before any edit. Probe the new tree with the unchanged adapter:
    ```bash
