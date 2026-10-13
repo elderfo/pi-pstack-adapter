@@ -21,29 +21,37 @@ executables in the shell the skills run in, with Pi's `shellCommandPrefix` appli
 that matters most, because Git Bash adds `/usr/bin` and `/mingw64/bin` to the `PATH` Pi
 started with. A shell that is missing, inactive, or cannot run a command blocks every workflow.
 
-Windows evidence from pstack `0.15.9`, on Windows 11 with Git for Windows 2.53, Node 22, and
-Pi 1.0.2:
+Windows evidence at the certified revision, pstack `0.15.23`, on Windows 11 with Git for
+Windows 2.53, Node 22, Bun 1.3, and Pi 1.2.0:
 
-- The unit suite passes, and `npm run test:isolated` passes against the adapter commit that
-  introduced Windows support. Pi registers all 51 skills, and a later run reuses the cache
-  without the network. CI runs the unit suite on Windows for every change.
-- Every upstream helper script ran in Git Bash: `show-me-your-work/scripts/log.sh`,
-  `poteto-mode/scripts/check-plan.mjs`, `worktree-audit.sh`, `watch-pr`, and `orch.ts`.
+- The unit suite and the type check pass. `npm run test:isolated` passes from Git Bash: Pi
+  registers all 54 skills, and a later run reuses the cache without the network. CI runs the
+  unit suite on Windows for every change.
+- The certification probe passes on an LF export of the tree: no diagnostics, 52 bodies
+  byte-identical, and none mismatched. The adapter's cache checkout matches that export byte for
+  byte.
+- `in-your-own-words`, `ketchup`, and `poteto-help` ran end to end in the isolated install, with
+  no `subagent` or `ask_user` tool. `ketchup` reported a commit and a pending decision with
+  Mermaid diagrams and changed nothing. `poteto-help` answered with `/pistack-mode on` and read
+  the guide from the `plugin directory` row, whose Windows path it resolved.
+- The status report's `plugin directory` and `generated skills` rows give native Windows paths.
+  `/pistack-check` clears `ketchup`, and still reports `uptime` missing for `benchmark-checklist`.
+- The helpers changed in `0.15.23` ran in Git Bash. `worktree-audit.sh` handled `-b <ref>`,
+  `--help`, an unknown base, and the `origin/HEAD` fallback, and classified a linked worktree.
+  `check-plan.mjs` ran on Node. Upstream's helper suite passed 61 of 63 tests under Bun. The two
+  failures fake the Graphite `gt` CLI with a shell script, which Bun cannot spawn on Windows.
+  Both fail at `0.15.9` too, and the adapter does not gate on `gt`.
+- At pstack `0.15.9`, `show-me-your-work/scripts/log.sh`, `watch-pr`, and `orch.ts` also ran
+  in Git Bash. None of them changed in a way that adds an executable or a path assumption.
 - Git for Windows bundles `git`, `curl`, `nproc`, and the POSIX tools the skill bodies call,
   but not `uptime`, so `benchmark-checklist` reports it missing. `gh`, `tailscale`, and `sudo`
   are separate installs on Windows, as on the other platforms.
 - The adapter checks out upstream with `core.autocrlf=false`. Git for Windows enables
   `autocrlf` system-wide, which would otherwise rewrite every upstream file to CRLF. A cache
   written before that setting existed is repaired on the next start, or refused with a recovery
-  step when it cannot be written.
-
-pstack `0.15.23` was not rerun on Windows. Its three new skills, `in-your-own-words`, `ketchup`,
-and `poteto-help`, need no executable. Three helpers changed. `worktree-audit.sh` now takes
-`-b <ref>` and resolves the base with `git symbolic-ref` and `git rev-parse`. It still runs only
-`git`, `gh`, and the POSIX tools Git for Windows bundles. `check-plan.mjs` now parses fenced
-code blocks by their opening fence, and `watch-pr` pages through review threads instead of
-reading the first 100. `check-plan.mjs` still runs on Node, and `watch-pr` still runs on Bun with
-`gh` and `git`. Neither adds an executable or a path assumption.
+  step when it cannot be written. `git archive` follows the same setting, so a certification
+  export on Windows needs `-c core.autocrlf=false`. Without it, 155 upstream text files at
+  `0.15.23` come out as CRLF and no longer match what Pi loads.
 
 A session that replaces the `bash` tool with `powershell` cannot run the skills.
 `/pistack-status` reports it, and `/pistack-check` refuses to clear any workflow.
