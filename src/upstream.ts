@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { MANIFEST_RELATIVE_PATH } from "./manifest.ts";
 import { cacheRoot, checkoutDir, stateFile, validateContainedPath } from "./paths.ts";
@@ -339,7 +339,19 @@ async function expect(result: Promise<GitResult>, what: string): Promise<GitResu
 
 function locatePluginDir(checkout: string, pluginPath: string): string {
   const nested = join(checkout, pluginPath);
-  if (existsSync(join(nested, MANIFEST_RELATIVE_PATH))) return nested;
+  if (existsSync(join(nested, MANIFEST_RELATIVE_PATH))) {
+    // The plugin path is textually contained, but a symbolic link inside the checkout could
+    // still lead outside it. Compare resolved paths so the link target decides.
+    const root = realpathSync(checkout);
+    const target = realpathSync(nested);
+    const inside = relative(root, target);
+    if (inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside)) {
+      throw new Error(
+        `Refusing the upstream plugin path ${JSON.stringify(pluginPath)}. It resolves to ${target}, outside the checkout ${root}. Point it at a real directory inside the checkout.`,
+      );
+    }
+    return nested;
+  }
   if (existsSync(join(checkout, MANIFEST_RELATIVE_PATH))) return checkout;
   throw new Error(
     `No pstack manifest under ${checkout}. Expected ${join(pluginPath, MANIFEST_RELATIVE_PATH)} or ${MANIFEST_RELATIVE_PATH}.`,

@@ -227,6 +227,8 @@ test("the host mapping covers Cursor vocabulary new in pstack 0.15.23", () => {
   assert.match(mapping, /\| `\/visualize`, a generated image \| not installed\. Draw a Mermaid diagram/);
   assert.match(mapping, /the `generated skills` row of the `pstack_adapter` tool's `action: "status"` report/i);
   assert.match(mapping, /\| a link that leaves the skill directory, such as `\.\.\/\.\.\/README\.md` .* under the `plugin directory` row/);
+  assert.match(mapping, /\| a public link to `https:\/\/github\.com\/cursor\/plugins\/blob\/main\/pstack\/` \| the same link with `main` replaced by the `resolved commit` row/);
+  assert.match(mapping, /`\.\.\/<pi-name>\/SKILL\.md` beside the current wrapper, where `<pi-name>` is its Pi name in \[skill names\]\(skill-names\.md\)/);
 });
 
 test("a registry skill missing from the upstream revision is reported", () => {
@@ -403,7 +405,10 @@ test("an agent prompt names the generated poteto-mode path and forbids the Curso
   const prompt = result.agents[0]?.systemPrompt ?? "";
   const potetoMode = join(result.skillsDir, "pistack-poteto-mode", "SKILL.md");
 
-  assert.ok(prompt.includes(`so \`poteto-mode\` is ${potetoMode}.`));
+  assert.ok(prompt.includes(`\`poteto-mode\` is ${potetoMode}.`));
+  assert.ok(prompt.includes("so `setup-pstack` is `pistack-setup`"), "a renamed skill must not be guessed from its upstream name");
+  assert.ok(prompt.includes(join(result.outDir, "adapter", "skill-names.md")));
+  assert.equal(existsSync(join(result.outDir, "adapter", "skill-names.md")), true);
   assert.equal(existsSync(potetoMode), true);
   assert.match(prompt, /Use these paths even when your parent gives none\. Never search `~\/\.cursor\/plugins\/`/);
   assert.ok(prompt.indexOf("Never search") < prompt.indexOf("With no path, search"), "the adapter note precedes the upstream body");

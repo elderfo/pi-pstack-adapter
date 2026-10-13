@@ -219,7 +219,7 @@ export const HOST_PRECEDENCE =
 export function agentSkillLocation(namespace: string, skillsDir: string): string {
   return [
     `The pstack skills for this agent are the Pi-generated wrappers in ${skillsDir}.`,
-    `A pstack skill \`<name>\` is ${join(skillsDir, `${namespace}-<name>`, "SKILL.md")}, so \`poteto-mode\` is ${join(skillsDir, `${namespace}-poteto-mode`, "SKILL.md")}.`,
+    `A pstack skill is ${join(skillsDir, "<pi-name>", "SKILL.md")}, where \`<pi-name>\` is its Pi name in ${join(dirname(skillsDir), "adapter", "skill-names.md")}. Most names only gain the \`${namespace}-\` prefix, but some are renamed, so \`setup-pstack\` is \`${namespace}-${entryFor("setup-pstack").rename ?? "setup-pstack"}\`. \`poteto-mode\` is ${join(skillsDir, `${namespace}-poteto-mode`, "SKILL.md")}.`,
     "Use these paths even when your parent gives none. Never search `~/.cursor/plugins/` or another Cursor directory for pstack content, because it is outside the certified revision. If a file is missing here, stop and tell your parent.",
   ].join("\n");
 }
@@ -369,8 +369,9 @@ that names a Cursor tool, path, or model.
 | role lines \`feature, refactoring\`, \`bug-fix\`, \`perf-issue\`, \`hillclimb\`, \`judgment and prose\`, \`hardest tasks\` | adapter roles \`feature\` or \`refactoring\`, \`bug-fix\`, \`perf-issue\`, \`hillclimb\`, \`judgment\`, and \`strongest-judgment\`. |
 | any other role line, such as \`how explorer\`, \`arena runners\`, or \`interrogate reviewers\` | no adapter role. Omit \`model\` so the subagent runs on the parent model. |
 | a Custom Mode, "Use as Mode", or Option+Enter / Alt+Enter on \`/poteto-mode\` | \`/${namespace}-mode on\`, which keeps Poteto Mode active for the Pi session until \`/${namespace}-mode off\`. |
-| searching \`~/.cursor/plugins/\` for an installed pstack skill, or comparing \`.cursor-plugin/plugin.json\` versions | the generated skill directory. A pstack skill \`<name>\` is \`../${namespace}-<name>/SKILL.md\` beside the current wrapper. The \`generated skills\` row of the \`pstack_adapter\` tool's \`action: "status"\` report gives that directory's absolute path. A parent passes the absolute path to \`${namespace}-poteto-mode/SKILL.md\` to any \`${namespace}-poteto-agent\` it spawns. |
+| searching \`~/.cursor/plugins/\` for an installed pstack skill, or comparing \`.cursor-plugin/plugin.json\` versions | the generated skill directory. A pstack skill is \`../<pi-name>/SKILL.md\` beside the current wrapper, where \`<pi-name>\` is its Pi name in [skill names](skill-names.md). Most names only gain the \`${namespace}-\` prefix, but some are renamed. The \`generated skills\` row of the \`pstack_adapter\` tool's \`action: "status"\` report gives that directory's absolute path. A parent passes the absolute path to \`${namespace}-poteto-mode/SKILL.md\` to any \`${namespace}-poteto-agent\` it spawns. |
 | a link that leaves the skill directory, such as \`../../README.md\` or \`../../docs/guide/\` | the same path under the \`plugin directory\` row of the \`pstack_adapter\` status report. That is the upstream checkout at the resolved commit, so read it there, not from a public \`main\` copy. |
+| a public link to \`https://github.com/cursor/plugins/blob/main/pstack/\` | the same link with \`main\` replaced by the \`resolved commit\` row of the \`pstack_adapter\` status report, so the user sees the content the answer came from. Give no public link when the configured source is a local path or another repository. |
 | \`~/.cursor/skills/\`, \`.cursor/skills/\` | Pi skill locations, \`~/.pi/agent/skills/\` and \`.pi/skills/\`. |
 | \`~/.cursor/projects/*/agent-transcripts\` | no Pi equivalent. Pi sessions live under \`~/.pi/agent/sessions/\`, in a different format. |
 | Cursor built-in skills such as \`run\` and \`verify\` | not installed. Use the project's own scripts, or say the check could not be run. |
