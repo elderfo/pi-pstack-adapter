@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { test } from "node:test";
 import { mergeConfig } from "../src/config.ts";
 import { checkoutDir } from "../src/paths.ts";
@@ -422,6 +422,20 @@ test("a plugin path that escapes the checkout is refused", async () => {
 
   const config = mergeConfig([layer({ repo: "https://example.test/x", pluginPath: "../../escape" })]);
   await assert.rejects(() => resolveSource({ config, mayBootstrap: true }), /Refusing the upstream plugin path/);
+});
+
+test("a local source cannot escape its checkout through the plugin path", async () => {
+  const root = makeTempDir("local-escape");
+  const checkout = join(root, "checkout");
+  mkdirSync(checkout, { recursive: true });
+  const outside = writePluginFixture(join(root, "outside"), { skills: [{ name: "unslop", body: "b\n" }] });
+  const escape = relative(checkout, outside);
+  assert.ok(escape.startsWith(".."), "the fixture plugin must sit outside the checkout");
+
+  for (const hostile of [escape, outside, "a/../../outside"]) {
+    const config = mergeConfig([layer({ localPath: checkout, pluginPath: hostile })]);
+    await assert.rejects(() => resolveSource({ config, mayBootstrap: false }), /Refusing the upstream plugin path/, hostile);
+  }
 });
 
 test("each repository gets its own cache directory", () => {

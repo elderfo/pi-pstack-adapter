@@ -119,17 +119,19 @@ export async function resolveSource(options: ResolveOptions): Promise<ResolvedSo
   const git = options.git ?? systemGit;
   const selection = selectionOf(config);
   const trust = trustOf(config);
+  // Validate before either branch touches the filesystem, so a local checkout cannot be
+  // escaped through the plugin path any more than a Git one can.
+  const pluginPath = validateContainedPath(config.pluginPath, "the upstream plugin path");
 
   if (selection.kind === "local") {
     const checkout = resolve(selection.path);
-    const pluginDir = locatePluginDir(checkout, config.pluginPath);
+    const pluginDir = locatePluginDir(checkout, pluginPath);
     const head = await git(["rev-parse", "HEAD"], checkout);
     return { selection, trust, commit: head.code === 0 ? head.stdout.trim() : "", checkoutDir: checkout, pluginDir };
   }
 
   const repo = validateRepo(config.repo);
   const wanted = validateRef(selection.ref);
-  const pluginPath = validateContainedPath(config.pluginPath, "the upstream plugin path");
   const root = cacheRoot(config.cacheDir);
   const dir = checkoutDir(root, repo);
 
