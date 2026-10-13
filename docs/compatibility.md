@@ -38,9 +38,12 @@ Pi 1.0.2:
   step when it cannot be written.
 
 pstack `0.15.23` was not rerun on Windows. Its three new skills, `in-your-own-words`, `ketchup`,
-and `poteto-help`, need no executable. The one changed helper script, `worktree-audit.sh`, now
-takes `-b <ref>` and resolves the base with `git symbolic-ref` and `git rev-parse`. It still
-runs only `git`, `gh`, and the POSIX tools Git for Windows bundles.
+and `poteto-help`, need no executable. Three helpers changed. `worktree-audit.sh` now takes
+`-b <ref>` and resolves the base with `git symbolic-ref` and `git rev-parse`. It still runs only
+`git`, `gh`, and the POSIX tools Git for Windows bundles. `check-plan.mjs` now parses fenced
+code blocks by their opening fence, and `watch-pr` pages through review threads instead of
+reading the first 100. `check-plan.mjs` still runs on Node, and `watch-pr` still runs on Bun with
+`gh` and `git`. Neither adds an executable or a path assumption.
 
 A session that replaces the `bash` tool with `powershell` cannot run the skills.
 `/pistack-status` reports it, and `/pistack-check` refuses to clear any workflow.
@@ -137,7 +140,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
 | `automate-me` | `/skill:pistack-automate-me` | `delegation`, `structured-question` | `git`, `gh` | Mining step depends on Cursor transcript files and the built-in create-skill skill, with no Pi equivalent. |
-| `poteto-help` | `/skill:pistack-poteto-help` | - | - | Its answers describe Cursor setup, the slash menu, and Custom Modes. A request for work runs poteto-mode, which is experimental. It asks a multiple-choice question only when the need is unclear. |
+| `poteto-help` | `/skill:pistack-poteto-help` | - | - | Its answers describe Cursor setup, the slash menu, and Custom Modes. A request for work runs poteto-mode, which is experimental. It asks a multiple-choice question only when the need is unclear. Its README and guide links resolve under the status report's plugin directory. |
 | `poteto-mode` | `/skill:pistack-poteto-mode` | `delegation`, `structured-question` | `git`, `gh` | Sticky-mode hosting plus references to Cursor built-in and plugin skills only partially map to Pi. |
 | `recall` | `/skill:pistack-recall` | `delegation` | `git`, `gh` | Core corpus is Cursor's on-disk transcript JSONL, so only the git/gh and shared-record half survives. |
 | `reflect` | `/skill:pistack-reflect` | `delegation` | - | Transcript mining and create-skill routing are Cursor-specific, though the digest fallback partly works. |

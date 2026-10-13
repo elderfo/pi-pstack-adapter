@@ -225,6 +225,8 @@ test("the host mapping covers Cursor vocabulary new in pstack 0.15.23", () => {
   assert.match(mapping, /\| a Custom Mode, .* \| `\/pistack-mode on`/);
   assert.match(mapping, /\| searching `~\/\.cursor\/plugins\/` .* `pistack-poteto-mode\/SKILL\.md` to any `pistack-poteto-agent`/);
   assert.match(mapping, /\| `\/visualize`, a generated image \| not installed\. Draw a Mermaid diagram/);
+  assert.match(mapping, /the `generated skills` row of the `pstack_adapter` tool's `action: "status"` report/i);
+  assert.match(mapping, /\| a link that leaves the skill directory, such as `\.\.\/\.\.\/README\.md` .* under the `plugin directory` row/);
 });
 
 test("a registry skill missing from the upstream revision is reported", () => {

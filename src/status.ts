@@ -46,7 +46,9 @@ export function renderStatus(input: StatusInput): string {
   lines.push(`| certified commit | ${CERTIFIED.commit} |`);
   lines.push(`| trust | ${source.trust} |`);
   lines.push(`| checkout | ${source.checkoutDir} |`);
+  lines.push(`| plugin directory | ${source.pluginDir} |`);
   lines.push(`| generated resources | ${input.generation.outDir} |`);
+  lines.push(`| generated skills | ${input.generation.skillsDir} |`);
   lines.push(`| cache root | ${input.cacheRoot} |`);
   lines.push(`| cache state | ${input.bootstrapped ? "downloaded this session" : "reused, no network needed"} |`);
   lines.push(`| namespace | ${config.namespace} |`);

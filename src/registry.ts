@@ -22,7 +22,7 @@ export const SKILL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   "maintain-verification-skill": { tier: "dependency-gated", capabilities: ["delegation"], executables: [], note: "Source wave launches one read-only subagent per feature file." },
   "make-bot-ui": { tier: "unsupported", capabilities: [], executables: ["curl", "tailscale", "sudo"], note: "Built entirely on Cursor Automations webhook routines and the secret-request card." },
   "no-comments": { tier: "dependency-gated", capabilities: ["delegation"], executables: ["git"], note: "Step 1 must spawn the comment-sicko agent; the skill only triages its report." },
-  "poteto-help": { tier: "experimental", capabilities: [], executables: [], note: "Its answers describe Cursor setup, the slash menu, and Custom Modes. A request for work runs poteto-mode, which is experimental. It asks a multiple-choice question only when the need is unclear." },
+  "poteto-help": { tier: "experimental", capabilities: [], executables: [], note: "Its answers describe Cursor setup, the slash menu, and Custom Modes. A request for work runs poteto-mode, which is experimental. It asks a multiple-choice question only when the need is unclear. Its README and guide links resolve under the status report's plugin directory." },
   "poteto-mode": { tier: "experimental", capabilities: ["delegation", "structured-question"], executables: ["git", "gh"], note: "Sticky-mode hosting plus references to Cursor built-in and plugin skills only partially map to Pi." },
   "principle-attack-the-premise": { tier: "native", capabilities: [], executables: [] },
   "principle-boundary-discipline": { tier: "native", capabilities: [], executables: [] },
