@@ -331,7 +331,7 @@ test("the status report names both versions, the resolved commit, the tiers, and
   assert.match(report, /\| adapter version \| 0\.1\.0 \|/);
   assert.match(report, /\| upstream pstack version \| 0\.15\.2 \|/);
   assert.match(report, new RegExp(`\\| resolved commit \\| ${commit} \\|`));
-  assert.match(report, /\| certified commit \| e43c7ee26e0038c6c1fa8380dd34ce86ff94cb2a \|/);
+  assert.match(report, /\| certified commit \| dbf49813a39c1a5389c5e28cb8e4c1c2379e2454 \|/);
   assert.match(report, /\| Poteto Mode \| active \|/);
   assert.match(report, /\| cache state \| reused, no network needed \|/);
   assert.match(report, /outside the tested trust boundary/);

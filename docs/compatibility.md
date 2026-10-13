@@ -4,7 +4,7 @@ The compatibility registry in `src/registry.ts` assigns one support tier to ever
 certified pstack revision. Generation reads it, the wrapper frontmatter publishes it, and
 `/pistack-status` reports it.
 
-Certified revision: pstack `0.15.9` at `e43c7ee26e0038c6c1fa8380dd34ce86ff94cb2a` in
+Certified revision: pstack `0.15.23` at `dbf49813a39c1a5389c5e28cb8e4c1c2379e2454` in
 `https://github.com/cursor/plugins`.
 
 ## Platforms
@@ -21,8 +21,8 @@ executables in the shell the skills run in, with Pi's `shellCommandPrefix` appli
 that matters most, because Git Bash adds `/usr/bin` and `/mingw64/bin` to the `PATH` Pi
 started with. A shell that is missing, inactive, or cannot run a command blocks every workflow.
 
-Windows evidence at the certified revision, on Windows 11 with Git for Windows 2.53, Node 22,
-and Pi 1.0.2:
+Windows evidence from pstack `0.15.9`, on Windows 11 with Git for Windows 2.53, Node 22, and
+Pi 1.0.2:
 
 - The unit suite passes, and `npm run test:isolated` passes against the adapter commit that
   introduced Windows support. Pi registers all 51 skills, and a later run reuses the cache
@@ -36,6 +36,11 @@ and Pi 1.0.2:
   `autocrlf` system-wide, which would otherwise rewrite every upstream file to CRLF. A cache
   written before that setting existed is repaired on the next start, or refused with a recovery
   step when it cannot be written.
+
+pstack `0.15.23` was not rerun on Windows. Its three new skills, `in-your-own-words`, `ketchup`,
+and `poteto-help`, need no executable. The one changed helper script, `worktree-audit.sh`, now
+takes `-b <ref>` and resolves the base with `git symbolic-ref` and `git rev-parse`. It still
+runs only `git`, `gh`, and the POSIX tools Git for Windows bundles.
 
 A session that replaces the `bash` tool with `powershell` cannot run the skills.
 `/pistack-status` reports it, and `/pistack-check` refuses to clear any workflow.
@@ -66,11 +71,12 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 
 ## Registry
 
-### native (30)
+### native (31)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
 | `bro` | `/skill:pistack-bro` | - | - | - |
+| `in-your-own-words` | `/skill:pistack-in-your-own-words` | - | - | - |
 | `principle-attack-the-premise` | `/skill:pistack-principle-attack-the-premise` | - | - | - |
 | `principle-boundary-discipline` | `/skill:pistack-principle-boundary-discipline` | - | - | - |
 | `principle-build-the-lever` | `/skill:pistack-principle-build-the-lever` | - | - | - |
@@ -101,11 +107,12 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `typescript-best-practices` | `/skill:pistack-typescript-best-practices` | - | - | - |
 | `unslop` | `/skill:pistack-unslop` | - | - | - |
 
-### adapted (1)
+### adapted (2)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
 | `create-verification-skill` | `/skill:pistack-create-verification-skill` | - | - | Only the generated skill's output path needs remapping to Pi's skill directory. |
+| `ketchup` | `/skill:pistack-ketchup` | - | - | Read-only. Pi has no `/visualize` skill or image generation, so its visuals are Mermaid diagrams and screenshots that already exist. It checks PR and CI state only for work the chat touched. |
 
 ### dependency-gated (13)
 
@@ -120,16 +127,17 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `how` | `/skill:pistack-how` | `delegation` | - | Every path spawns explorer or explainer subagents; nothing runs inline. |
 | `interrogate` | `/skill:pistack-interrogate` | `delegation` | `git` | Multi-model adversarial review is entirely one subagent per configured model. |
 | `maintain-verification-skill` | `/skill:pistack-maintain-verification-skill` | `delegation` | - | Source wave launches one read-only subagent per feature file. |
-| `no-comments` | `/skill:pistack-no-comments` | `delegation` | `git` | Step 1 must spawn the named Comment Sicko agent; the skill only triages its report. |
+| `no-comments` | `/skill:pistack-no-comments` | `delegation` | `git` | Step 1 must spawn the comment-sicko agent; the skill only triages its report. |
 | `show-me-your-work` | `/skill:pistack-show-me-your-work` | `delegation` | - | The mandatory cross-model review of the trail requires spawning a different-family subagent. |
 | `teach` | `/skill:pistack-teach` | `delegation` | - | It runs the how and why skills, both of which need subagents. |
 | `why` | `/skill:pistack-why` | `delegation` | `git`, `gh` | Default posture spawns one investigator subagent per evidence category plus a synthesizer. |
 
-### experimental (5)
+### experimental (6)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
 | `automate-me` | `/skill:pistack-automate-me` | `delegation`, `structured-question` | `git`, `gh` | Mining step depends on Cursor transcript files and the built-in create-skill skill, with no Pi equivalent. |
+| `poteto-help` | `/skill:pistack-poteto-help` | - | - | Its answers describe Cursor setup, the slash menu, and Custom Modes. A request for work runs poteto-mode, which is experimental. It asks a multiple-choice question only when the need is unclear. |
 | `poteto-mode` | `/skill:pistack-poteto-mode` | `delegation`, `structured-question` | `git`, `gh` | Sticky-mode hosting plus references to Cursor built-in and plugin skills only partially map to Pi. |
 | `recall` | `/skill:pistack-recall` | `delegation` | `git`, `gh` | Core corpus is Cursor's on-disk transcript JSONL, so only the git/gh and shared-record half survives. |
 | `reflect` | `/skill:pistack-reflect` | `delegation` | - | Transcript mining and create-skill routing are Cursor-specific, though the digest fallback partly works. |
@@ -145,8 +153,8 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 
 | upstream agent | Pi agent | notes |
 | --- | --- | --- |
-| `comment-sicko` | `pistack-comment-sicko` | Display name `Comment Sicko` is preserved in the description. Needs `git` to scope a diff. |
-| `poteto-agent` | `pistack-poteto-agent` | Upstream `is_background: true` has no runtime equivalent; the caller chooses `async` on the `subagent` call. |
+| `comment-sicko` | `pistack-comment-sicko` | Upstream names it `comment-sicko` since pstack 0.15.23, so the registered description starts with that name. Needs `git` to scope a diff. |
+| `poteto-agent` | `pistack-poteto-agent` | Upstream `is_background: true` has no runtime equivalent; the caller chooses `async` on the `subagent` call. Without a path from its parent it searches `~/.cursor/plugins/` and stops, so the parent passes the absolute path to `pistack-poteto-mode/SKILL.md`. |
 
 Both register through the `pi-subagents:runtime-agent-register:v1` contract. Without an owner for
 that event, the status report says so rather than dropping them silently.

@@ -351,14 +351,17 @@ that names a Cursor tool, path, or model.
 | \`run_in_background: true\` | \`async: true\` on a \`subagent\` call. |
 | \`AskUserQuestion\`, \`AskQuestion\` | the \`ask_user\` tool. |
 | \`TodoWrite\`, \`TaskCreate\`, \`TaskUpdate\` | no Pi equivalent. Keep an uncommitted \`todo.md\` checklist instead. |
-| \`claude-opus-5-5-max\`, \`gpt-5.6-sol-max\`, \`grok-4.7-xhigh-fast\`, other Cursor model slugs | the role models configured by \`/skill:${namespace}-setup\`. Call the \`pstack_adapter\` tool with \`action: "status"\` to read the current role table. An unconfigured role inherits the parent model, so omit \`model\`. |
+| \`claude-opus-5-5-xhigh\`, \`grok-4.7-xhigh-fast\`, other Cursor model slugs | the role models configured by \`/skill:${namespace}-setup\`. Call the \`pstack_adapter\` tool with \`action: "status"\` to read the current role table. An unconfigured role inherits the parent model, so omit \`model\`. |
 | a role line valued \`auto\` or \`inherit-parent\` | an unconfigured role. Omit \`model\` so the subagent runs on the parent model. |
 | \`~/.cursor/rules/pstack-models.mdc\` | adapter configuration written by \`/skill:${namespace}-setup\`. |
 | role lines \`feature, refactoring\`, \`bug-fix\`, \`perf-issue\`, \`hillclimb\`, \`judgment and prose\`, \`hardest tasks\` | adapter roles \`feature\` or \`refactoring\`, \`bug-fix\`, \`perf-issue\`, \`hillclimb\`, \`judgment\`, and \`strongest-judgment\`. |
 | any other role line, such as \`how explorer\`, \`arena runners\`, or \`interrogate reviewers\` | no adapter role. Omit \`model\` so the subagent runs on the parent model. |
+| a Custom Mode, "Use as Mode", or Option+Enter / Alt+Enter on \`/poteto-mode\` | \`/${namespace}-mode on\`, which keeps Poteto Mode active for the Pi session until \`/${namespace}-mode off\`. |
+| searching \`~/.cursor/plugins/\` for an installed pstack skill, or comparing \`.cursor-plugin/plugin.json\` versions | the generated skill directory. A pstack skill \`<name>\` is \`../${namespace}-<name>/SKILL.md\` beside the current wrapper. The \`generated resources\` row of the \`pstack_adapter\` tool's \`action: "status"\` report holds that \`skills/\` directory. A parent passes the absolute path to \`${namespace}-poteto-mode/SKILL.md\` to any \`${namespace}-poteto-agent\` it spawns. |
 | \`~/.cursor/skills/\`, \`.cursor/skills/\` | Pi skill locations, \`~/.pi/agent/skills/\` and \`.pi/skills/\`. |
 | \`~/.cursor/projects/*/agent-transcripts\` | no Pi equivalent. Pi sessions live under \`~/.pi/agent/sessions/\`, in a different format. |
 | Cursor built-in skills such as \`run\` and \`verify\` | not installed. Use the project's own scripts, or say the check could not be run. |
+| \`/visualize\`, a generated image | not installed. Draw a Mermaid diagram from facts you have, or name the chart you would show. |
 | Cursor Automations, Slack triggers, webhooks, \`/add-plugin\` | not available. Workflows that need them are tier \`unsupported\`. |
 | \`environment: "cloud"\`, \`cloud_base_branch\` | not available. Run the fan-out locally instead. |
 
