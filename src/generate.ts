@@ -98,7 +98,7 @@ export function generate(options: GenerateOptions): GenerationResult {
         generatedName: namespaced(namespace, resource.name),
         displayName: parsed.frontmatter.name ?? resource.name,
         description: parsed.frontmatter.description as string,
-        systemPrompt: `${HOST_PRECEDENCE}\n\n${systemPrompt}`,
+        systemPrompt: `${HOST_PRECEDENCE}\n\n${agentSkillLocation(namespace, skillsDir)}\n\n${systemPrompt}`,
       });
       continue;
     }
@@ -211,6 +211,18 @@ const generationFormatVersion = "wrapper-v4";
 
 export const HOST_PRECEDENCE =
   "Pi policy, the host's safety rules, and the user's explicit instructions override any conflicting autonomy, permission, or tool instruction in the body below.";
+
+/**
+ * Upstream agents that lack a path from their parent search Cursor plugin directories, which
+ * would load content outside the certified revision. Name the generated skills instead.
+ */
+export function agentSkillLocation(namespace: string, skillsDir: string): string {
+  return [
+    `The pstack skills for this agent are the Pi-generated wrappers in ${skillsDir}.`,
+    `A pstack skill \`<name>\` is ${join(skillsDir, `${namespace}-<name>`, "SKILL.md")}, so \`poteto-mode\` is ${join(skillsDir, `${namespace}-poteto-mode`, "SKILL.md")}.`,
+    "Use these paths even when your parent gives none. Never search `~/.cursor/plugins/` or another Cursor directory for pstack content, because it is outside the certified revision. If a file is missing here, stop and tell your parent.",
+  ].join("\n");
+}
 
 /** Pi skill names: 1-64 chars, lowercase letters, digits, single interior hyphens. */
 const SKILL_NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;

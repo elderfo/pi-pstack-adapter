@@ -393,6 +393,23 @@ test("cached output is reused when the inputs have not changed", () => {
   assert.notEqual(readFileSync(join(forced.outDir, "skills", "pistack-unslop", "SKILL.md"), "utf8"), "tampered\n");
 });
 
+test("an agent prompt names the generated poteto-mode path and forbids the Cursor plugin search", () => {
+  const root = makeTempDir("agent-location");
+  const pluginDir = writePluginFixture(root, {
+    skills: [{ name: "poteto-mode", body: "b\n" }],
+    agents: [{ name: "poteto-agent", body: "\nWith no path, search `~/.cursor/plugins/` for poteto-mode.\n" }],
+  });
+  const result = run({ pluginDir, cacheRoot: join(root, "cache") });
+  const prompt = result.agents[0]?.systemPrompt ?? "";
+  const potetoMode = join(result.skillsDir, "pistack-poteto-mode", "SKILL.md");
+
+  assert.ok(prompt.includes(`so \`poteto-mode\` is ${potetoMode}.`));
+  assert.equal(existsSync(potetoMode), true);
+  assert.match(prompt, /Use these paths even when your parent gives none\. Never search `~\/\.cursor\/plugins\/`/);
+  assert.ok(prompt.indexOf("Never search") < prompt.indexOf("With no path, search"), "the adapter note precedes the upstream body");
+  assert.ok(prompt.endsWith("With no path, search `~/.cursor/plugins/` for poteto-mode."), "upstream text stays last and unchanged");
+});
+
 test("an agent system prompt is trimmed so a provider will accept it", () => {
   const root = makeTempDir("agents");
   const pluginDir = writePluginFixture(root, {

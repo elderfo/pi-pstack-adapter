@@ -157,7 +157,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | upstream agent | Pi agent | notes |
 | --- | --- | --- |
 | `comment-sicko` | `pistack-comment-sicko` | Upstream names it `comment-sicko` since pstack 0.15.23, so the registered description starts with that name. Needs `git` to scope a diff. |
-| `poteto-agent` | `pistack-poteto-agent` | Upstream `is_background: true` has no runtime equivalent; the caller chooses `async` on the `subagent` call. Without a path from its parent it searches `~/.cursor/plugins/` and stops, so the parent passes the absolute path to `pistack-poteto-mode/SKILL.md`. |
+| `poteto-agent` | `pistack-poteto-agent` | Upstream `is_background: true` has no runtime equivalent; the caller chooses `async` on the `subagent` call. Upstream tells it to search `~/.cursor/plugins/` when its parent gives no path. The adapter puts the generated `pistack-poteto-mode/SKILL.md` path in every agent prompt and forbids that search, which would load content outside the certified revision. |
 
 Both register through the `pi-subagents:runtime-agent-register:v1` contract. Without an owner for
 that event, the status report says so rather than dropping them silently.
