@@ -82,7 +82,7 @@ export const TIER_ORDER: readonly SupportTier[] = [
 ];
 
 export const CAPABILITY_LABELS: Readonly<Record<CapabilityId, string>> = {
-  delegation: "named parallel background subagents with model selection and tool restrictions",
+  delegation: "parallel background child agents with model selection, through T3 Code's delegate_task or pi-subagents",
   "structured-question": "structured multiple-choice questions to the user",
 };
 

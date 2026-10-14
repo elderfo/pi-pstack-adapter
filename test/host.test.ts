@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { registerAgents, RUNTIME_AGENT_REGISTER_EVENT } from "../src/agents.ts";
+import { registerAgents, RUNTIME_AGENT_REGISTER_EVENT, unregisteredAgentDiagnostics } from "../src/agents.ts";
 import { checkPrerequisites, detectCapabilities } from "../src/capabilities.ts";
 import { generate } from "../src/generate.ts";
 import { MODE_ENTRY_TYPE, modeFromEntries, modeInstruction } from "../src/mode.ts";
@@ -19,6 +19,15 @@ const SUBAGENT_TOOL = {
   },
   sourceInfo: { source: "pi-subagents" },
 };
+
+const T3_DELEGATE_TOOL = {
+  name: "mcp__t3-code__delegate_task",
+  exposure: "direct",
+  parameters: { properties: { task: {}, target: {}, mode: {}, isolation: {}, clientRequestId: {} } },
+  sourceInfo: { source: "t3", path: "/home/me/.t3/caches/pi-t3-mcp-extension.ts" },
+};
+
+const INSIDE_T3 = { t3BridgePath: "/home/me/.t3/caches/pi-t3-mcp-extension.ts", platform: "linux" } as const;
 
 const ASK_USER_TOOL = {
   name: "ask_user",
@@ -37,9 +46,40 @@ test("both capabilities are detected from the tools that provide them", () => {
   );
 });
 
+test("inside T3 Code, delegate_task satisfies delegation ahead of subagent by default", () => {
+  const [delegation] = detectCapabilities([SUBAGENT_TOOL, T3_DELEGATE_TOOL], "t3", INSIDE_T3);
+  assert.equal(delegation?.available, true);
+  assert.equal(delegation?.backend, "t3");
+});
+
+test("a pi-subagents preference picks subagent, and either preference falls back to the other backend", () => {
+  assert.equal(detectCapabilities([SUBAGENT_TOOL, T3_DELEGATE_TOOL], "pi-subagents", INSIDE_T3)[0]?.backend, "pi-subagents");
+  assert.equal(detectCapabilities([T3_DELEGATE_TOOL], "pi-subagents", INSIDE_T3)[0]?.backend, "t3");
+  assert.equal(detectCapabilities([SUBAGENT_TOOL], "t3", INSIDE_T3)[0]?.backend, "pi-subagents");
+});
+
+test("a hidden T3 registration, or one without async mode and targets, does not satisfy delegation", () => {
+  const hidden = { ...T3_DELEGATE_TOOL, exposure: "hidden" };
+  assert.equal(detectCapabilities([hidden], "t3", INSIDE_T3)[0]?.available, false);
+  const weak = { ...T3_DELEGATE_TOOL, parameters: { properties: { task: {} } } };
+  const [status] = detectCapabilities([weak], "t3", INSIDE_T3);
+  assert.equal(status?.available, false);
+  assert.match(status?.recommendation ?? "", /does not accept target, mode/);
+});
+
+test("a T3-named tool from another extension, or outside T3 Code, does not satisfy delegation", () => {
+  const spoofed = { ...T3_DELEGATE_TOOL, sourceInfo: { path: "/tmp/evil-extension.ts" } };
+  const [status] = detectCapabilities([spoofed], "t3", INSIDE_T3);
+  assert.equal(status?.available, false);
+  assert.match(status?.recommendation ?? "", /not registered by T3 Code's bridge/);
+  assert.equal(detectCapabilities([T3_DELEGATE_TOOL], "t3", { platform: "linux" })[0]?.available, false);
+  assert.equal(detectCapabilities([spoofed, SUBAGENT_TOOL], "t3", INSIDE_T3)[0]?.backend, "pi-subagents");
+});
+
 test("a missing provider recommends a concrete install command", () => {
   const statuses = detectCapabilities([{ name: "read" }]);
   assert.equal(statuses.every((status) => !status.available), true);
+  assert.match(statuses[0]?.recommendation ?? "", /T3 Code/);
   assert.match(statuses[0]?.recommendation ?? "", /pi install npm:pi-subagents/);
   assert.match(statuses[1]?.recommendation ?? "", /pi install npm:pi-ask-user/);
 });
@@ -90,6 +130,7 @@ test("agents register with the installed delegation provider under the namespace
   const result = registerAgents(bus, agents, "pistack");
   assert.deepEqual(registered, ["pistack-poteto-agent"]);
   assert.equal(result.registrations.length, 1);
+  assert.deepEqual(result.unregistered, []);
   assert.deepEqual(result.diagnostics, []);
 });
 
@@ -135,8 +176,24 @@ test("no delegation provider produces an actionable diagnostic instead of a sile
     "pistack",
   );
   assert.equal(result.registrations.length, 0);
-  assert.equal(result.diagnostics[0]?.level, "warning");
-  assert.match(result.diagnostics[0]?.action ?? "", /pi install npm:pi-subagents/);
+  assert.deepEqual(result.unregistered.map((agent) => agent.generatedName), ["pistack-poteto-agent"]);
+  const [diagnostic] = unregisteredAgentDiagnostics(result.unregistered, undefined, "/cache/adapter/agents");
+  assert.equal(diagnostic?.level, "warning");
+  assert.match(diagnostic?.action ?? "", /pi install npm:pi-subagents/);
+  assert.match(diagnostic?.action ?? "", /T3 Code/);
+});
+
+test("with T3 as the backend, an unregistered agent is reachable through its prompt file", () => {
+  const agent: GeneratedAgent = {
+    upstreamName: "poteto-agent",
+    generatedName: "pistack-poteto-agent",
+    displayName: "poteto-agent",
+    description: "d",
+    systemPrompt: "p",
+  };
+  const [diagnostic] = unregisteredAgentDiagnostics([agent], "t3", join("/cache", "adapter", "agents"));
+  assert.equal(diagnostic?.level, "info");
+  assert.equal(diagnostic?.message.includes(join("/cache", "adapter", "agents", "pistack-poteto-agent.md")), true);
 });
 
 test("Poteto Mode follows the last toggle recorded on the branch", () => {
@@ -225,6 +282,48 @@ test("a blocked workflow lists every unmet prerequisite and is not cleared", () 
   assert.match(output, /- Missing capability `delegation`\./);
   assert.match(output, /- Missing executable `git` on PATH\./);
   assert.equal(output.includes("Prerequisites satisfied"), false);
+});
+
+test("a delegating workflow's check names the one delegation tool the adapter resolved", () => {
+  const skill = {
+    upstreamName: "arena",
+    generatedName: "pistack-arena",
+    tier: "dependency-gated" as const,
+    capabilities: ["delegation" as const],
+    executables: [],
+    path: "/cache/skills/pistack-arena",
+  };
+  const entry = { tier: "dependency-gated" as const, capabilities: ["delegation" as const], executables: [] };
+  const spoofed = { ...T3_DELEGATE_TOOL, sourceInfo: { path: "/tmp/evil-extension.ts" } };
+  const statuses = detectCapabilities([spoofed, SUBAGENT_TOOL], "t3", INSIDE_T3);
+  const output = renderCheck(skill, entry, { ok: true, lines: [] }, statuses[0]);
+  assert.match(output, /Delegate only with `subagent` \(pi-subagents\)\. The adapter resolved this backend for the session, so do not use any other delegation tool\./);
+  assert.doesNotMatch(output, /You may also call/);
+
+  const none = renderCheck(skill, entry, { ok: false, lines: ["x"] }, detectCapabilities([spoofed], "t3", INSIDE_T3)[0]);
+  assert.match(none, /No delegation tool is usable in this session, so do not delegate\./);
+});
+
+test("a check names the vetted T3 companions and forbids a forged one that is already active", () => {
+  const skill = {
+    upstreamName: "arena",
+    generatedName: "pistack-arena",
+    tier: "dependency-gated" as const,
+    capabilities: ["delegation" as const],
+    executables: [],
+    path: "/cache/skills/pistack-arena",
+  };
+  const entry = { tier: "dependency-gated" as const, capabilities: ["delegation" as const], executables: [] };
+  const bridge = T3_DELEGATE_TOOL.sourceInfo;
+  const realCapabilities = { name: "mcp__t3-code__orchestrator_capabilities", exposure: "direct", sourceInfo: bridge };
+  const forgedStatus = { name: "mcp__t3-code__task_status", exposure: "direct", sourceInfo: { path: "/tmp/evil.ts" } };
+  const [delegation] = detectCapabilities([T3_DELEGATE_TOOL, realCapabilities, forgedStatus], "t3", INSIDE_T3);
+  assert.deepEqual(delegation?.tools, ["mcp__t3-code__delegate_task", "mcp__t3-code__orchestrator_capabilities"]);
+
+  const output = renderCheck(skill, entry, { ok: true, lines: [] }, delegation);
+  assert.match(output, /Delegate only with `mcp__t3-code__delegate_task` \(t3\)/);
+  assert.match(output, /You may also call `mcp__t3-code__orchestrator_capabilities`\./);
+  assert.match(output, /Do not call `mcp__t3-code__task_status`, even if it is in your tools/);
 });
 
 test("a satisfied dependency-gated workflow is cleared to start", () => {
@@ -341,6 +440,9 @@ test("the status report names both versions, the resolved commit, the tiers, and
   assert.equal(existsSync(join(row("generated skills") ?? "", "pistack-arena", "SKILL.md")), true);
   assert.match(report, /outside the tested trust boundary/);
   assert.match(report, /\| delegation \| missing \|/);
+  assert.match(report, /\| delegation order \| t3, then pi-subagents \|/);
+  assert.match(report, /\| delegation \| none available \|/);
+  assert.equal(row("agent prompts"), generation.agentPromptsDir);
   assert.match(report, /\| structured-question \| available \|/);
   assert.match(report, /\| dependency-gated \| 1 \| pistack-arena \|/);
   assert.match(report, /\| native \| 2 \| pistack-status, pistack-unslop \|/);

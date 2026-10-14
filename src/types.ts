@@ -22,6 +22,9 @@ export type SupportTier =
 
 export type CapabilityId = "delegation" | "structured-question";
 
+/** Where a delegating workflow starts its children. */
+export type DelegationProvider = "t3" | "pi-subagents";
+
 export interface RegistryEntry {
   readonly tier: SupportTier;
   readonly capabilities: readonly CapabilityId[];
@@ -85,6 +88,8 @@ export interface GenerationResult {
   readonly skillsDir: string;
   readonly skills: readonly GeneratedSkill[];
   readonly agents: readonly GeneratedAgent[];
+  /** One `<generatedName>.md` system prompt per agent, for providers without named agents. */
+  readonly agentPromptsDir: string;
   readonly diagnostics: readonly Diagnostic[];
 }
 
@@ -92,6 +97,10 @@ export interface CapabilityStatus {
   readonly id: CapabilityId;
   readonly available: boolean;
   readonly provider?: string;
+  /** The delegation backend that satisfies `delegation`, when one does. */
+  readonly backend?: DelegationProvider;
+  /** Every tool of that backend the adapter vetted: the delegation tool, then its companions. */
+  readonly tools?: readonly string[];
   readonly recommendation: string;
 }
 

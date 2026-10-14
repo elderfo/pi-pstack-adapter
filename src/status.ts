@@ -2,9 +2,11 @@ import { CERTIFIED } from "./certified.ts";
 import { CAPABILITY_LABELS, MODEL_ROLES, TIER_ORDER } from "./registry.ts";
 import type { AdapterConfig } from "./config.ts";
 import { trustWarning } from "./config.ts";
+import { DELEGATION_BACKENDS, delegationOrder } from "./delegation.ts";
 import type { PrerequisiteReport } from "./capabilities.ts";
 import type {
   CapabilityStatus,
+  DelegationProvider,
   Diagnostic,
   GeneratedSkill,
   GenerationResult,
@@ -49,12 +51,15 @@ export function renderStatus(input: StatusInput): string {
   lines.push(`| plugin directory | ${source.pluginDir} |`);
   lines.push(`| generated resources | ${input.generation.outDir} |`);
   lines.push(`| generated skills | ${input.generation.skillsDir} |`);
+  lines.push(`| agent prompts | ${input.generation.agentPromptsDir} |`);
   lines.push(`| cache root | ${input.cacheRoot} |`);
   lines.push(`| cache state | ${input.bootstrapped ? "downloaded this session" : "reused, no network needed"} |`);
   lines.push(`| namespace | ${config.namespace} |`);
   lines.push(`| config layers | ${config.sources.length > 0 ? config.sources.join(", ") : "built-in defaults"} |`);
   lines.push(`| platform | ${input.platformName} (${input.platform}) |`);
   lines.push(`| Poteto Mode | ${input.modeActive ? "active" : "off"} |`);
+  lines.push(`| delegation order | ${delegationOrder(config.delegation).map((backend) => backend.id).join(", then ")} |`);
+  lines.push(`| delegation | ${describeDelegation(input.capabilities)} |`);
   lines.push("");
 
   const warning = trustWarning(source.trust, config);
@@ -126,6 +131,13 @@ export function renderStatus(input: StatusInput): string {
   return lines.join("\n");
 }
 
+function describeDelegation(capabilities: readonly CapabilityStatus[]): string {
+  const backend = capabilities.find((capability) => capability.id === "delegation")?.backend;
+  if (!backend) return "none available";
+  const { label, tool } = DELEGATION_BACKENDS[backend];
+  return `${backend} (${label}, \`${tool}\`)`;
+}
+
 function describeSelection(input: StatusInput): string {
   const { config } = input;
   if (config.localPath) return `local checkout ${config.localPath}`;
@@ -155,6 +167,8 @@ export function renderCheck(
   skill: GeneratedSkill,
   entry: RegistryEntry,
   report: PrerequisiteReport,
+  /** The resolved `delegation` capability, named for a workflow that delegates. */
+  delegation?: CapabilityStatus,
 ): string {
   const parts = [`\`/skill:${skill.generatedName}\` is tier **${skill.tier}**.`];
   if (entry.note) parts.push(entry.note);
@@ -168,10 +182,34 @@ export function renderCheck(
   } else if (skill.tier !== "unsupported") {
     parts.push("Prerequisites satisfied. Start the workflow.");
   }
+  if (skill.capabilities.includes("delegation")) {
+    parts.push(
+      delegation?.backend ? delegationInstruction(delegation.backend, delegation.tools) : "No delegation tool is usable in this session, so do not delegate.",
+    );
+  }
   if (skill.tier === "experimental" && report.ok) {
     parts.push("Tier `experimental` means parts of this workflow have no Pi equivalent. Expect gaps.");
   }
   return parts.join("\n\n");
+}
+
+function delegationInstruction(backend: DelegationProvider, tools: readonly string[] | undefined): string {
+  const { tool, companions } = DELEGATION_BACKENDS[backend];
+  const vetted = tools ?? [tool];
+  const lines = [
+    `Delegate only with \`${tool}\` (${backend}). The adapter resolved this backend for the session, so do not use any other delegation tool.`,
+  ];
+  if (companions.length > 0) {
+    const usable = companions.filter((name) => vetted.includes(name));
+    const unusable = companions.filter((name) => !vetted.includes(name));
+    if (usable.length > 0) lines.push(`You may also call ${usable.map((name) => `\`${name}\``).join(", ")}.`);
+    if (unusable.length > 0) {
+      lines.push(
+        `Do not call ${unusable.map((name) => `\`${name}\``).join(", ")}, even if it is in your tools: the adapter could not confirm it belongs to this backend. Wait for children to report back instead.`,
+      );
+    }
+  }
+  return lines.join(" ");
 }
 
 /** Platforms a release certifies. Windows means native Windows with Pi's Git Bash `bash` tool. */

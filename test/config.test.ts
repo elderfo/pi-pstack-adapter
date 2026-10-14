@@ -133,6 +133,23 @@ test("an invalid namespace is rejected instead of producing broken skill names",
   assert.throws(() => mergeConfig([layer("global", { namespace: "Pi Stack" })]), /Invalid pstack adapter namespace/);
 });
 
+test("delegation prefers T3 by default, and a later layer or PISTACK_DELEGATION can switch it", () => {
+  assert.equal(mergeConfig([]).delegation, "t3");
+  assert.equal(mergeConfig([layer("global", { delegation: "pi-subagents" })]).delegation, "pi-subagents");
+  const config = mergeConfig([
+    layer("global", { delegation: "pi-subagents" }),
+    environmentLayer({ PISTACK_DELEGATION: " T3 " } as NodeJS.ProcessEnv),
+  ]);
+  assert.equal(config.delegation, "t3");
+});
+
+test("an unknown delegation backend names the layer and the accepted values", () => {
+  assert.throws(
+    () => mergeConfig([layer("/home/me/.pi/agent/pi-pstack-adapter.json", { delegation: "cursor" })]),
+    /pi-pstack-adapter\.json sets `delegation` to "cursor"\. Use one of "t3", "pi-subagents"/,
+  );
+});
+
 test("a malformed model assignment names the expected form", () => {
   assert.throws(() => parseModelRoles("feature"), /role=provider\/model/);
 });

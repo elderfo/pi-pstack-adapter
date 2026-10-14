@@ -4,7 +4,7 @@ Upstream pstack ships a `setup-pstack` skill that writes `~/.cursor/rules/pstack
 a Cursor-only always-applied rule full of Cursor model slugs. Pi has neither that file nor
 those models, so this adapter replaces the body with the Pi equivalent.
 
-Two things are configurable. Model roles, and the upstream source.
+Three things are configurable. Model roles, the upstream source, and the delegation order.
 
 ## Model roles
 
@@ -60,6 +60,14 @@ interactive session, so a change cannot happen on your say-so alone. Explain the
 plain words before you call it, and report a refusal as a refusal.
 
 Regeneration happens on the next Pi start. Tell the user to restart Pi, or run `/reload`.
+
+## Delegation order
+
+Delegating workflows try T3 Code's `delegate_task` first, then pi-subagents' `subagent`. A user
+who wants `subagent` first sets `"delegation": "pi-subagents"` in the adapter config file, or
+`PISTACK_DELEGATION=pi-subagents`. The adapter tool has no action for this. Tell the user which
+file to edit: the `config layers` row of the status report lists them. Regeneration happens on
+the next Pi start.
 
 ## Finish
 

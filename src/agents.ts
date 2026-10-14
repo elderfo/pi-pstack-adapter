@@ -1,4 +1,6 @@
-import type { Diagnostic, GeneratedAgent } from "./types.ts";
+import { join } from "node:path";
+import { T3_DELEGATE_TOOL } from "./delegation.ts";
+import type { DelegationProvider, Diagnostic, GeneratedAgent } from "./types.ts";
 
 export const RUNTIME_AGENT_REGISTER_EVENT = "pi-subagents:runtime-agent-register:v1";
 
@@ -19,6 +21,9 @@ export interface EventBus {
 
 export interface AgentRegistrationResult {
   readonly registrations: readonly RuntimeRegistration[];
+  /** Agents no installed extension accepted as named agents. */
+  readonly unregistered: readonly GeneratedAgent[];
+  /** Registrations a provider refused. */
   readonly diagnostics: readonly Diagnostic[];
 }
 
@@ -32,6 +37,7 @@ export function registerAgents(
   namespace: string,
 ): AgentRegistrationResult {
   const registrations: RuntimeRegistration[] = [];
+  const unregistered: GeneratedAgent[] = [];
   const diagnostics: Diagnostic[] = [];
 
   for (const agent of agents) {
@@ -45,12 +51,7 @@ export function registerAgents(
     };
     bus.emit(RUNTIME_AGENT_REGISTER_EVENT, request);
     if (!request.result) {
-      diagnostics.push({
-        level: "warning",
-        resource: `agent:${agent.upstreamName}`,
-        message: `No installed delegation provider accepted \`${agent.generatedName}\`, so pstack workflows cannot delegate to it.`,
-        action: `Install a provider that owns ${RUNTIME_AGENT_REGISTER_EVENT}, for example \`pi install npm:pi-subagents\`.`,
-      });
+      unregistered.push(agent);
       continue;
     }
     if (!request.result.ok) {
@@ -65,5 +66,32 @@ export function registerAgents(
     registrations.push(request.result.registration);
   }
 
-  return { registrations, diagnostics };
+  return { registrations, unregistered, diagnostics };
+}
+
+/**
+ * T3 Code children have no named agents and load an agent from its prompt file, so a missing
+ * pi-subagents registration only blocks delegation when T3 is not the resolved backend.
+ */
+export function unregisteredAgentDiagnostics(
+  unregistered: readonly GeneratedAgent[],
+  backend: DelegationProvider | undefined,
+  promptsDir: string,
+): Diagnostic[] {
+  return unregistered.map((agent) => {
+    const promptPath = join(promptsDir, `${agent.generatedName}.md`);
+    if (backend === "t3") {
+      return {
+        level: "info",
+        resource: `agent:${agent.upstreamName}`,
+        message: `\`${agent.generatedName}\` is not a named agent here. T3 Code children run it by reading ${promptPath} as their system prompt.`,
+      };
+    }
+    return {
+      level: "warning",
+      resource: `agent:${agent.upstreamName}`,
+      message: `No installed delegation provider accepted \`${agent.generatedName}\` as a named agent, so pstack workflows cannot delegate to it through \`subagent\`.`,
+      action: `Install a provider that owns ${RUNTIME_AGENT_REGISTER_EVENT}, for example \`pi install npm:pi-subagents\`, or run Pi inside T3 Code, whose \`${T3_DELEGATE_TOOL}\` loads the agent from ${promptPath}.`,
+    };
+  });
 }

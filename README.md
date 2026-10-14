@@ -46,17 +46,34 @@ counts as Linux.
 
 ### Add optional providers for delegating workflows
 
-Some workflows hand work to subagents or ask you multiple-choice questions. Install these two
-packages to enable them:
+Some workflows hand work to subagents or ask you multiple-choice questions. Two providers can run
+the subagents:
+
+- **T3 Code.** When Pi runs inside [T3 Code](https://github.com/pingdotgg/t3code), workflows
+  delegate through T3's `delegate_task` tool. Each child appears in T3, can run on any provider
+  and model T3 offers, and can work in its own worktree. You install nothing extra.
+- **pi-subagents.** Outside T3 Code, install `pi-subagents`. The upstream agents register as
+  `pistack-comment-sicko` and `pistack-poteto-agent`.
+
+For multiple-choice questions, install `pi-ask-user`:
 
 ```bash
 pi install npm:pi-subagents
 pi install npm:pi-ask-user
 ```
 
-With `pi-subagents` installed, the upstream agents register as `pistack-comment-sicko` and
-`pistack-poteto-agent`. The adapter turns on the `subagent` tool when a delegating workflow
-starts, whether you run its `/skill:` command or the agent opens the skill itself. While Poteto
+The adapter uses T3 Code first and falls back to `pi-subagents`. To reverse that order, set
+`"delegation": "pi-subagents"` in the adapter config, or set `PISTACK_DELEGATION=pi-subagents`.
+Restart Pi or run `/reload` after changing it. `/pistack-status` shows the order and the
+provider the session resolved.
+
+The adapter counts T3's tools, including `task_status` and `orchestrator_capabilities`, only
+when T3 Code's own bridge registered them. A tool that another extension or MCP server registers
+under the same name is ignored, and `/pistack-check <skill>` names the one tool to delegate with.
+
+When a delegating workflow starts, the adapter turns on that provider's tool, even if you turned
+it off in the tool selector. This happens
+whether you run the workflow's `/skill:` command or the agent opens the skill itself. While Poteto
 Mode is on, the adapter turns it on for every prompt.
 
 To find missing providers or executables before you start a workflow, run
@@ -172,6 +189,7 @@ settings to `.pi/pi-pstack-adapter.json`. Environment variables override both fi
 | `PISTACK_ALLOW_BOOTSTRAP` | Allows a noninteractive first download. |
 | `PISTACK_CACHE_DIR` | Changes the cache directory. |
 | `PISTACK_MODELS` | Assigns models as comma-separated `role=provider/model` pairs. |
+| `PISTACK_DELEGATION` | Sets the delegation provider to try first: `t3` (default) or `pi-subagents`. The config file key is `delegation`. |
 
 ## Security and trust
 
