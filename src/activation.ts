@@ -2,23 +2,26 @@ import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { GeneratedSkill } from "./types.ts";
-
-/** The pi-subagents tool a delegation skill calls. */
-export const DELEGATION_TOOL = "subagent";
-/** The pi-subagents loader that exposes a registered but inactive `subagent` tool. */
-export const DELEGATION_LOADER = "subagents_enable";
+import {
+  DEFAULT_DELEGATION,
+  type DelegationHost,
+  type ToolPresence,
+  callableTool,
+  delegationHost,
+  resolveDelegation,
+} from "./delegation.ts";
+import type { DelegationProvider, GeneratedSkill } from "./types.ts";
 
 /** The slice of Pi's tool registry that activation reads and writes. */
 export interface ToolLoadout {
-  getAllTools(): readonly { readonly name: string }[];
+  getAllTools(): readonly ToolPresence[];
   getActiveTools(): string[];
   setActiveTools(toolNames: string[]): void;
 }
 
 export type ActivationResult =
-  | { readonly kind: "already-active" }
-  | { readonly kind: "activated" }
+  | { readonly kind: "already-active"; readonly backend: DelegationProvider }
+  | { readonly kind: "activated"; readonly backend: DelegationProvider }
   | { readonly kind: "unavailable" };
 
 export function needsDelegation(skill: GeneratedSkill): boolean {
@@ -54,37 +57,51 @@ export function skillFromReadPath(
 }
 
 /**
- * Adds `subagent` to the active tools, the same selection `subagents_enable` makes, so a
- * delegation skill never depends on the model remembering to call the loader first.
- * Pi applies the new loadout on the next model request.
+ * Adds the delegation backend that capability detection resolves to the active tools, with its
+ * companion tools, so a delegation skill never depends on the model loading it first. For
+ * pi-subagents that is the selection `subagents_enable` makes; T3's `delegate_task` may be
+ * deferred behind `tool_search`. Pi applies the new loadout on the next model request.
  */
-export function activateDelegation(loadout: ToolLoadout): ActivationResult {
-  if (!loadout.getAllTools().some((tool) => tool.name === DELEGATION_TOOL)) return { kind: "unavailable" };
+export function activateDelegation(
+  loadout: ToolLoadout,
+  preferred: DelegationProvider = DEFAULT_DELEGATION,
+  host: DelegationHost = delegationHost(),
+): ActivationResult {
+  const registered = loadout.getAllTools();
+  const resolution = resolveDelegation(registered, preferred, host);
+  if (resolution.kind === "unavailable") return { kind: "unavailable" };
+  const { backend, companions } = resolution;
+  const wanted = [backend.tool, ...companions];
   const active = loadout.getActiveTools();
-  if (active.includes(DELEGATION_TOOL)) return { kind: "already-active" };
-  loadout.setActiveTools([...active, DELEGATION_TOOL]);
-  return { kind: "activated" };
+  const missing = wanted.filter((name) => !active.includes(name));
+  if (missing.length === 0) return { kind: "already-active", backend: backend.id };
+  loadout.setActiveTools([...active, ...missing]);
+  return { kind: "activated", backend: backend.id };
 }
 
 export interface ActivationSources {
   /** Generated skills, or none while the adapter has no upstream checkout. */
   readonly skills: () => readonly GeneratedSkill[];
   readonly modeActive: () => boolean;
+  /** The configured backend preference, read at activation time. */
+  readonly preferred: () => DelegationProvider;
+  /** Defaults to the running process's T3 Code bridge, if any. */
+  readonly host?: DelegationHost;
 }
 
 type ActivationHost = Pick<ExtensionAPI, "on" | "getAllTools" | "getActiveTools" | "setActiveTools">;
 
 /**
- * A delegation skill must not depend on the model remembering to call `subagents_enable`,
- * so a slash command, a model-initiated SKILL.md read, and Poteto Mode each activate
- * `subagent` in code.
+ * A delegation skill must not depend on the model remembering to load its delegation tool,
+ * so a slash command, a model-initiated SKILL.md read, and Poteto Mode each activate it in code.
  */
 export function registerDelegationActivation(pi: ActivationHost, sources: ActivationSources): void {
+  const activate = () => activateDelegation(pi, sources.preferred(), sources.host ?? delegationHost());
   // `input` runs before Pi copies the tool list for the prompt, so the first model request
-  // already carries `subagent`. It also covers messages queued while the agent is streaming.
+  // already carries the tool. It also covers messages queued while the agent is streaming.
   pi.on("input", async (event) => {
     const skill = skillFromPrompt(event.text, sources.skills());
-    if (sources.modeActive() || (skill && needsDelegation(skill))) activateDelegation(pi);
+    if (sources.modeActive() || (skill && needsDelegation(skill))) activate();
   });
 
   pi.on("tool_call", async (event, ctx) => {
@@ -92,12 +109,12 @@ export function registerDelegationActivation(pi: ActivationHost, sources: Activa
     const path = (event.input as { path?: unknown }).path;
     if (typeof path !== "string") return;
     const skill = skillFromReadPath(path, ctx.cwd, sources.skills());
-    if (skill && needsDelegation(skill)) activateDelegation(pi);
+    if (skill && needsDelegation(skill)) activate();
   });
 
   // Backstop for prompts that reach the agent without an `input` event.
   pi.on("before_agent_start", async () => {
-    if (sources.modeActive()) activateDelegation(pi);
+    if (sources.modeActive()) activate();
   });
 }
 

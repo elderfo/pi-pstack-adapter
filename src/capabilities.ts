@@ -1,9 +1,18 @@
-import type { CapabilityId, CapabilityStatus } from "./types.ts";
+import {
+  DEFAULT_DELEGATION,
+  type DelegationHost,
+  callableTool,
+  delegationHost,
+  parameterNames,
+  resolveDelegation,
+} from "./delegation.ts";
+import type { CapabilityId, CapabilityStatus, DelegationProvider } from "./types.ts";
 
 export interface ToolDescriptor {
   readonly name: string;
+  readonly exposure?: string;
   readonly parameters?: unknown;
-  readonly sourceInfo?: { readonly source?: string };
+  readonly sourceInfo?: { readonly source?: string; readonly path?: string };
 }
 
 interface CapabilityProbe {
@@ -14,13 +23,10 @@ interface CapabilityProbe {
   readonly recommendation: string;
 }
 
+const DELEGATION_RECOMMENDATION =
+  "Run Pi inside T3 Code, whose `delegate_task` tool starts child agents, or install a delegation provider with named background agents and model selection, for example `pi install npm:pi-subagents`.";
+
 const PROBES: readonly CapabilityProbe[] = [
-  {
-    id: "delegation",
-    toolName: "subagent",
-    requiredParameters: ["agent", "task", "async", "model"],
-    recommendation: "Install a delegation provider that exposes named background agents with model selection, for example `pi install npm:pi-subagents`.",
-  },
   {
     id: "structured-question",
     toolName: "ask_user",
@@ -29,31 +35,50 @@ const PROBES: readonly CapabilityProbe[] = [
   },
 ];
 
-export function detectCapabilities(tools: readonly ToolDescriptor[]): CapabilityStatus[] {
-  return PROBES.map((probe) => {
-    const tool = tools.find((candidate) => candidate.name === probe.toolName);
-    if (!tool) {
-      return { id: probe.id, available: false, recommendation: probe.recommendation };
-    }
-    const properties = parameterNames(tool.parameters);
-    const missing = probe.requiredParameters.filter((name) => !properties.has(name));
-    if (missing.length > 0) {
-      return {
-        id: probe.id,
-        available: false,
-        provider: tool.sourceInfo?.source,
-        recommendation: `The \`${probe.toolName}\` tool is present but does not accept ${missing.join(", ")}. ${probe.recommendation}`,
-      };
-    }
-    return { id: probe.id, available: true, provider: tool.sourceInfo?.source, recommendation: probe.recommendation };
-  });
+export function detectCapabilities(
+  tools: readonly ToolDescriptor[],
+  preferred: DelegationProvider = DEFAULT_DELEGATION,
+  host: DelegationHost = delegationHost(),
+): CapabilityStatus[] {
+  return [detectDelegation(tools, preferred, host), ...PROBES.map((probe) => detectTool(tools, probe))];
 }
 
-function parameterNames(parameters: unknown): Set<string> {
-  if (typeof parameters !== "object" || parameters === null) return new Set();
-  const properties = (parameters as { properties?: unknown }).properties;
-  if (typeof properties !== "object" || properties === null) return new Set();
-  return new Set(Object.keys(properties as Record<string, unknown>));
+/** The first usable backend in preference order satisfies `delegation`. */
+function detectDelegation(
+  tools: readonly ToolDescriptor[],
+  preferred: DelegationProvider,
+  host: DelegationHost,
+): CapabilityStatus {
+  const resolution = resolveDelegation(tools, preferred, host);
+  if (resolution.kind === "unavailable") {
+    return { id: "delegation", available: false, recommendation: [...resolution.problems, DELEGATION_RECOMMENDATION].join(" ") };
+  }
+  return {
+    id: "delegation",
+    available: true,
+    provider: resolution.backend.id === "t3" ? resolution.backend.label : resolution.tool.sourceInfo?.source ?? resolution.backend.label,
+    backend: resolution.backend.id,
+    tools: [resolution.backend.tool, ...resolution.companions],
+    recommendation: DELEGATION_RECOMMENDATION,
+  };
+}
+
+function detectTool(tools: readonly ToolDescriptor[], probe: CapabilityProbe): CapabilityStatus {
+  const tool = callableTool(tools, probe.toolName);
+  if (!tool) {
+    return { id: probe.id, available: false, recommendation: probe.recommendation };
+  }
+  const properties = parameterNames(tool.parameters);
+  const missing = probe.requiredParameters.filter((name) => !properties.has(name));
+  if (missing.length > 0) {
+    return {
+      id: probe.id,
+      available: false,
+      provider: tool.sourceInfo?.source,
+      recommendation: `The \`${probe.toolName}\` tool is present but does not accept ${missing.join(", ")}. ${probe.recommendation}`,
+    };
+  }
+  return { id: probe.id, available: true, provider: tool.sourceInfo?.source, recommendation: probe.recommendation };
 }
 
 export interface PrerequisiteReport {

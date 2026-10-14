@@ -3,7 +3,8 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { CERTIFIED } from "./certified.ts";
 import { DEFAULT_NAMESPACE, validateNamespace } from "./namespace.ts";
 import { expandHome } from "./paths.ts";
-import type { SourceSelection, Trust } from "./types.ts";
+import { DEFAULT_DELEGATION, DELEGATION_PROVIDERS, isDelegationProvider } from "./delegation.ts";
+import type { DelegationProvider, SourceSelection, Trust } from "./types.ts";
 
 export interface AdapterConfig {
   readonly namespace: string;
@@ -17,6 +18,8 @@ export interface AdapterConfig {
   readonly allowBootstrap: boolean;
   readonly cacheDir?: string;
   readonly models: Readonly<Record<string, string>>;
+  /** The delegation backend tried first. The other one is the fallback. */
+  readonly delegation: DelegationProvider;
   readonly sources: readonly string[];
 }
 
@@ -30,6 +33,7 @@ export interface ConfigFile {
   allowBootstrap?: boolean;
   cacheDir?: string;
   models?: Record<string, string>;
+  delegation?: string;
 }
 
 export interface ConfigLayer {
@@ -49,6 +53,7 @@ const ENV = {
   allowBootstrap: "PISTACK_ALLOW_BOOTSTRAP",
   cacheDir: "PISTACK_CACHE_DIR",
   models: "PISTACK_MODELS",
+  delegation: "PISTACK_DELEGATION",
 } as const;
 
 export function readConfigFile(path: string): ConfigLayer | undefined {
@@ -107,6 +112,7 @@ export function environmentLayer(env: NodeJS.ProcessEnv): ConfigLayer {
   if (env[ENV.cacheDir]) values.cacheDir = env[ENV.cacheDir];
   if (env[ENV.allowBootstrap]) values.allowBootstrap = !NEGATIVE.has((env[ENV.allowBootstrap] as string).trim().toLowerCase());
   if (env[ENV.models]) values.models = parseModelRoles(env[ENV.models] as string);
+  if (env[ENV.delegation]) values.delegation = (env[ENV.delegation] as string).trim().toLowerCase();
   return { label: "environment", values };
 }
 
@@ -151,6 +157,7 @@ export function mergeConfig(layers: readonly ConfigLayer[]): AdapterConfig {
     allowBootstrap: merged.allowBootstrap ?? false,
     cacheDir: merged.cacheDir,
     models: merged.models ?? {},
+    delegation: validateDelegation(merged.delegation, layers),
     sources,
   };
 }
@@ -165,6 +172,15 @@ function resolvePin(merged: ConfigFile): string | undefined {
   if (merged.ref) return undefined;
   if (merged.repo && normalizeRepo(merged.repo) !== normalizeRepo(CERTIFIED.repo)) return undefined;
   return CERTIFIED.commit;
+}
+
+function validateDelegation(value: string | undefined, layers: readonly ConfigLayer[]): DelegationProvider {
+  if (value === undefined) return DEFAULT_DELEGATION;
+  if (isDelegationProvider(value)) return value;
+  const owner = [...layers].reverse().find((layer) => layer.values.delegation === value);
+  throw new Error(
+    `${owner?.label ?? "config"} sets \`delegation\` to ${JSON.stringify(value)}. Use one of ${DELEGATION_PROVIDERS.map((id) => `"${id}"`).join(", ")}, or remove it to prefer "${DEFAULT_DELEGATION}".`,
+  );
 }
 
 function resolveLayerPath(value: string, layers: readonly ConfigLayer[]): string {

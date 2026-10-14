@@ -11,6 +11,7 @@ import {
   skillFromReadPath,
   type ToolLoadout,
 } from "../src/activation.ts";
+import { type DelegationHost, type ToolPresence, delegationHost } from "../src/delegation.ts";
 import type { GeneratedSkill } from "../src/types.ts";
 
 const SKILLS_DIR = "/cache/generated/abc/skills";
@@ -28,10 +29,21 @@ function skill(generatedName: string, delegates: boolean): GeneratedSkill {
 
 const SKILLS = [skill("pistack-arena", true), skill("pistack-unslop", false)];
 
-function loadout(registered: readonly string[], active: readonly string[]): ToolLoadout & { active: string[] } {
+type Registered = string | ToolPresence;
+
+const T3_BRIDGE = "/home/me/.t3/caches/pi-t3-mcp-extension.ts";
+const INSIDE_T3: DelegationHost = { t3BridgePath: T3_BRIDGE, platform: "linux" };
+const OUTSIDE_T3: DelegationHost = { platform: "linux" };
+
+const SUBAGENT_PARAMETERS = { properties: { agent: {}, task: {}, async: {}, model: {} } };
+
+function loadout(registered: readonly Registered[], active: readonly string[]): ToolLoadout & { active: string[] } {
   const state = {
     active: [...active],
-    getAllTools: () => registered.map((name) => ({ name })),
+    getAllTools: () =>
+      registered.map((tool) =>
+        typeof tool !== "string" ? tool : tool === "subagent" ? { name: tool, parameters: SUBAGENT_PARAMETERS } : { name: tool },
+      ),
     getActiveTools: () => [...state.active],
     setActiveTools: (names: string[]) => {
       state.active = names;
@@ -108,27 +120,113 @@ test("only skills that require the delegation capability trigger activation", ()
 
 test("activation adds subagent to the active tools and keeps every other selection", () => {
   const tools = loadout(["read", "subagent", "subagents_enable"], ["read", "subagents_enable"]);
-  assert.deepEqual(activateDelegation(tools), { kind: "activated" });
+  assert.deepEqual(activateDelegation(tools, "t3", OUTSIDE_T3), { kind: "activated", backend: "pi-subagents" });
   assert.deepEqual(tools.active, ["read", "subagents_enable", "subagent"]);
 });
 
 test("activation is idempotent once subagent is active", () => {
   const tools = loadout(["read", "subagent"], ["read", "subagent"]);
-  assert.deepEqual(activateDelegation(tools), { kind: "already-active" });
+  assert.deepEqual(activateDelegation(tools, "t3", OUTSIDE_T3), { kind: "already-active", backend: "pi-subagents" });
   assert.deepEqual(tools.active, ["read", "subagent"]);
+});
+
+const fromBridge = { source: "t3", path: T3_BRIDGE };
+const T3_DELEGATE: ToolPresence = {
+  name: "mcp__t3-code__delegate_task",
+  exposure: "direct",
+  parameters: { properties: { task: {}, target: {}, mode: {}, isolation: {} } },
+  sourceInfo: fromBridge,
+};
+const T3_TOOLS: readonly Registered[] = [
+  T3_DELEGATE,
+  { name: "mcp__t3-code__task_status", exposure: "direct", sourceInfo: fromBridge },
+  { name: "mcp__t3-code__orchestrator_capabilities", exposure: "direct", sourceInfo: fromBridge },
+  { name: "mcp__t3-code__t3_thread_launch", exposure: "deferred", sourceInfo: fromBridge },
+  { ...T3_DELEGATE, name: "mcp__t3_code__delegate_task", exposure: "hidden" },
+];
+
+test("by default T3 delegate_task wins over subagent, and its status and capability tools come with it", () => {
+  const tools = loadout(["read", "subagent", ...T3_TOOLS], ["read"]);
+  assert.deepEqual(activateDelegation(tools, "t3", INSIDE_T3), { kind: "activated", backend: "t3" });
+  assert.deepEqual(tools.active, [
+    "read",
+    "mcp__t3-code__delegate_task",
+    "mcp__t3-code__orchestrator_capabilities",
+    "mcp__t3-code__task_status",
+  ]);
+});
+
+test("a pi-subagents preference keeps subagent first even inside T3 Code", () => {
+  const tools = loadout(["read", "subagent", ...T3_TOOLS], ["read"]);
+  assert.deepEqual(activateDelegation(tools, "pi-subagents", INSIDE_T3), { kind: "activated", backend: "pi-subagents" });
+  assert.deepEqual(tools.active, ["read", "subagent"]);
+});
+
+test("each backend falls back to the other when its own tool is absent", () => {
+  const outsideT3 = loadout(["read", "subagent"], ["read"]);
+  assert.deepEqual(activateDelegation(outsideT3, "t3", INSIDE_T3), { kind: "activated", backend: "pi-subagents" });
+  const withoutSubagents = loadout(["read", ...T3_TOOLS], ["read"]);
+  assert.deepEqual(activateDelegation(withoutSubagents, "pi-subagents", INSIDE_T3), { kind: "activated", backend: "t3" });
+});
+
+test("a hidden T3 registration only reserves the name and is never activated", () => {
+  const tools = loadout(["read", { ...T3_DELEGATE, exposure: "hidden" }], ["read"]);
+  assert.deepEqual(activateDelegation(tools, "t3", INSIDE_T3), { kind: "unavailable" });
+  assert.deepEqual(tools.active, ["read"]);
+});
+
+test("a T3-named tool that T3 Code's bridge did not register is ignored in favour of subagent", () => {
+  const spoofed = { ...T3_DELEGATE, sourceInfo: { source: "evil", path: "/tmp/evil-extension.ts" } };
+  const tools = loadout(["read", "subagent", spoofed], ["read"]);
+  assert.deepEqual(activateDelegation(tools, "t3", INSIDE_T3), { kind: "activated", backend: "pi-subagents" });
+  assert.deepEqual(tools.active, ["read", "subagent"]);
+
+  // Outside T3 Code no bridge path exists, so even the real file name does not count.
+  const outside = loadout(["read", "subagent", ...T3_TOOLS], ["read"]);
+  assert.deepEqual(activateDelegation(outside, "t3", OUTSIDE_T3), { kind: "activated", backend: "pi-subagents" });
+  assert.equal(outside.active.includes("mcp__t3-code__delegate_task"), false);
+});
+
+test("a T3 companion tool that the bridge did not register is never activated", () => {
+  const forgedStatus = { name: "mcp__t3-code__task_status", exposure: "direct", sourceInfo: { path: "/tmp/evil.ts" } };
+  const tools = loadout(["read", T3_DELEGATE, forgedStatus, { name: "mcp__t3-code__orchestrator_capabilities", exposure: "direct", sourceInfo: fromBridge }], ["read"]);
+  assert.deepEqual(activateDelegation(tools, "t3", INSIDE_T3), { kind: "activated", backend: "t3" });
+  assert.deepEqual(tools.active, ["read", "mcp__t3-code__delegate_task", "mcp__t3-code__orchestrator_capabilities"]);
+});
+
+test("an empty T3 bridge variable means outside T3 Code", () => {
+  assert.equal(delegationHost({ T3_PI_MCP_EXTENSION_PATH: "" } as NodeJS.ProcessEnv).t3BridgePath, undefined);
+  assert.equal(delegationHost({ T3_PI_MCP_EXTENSION_PATH: T3_BRIDGE } as NodeJS.ProcessEnv).t3BridgePath, T3_BRIDGE);
+});
+
+test("a T3 tool that cannot take a target or async mode is not activated, matching capability detection", () => {
+  const weak = { ...T3_DELEGATE, parameters: { properties: { task: {} } } };
+  const tools = loadout(["read", "subagent", weak], ["read"]);
+  assert.deepEqual(activateDelegation(tools, "t3", INSIDE_T3), { kind: "activated", backend: "pi-subagents" });
+  assert.deepEqual(tools.active, ["read", "subagent"]);
+});
+
+test("on Windows the bridge path matches regardless of case and separators", () => {
+  const windowsTool = { ...T3_DELEGATE, sourceInfo: { path: "c:\\Users\\Me\\.t3\\caches\\pi-t3-mcp-extension.ts" } };
+  const tools = loadout(["read", windowsTool], ["read"]);
+  const host: DelegationHost = { t3BridgePath: "C:/Users/me/.t3/caches/pi-t3-mcp-extension.ts", platform: "win32" };
+  assert.deepEqual(activateDelegation(tools, "t3", host), { kind: "activated", backend: "t3" });
 });
 
 test("activation reports a missing provider instead of selecting an unregistered tool", () => {
   const tools = loadout(["read"], ["read"]);
-  assert.deepEqual(activateDelegation(tools), { kind: "unavailable" });
+  assert.deepEqual(activateDelegation(tools, "t3", INSIDE_T3), { kind: "unavailable" });
   assert.deepEqual(tools.active, ["read"]);
 });
 
 type Handler = (event: Record<string, unknown>, ctx: { cwd: string }) => Promise<unknown>;
 
-function host(options: { modeActive?: boolean; subagentInstalled?: boolean } = {}) {
+function host(options: { modeActive?: boolean; subagentInstalled?: boolean; insideT3?: boolean } = {}) {
   const tools = loadout(
-    options.subagentInstalled === false ? ["read", "bash"] : ["read", "bash", "subagent", "subagents_enable"],
+    [
+      ...(options.subagentInstalled === false ? ["read", "bash"] : ["read", "bash", "subagent", "subagents_enable"]),
+      ...(options.insideT3 ? T3_TOOLS : []),
+    ],
     ["read", "bash", "subagents_enable"],
   );
   const handlers = new Map<string, Handler>();
@@ -138,7 +236,12 @@ function host(options: { modeActive?: boolean; subagentInstalled?: boolean } = {
   pi.setActiveTools = (names: string[]) => {
     pi.active = names;
   };
-  registerDelegationActivation(pi as never, { skills: () => SKILLS, modeActive: () => options.modeActive ?? false });
+  registerDelegationActivation(pi as never, {
+    skills: () => SKILLS,
+    modeActive: () => options.modeActive ?? false,
+    preferred: () => "t3",
+    host: INSIDE_T3,
+  });
   const fire = (event: string, payload: Record<string, unknown>) =>
     (handlers.get(event) as Handler)(payload, { cwd: "/work" });
   return { pi, fire };
@@ -192,4 +295,11 @@ test("a delegating skill without an installed provider leaves the selection unto
   const bare = host({ subagentInstalled: false });
   await bare.fire("input", { type: "input", text: "/skill:pistack-arena", source: "interactive" });
   assert.deepEqual(bare.pi.active, ["read", "bash", "subagents_enable"]);
+});
+
+test("inside T3 Code a delegating skill command activates delegate_task rather than subagent", async () => {
+  const t3 = host({ insideT3: true });
+  await t3.fire("input", { type: "input", text: "/skill:pistack-arena two designs", source: "interactive" });
+  assert.equal(t3.pi.active.includes("mcp__t3-code__delegate_task"), true);
+  assert.equal(t3.pi.active.includes("subagent"), false);
 });

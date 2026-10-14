@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerDelegationActivation } from "./src/activation.ts";
-import { registerAgents, type RuntimeRegistration } from "./src/agents.ts";
+import { registerAgents, unregisteredAgentDiagnostics, type RuntimeRegistration } from "./src/agents.ts";
+import { DEFAULT_DELEGATION } from "./src/delegation.ts";
 import { checkPrerequisites, detectCapabilities, type ToolDescriptor } from "./src/capabilities.ts";
 import {
   type AdapterConfig,
@@ -26,7 +27,7 @@ import { entryFor } from "./src/registry.ts";
 import { platformSupport, renderCheck, renderStatus, shellDiagnostics, type ShellState } from "./src/status.ts";
 import { BootstrapRequiredError, resolveRefToCommit, resolveSource } from "./src/upstream.ts";
 import { normalizeRepo } from "./src/config.ts";
-import type { CapabilityStatus, Diagnostic, GenerationResult, ResolvedSource } from "./src/types.ts";
+import type { CapabilityStatus, Diagnostic, GeneratedAgent, GenerationResult, ResolvedSource } from "./src/types.ts";
 
 const PACKAGE_ROOT = dirname(fileURLToPath(import.meta.url));
 const ADAPTER_VERSION = readAdapterVersion();
@@ -45,6 +46,7 @@ export default function (pi: ExtensionAPI) {
   let startupError: Error | undefined;
   let registrations: readonly RuntimeRegistration[] = [];
   let agentDiagnostics: readonly Diagnostic[] = [];
+  let unregisteredAgents: readonly GeneratedAgent[] = [];
   let modeActive = false;
   const commandNamespace = startupNamespace();
 
@@ -77,6 +79,7 @@ export default function (pi: ExtensionAPI) {
 
     const result = registerAgents(pi.events, state.generation.agents, state.config.namespace);
     registrations = result.registrations;
+    unregisteredAgents = result.unregistered;
     const diagnostics: Diagnostic[] = [...result.diagnostics];
     if (result.registrations.length > 0) {
       diagnostics.push({
@@ -100,6 +103,7 @@ export default function (pi: ExtensionAPI) {
   registerDelegationActivation(pi, {
     skills: () => state?.generation.skills ?? [],
     modeActive: () => modeActive && state !== undefined,
+    preferred: () => state?.config.delegation ?? DEFAULT_DELEGATION,
   });
 
   pi.on("before_agent_start", async (event) => {
@@ -202,21 +206,29 @@ export default function (pi: ExtensionAPI) {
     if (!state) return "The pstack adapter has not resolved its upstream checkout yet.";
 
     switch (params.action) {
-      case "status":
+      case "status": {
+        const current = capabilities();
+        const delegation = current.find((capability) => capability.id === "delegation");
         return renderStatus({
           adapterVersion: ADAPTER_VERSION,
           config: state.config,
           source: state.source,
           upstreamVersion: state.upstreamVersion,
           generation: state.generation,
-          capabilities: capabilities(),
+          capabilities: current,
           platform: platformSupport(platform()),
           platformName: platform(),
           modeActive,
           cacheRoot: state.cacheRoot,
           bootstrapped: state.bootstrapped,
-          runtimeDiagnostics: [...agentDiagnostics, ...shellDiagnostics(probedShellState(ctx, pi.getActiveTools()))],
+          runtimeDiagnostics: [
+            ...agentDiagnostics,
+            // Judged now, because T3's tools can connect after the agents were registered.
+            ...unregisteredAgentDiagnostics(unregisteredAgents, delegation?.backend, state.generation.agentPromptsDir),
+            ...shellDiagnostics(probedShellState(ctx, pi.getActiveTools())),
+          ],
         });
+      }
       case "check":
         return checkSkill(params.skill ?? "", ctx);
       case "models":
@@ -231,7 +243,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   function capabilities(): CapabilityStatus[] {
-    return detectCapabilities(pi.getAllTools() as unknown as ToolDescriptor[]);
+    return detectCapabilities(pi.getAllTools() as unknown as ToolDescriptor[], state?.config.delegation);
   }
 
   function checkSkill(requested: string, ctx: ExtensionContext): string {
@@ -250,10 +262,12 @@ export default function (pi: ExtensionAPI) {
     const executables = probeExecutables(skill.executables, usable ? () => sessionBashContext(ctx) : undefined);
     const shell: ShellState = { ...resolved, runError: executables.shellFailure };
     const shellProblems = shellDiagnostics(shell).map((diagnostic) => `${diagnostic.message} ${diagnostic.action ?? ""}`.trim());
+    const current = capabilities();
     return renderCheck(
       skill,
       entryFor(skill.upstreamName, skill.generatedName.slice(prefix.length)),
-      checkPrerequisites(skill.capabilities, capabilities(), skill.executables, executables.has, shellProblems),
+      checkPrerequisites(skill.capabilities, current, skill.executables, executables.has, shellProblems),
+      current.find((capability) => capability.id === "delegation"),
     );
   }
 
@@ -336,6 +350,7 @@ export default function (pi: ExtensionAPI) {
       }
     }
     registrations = [];
+    unregisteredAgents = [];
   }
 }
 
@@ -418,6 +433,7 @@ function buildState(
     namespace: config.namespace,
     cacheRoot: root,
     adapterVersion: ADAPTER_VERSION,
+    delegation: config.delegation,
     // A local checkout has uncommitted edits the digest cannot see, so never reuse its output.
     force: source.selection.kind === "local",
   });

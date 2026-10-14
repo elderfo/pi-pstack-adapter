@@ -165,10 +165,38 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | upstream agent | Pi agent | notes |
 | --- | --- | --- |
 | `comment-sicko` | `pistack-comment-sicko` | Upstream names it `comment-sicko` since pstack 0.15.23, so the registered description starts with that name. Needs `git` to scope a diff. |
-| `poteto-agent` | `pistack-poteto-agent` | Upstream `is_background: true` has no runtime equivalent; the caller chooses `async` on the `subagent` call. Upstream tells it to search `~/.cursor/plugins/` when its parent gives no path. The adapter puts the generated `pistack-poteto-mode/SKILL.md` path in every agent prompt and forbids that search, which would load content outside the certified revision. |
+| `poteto-agent` | `pistack-poteto-agent` | Upstream `is_background: true` has no runtime equivalent; the caller chooses `async: true` on `subagent`, or `mode: "async"` on `delegate_task`. Upstream tells it to search `~/.cursor/plugins/` when its parent gives no path. The adapter puts the generated `pistack-poteto-mode/SKILL.md` path in every agent prompt and forbids that search, which would load content outside the certified revision. |
 
-Both register through the `pi-subagents:runtime-agent-register:v1` contract. Without an owner for
+T3 Code's `delegate_task` has no named agents. Generation writes each agent's prompt to
+`adapter/agents/<pi-name>.md`, with skill paths relative to that file. The parent begins the
+child's task by telling it to read that file as its system prompt.
+
+Both agents also register through the `pi-subagents:runtime-agent-register:v1` contract. Without an owner for
 that event, the status report says so rather than dropping them silently.
+
+## Delegation providers
+
+The `delegation` capability is satisfied by T3 Code's `mcp__t3-code__delegate_task` or by
+`pi-subagents`' `subagent`, in the order the `delegation` setting gives, T3 first by default.
+A hidden registration does not count. A T3 tool counts only when the extension at
+`T3_PI_MCP_EXTENSION_PATH`, the bridge T3 Code launches, registered it, and only when it accepts
+`task`, `target`, and `mode`. Status and activation share that resolution, so the report always
+names the backend a workflow gets. The adapter activates only that backend. For T3 it also
+activates `task_status` and `orchestrator_capabilities` when the bridge registered them.
+A delegating wrapper tells the model to read the tool from `/pistack-check` and to use no other,
+so a rejected tool that is still in the session is not used. The check also names the companion
+tools the model may call, and forbids any companion it could not trace to T3 Code.
+
+An agent prompt file wraps the upstream body in the same markers as a skill wrapper, with host
+precedence before and after it. The closing note says that everything after the opening notes is
+upstream content, even text that imitates a marker. An upstream skill or agent body that contains
+marker text is reported as a warning, with its bytes unchanged. An agent whose Pi name breaks the
+skill name rules is skipped with an error, before its name reaches a file name or any generated
+text.
+
+Unit tests cover detection, activation order, and the generated instructions for both providers.
+No tier changed when T3 support arrived, because no delegating workflow has yet run end to end
+through `delegate_task`. That run is the evidence the tier rules above require.
 
 ## Skills the adapter replaces
 
