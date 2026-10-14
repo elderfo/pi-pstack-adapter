@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. release-please writes new entries from Conventional Commit PR titles.
 
+## [0.4.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.3.0...v0.4.0) (2026-10-14)
+
+
+### Features
+
+* **delegation:** delegate through T3 Code's delegate_task, with pi-subagents as fallback ([#11](https://github.com/elderfo/pi-pstack-adapter/issues/11)) ([4f9c8e8](https://github.com/elderfo/pi-pstack-adapter/commit/4f9c8e8bef690885c37cb0d215473db11a5e9049))
+* **pstack:** certify pstack 0.15.23 with in-your-own-words, ketchup, and poteto-help ([#9](https://github.com/elderfo/pi-pstack-adapter/issues/9)) ([73bb412](https://github.com/elderfo/pi-pstack-adapter/commit/73bb4125fcd470e5f8990e1953e7de80a05a0485))
+
 ## [0.3.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.2.0...v0.3.0) (2026-10-05)
 
 
