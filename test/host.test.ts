@@ -461,7 +461,7 @@ test("the status report shows every model role, configured or inherited", () => 
   const report = renderStatus({
     adapterVersion: "0.1.0",
     config: mergeConfig([
-      { label: "global", values: { localPath: root, models: { feature: "anthropic/one", custom: "openai/two" } } } as never,
+      { label: "global", values: { localPath: root, models: { feature: "anthropic/one:high", custom: "openai/two" } } } as never,
     ]),
     source,
     upstreamVersion: "0.15.2",
@@ -474,10 +474,10 @@ test("the status report shows every model role, configured or inherited", () => 
     bootstrapped: false,
   });
 
-  assert.match(report, /\| feature \| anthropic\/one \|/);
-  assert.match(report, /\| custom \| openai\/two \|/);
+  assert.match(report, /\| feature \| anthropic\/one \| high \|/);
+  assert.match(report, /\| custom \| openai\/two \| backend default \|/);
   for (const role of MODEL_ROLES.filter((name) => name !== "feature")) {
-    assert.match(report, new RegExp(`\\| ${role} \\| inherit \\(parent session model\\) \\|`));
+    assert.match(report, new RegExp(`\\| ${role} \\| inherit \\(parent session model\\) \\| inherit \\(parent session thinking\\) \\|`));
   }
 });
 

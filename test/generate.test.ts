@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { extractUpstreamBody, generate } from "../src/generate.ts";
 import { CERTIFIED } from "../src/certified.ts";
-import { ADAPTER_SKILLS, SKILL_REGISTRY } from "../src/registry.ts";
+import { isThinkingLevel } from "../src/config.ts";
+import { ADAPTER_SKILLS, MODEL_ROLES, SKILL_REGISTRY } from "../src/registry.ts";
 import type { DelegationProvider, ResolvedSource } from "../src/types.ts";
 import { makeTempDir, readTree, writePluginFixture } from "./support/fixture.ts";
 
@@ -297,6 +298,37 @@ test("the adapter replaces the Cursor setup body and keeps the upstream skill re
   assert.match(description, /Configure which Pi model each pstack role uses/);
 });
 
+test("the setup skill makes asking for a thinking level a required step with a recommended preset", () => {
+  const root = makeTempDir("setup-thinking");
+  const pluginDir = writePluginFixture(root, { skills: [{ name: "setup-pstack", body: "b\n" }] });
+  const result = run({ pluginDir, cacheRoot: join(root, "cache") });
+  const wrapper = readFileSync(join(result.skillsDir, "pistack-setup", "SKILL.md"), "utf8");
+
+  assert.match(wrapper, /3\.\s+Ask for a thinking level\.\s+Do not assume the user wants\s+none/);
+  assert.match(wrapper, /\| Balanced \(suggest this first\) \| `medium` \| `high` \| `xhigh` \|/);
+  assert.match(wrapper, /A role on\s+`inherit` cannot have a level/);
+  assert.match(wrapper, /without\s+`thinking` clears a level set earlier/);
+  assert.match(wrapper, /including the\s+thinking\s+column/);
+  assert.match(wrapper, /Skip this step only when every\s+role is on\s+`inherit`/);
+
+  // The preset table must stay consistent with the code it describes.
+  const rows = wrapper.split("\n").filter((line) => /^\s*\| (Balanced|Low cost|Maximum quality) /.test(line));
+  assert.equal(rows.length, 3);
+  for (const row of rows) {
+    for (const [, level] of row.matchAll(/`([a-z]+)`/g)) {
+      assert.equal(isThinkingLevel(level as string), true, `${level} in ${row}`);
+    }
+  }
+  const header = wrapper.split("\n").find((line) => line.includes("| choice |")) ?? "";
+  const codeRoles = [...header.matchAll(/`([a-z-]+)`/g)].map((match) => match[1] as string);
+  const tiers = ["judgment", "strongest-judgment"];
+  assert.deepEqual(
+    [...codeRoles.filter((role) => !tiers.includes(role))].sort(),
+    MODEL_ROLES.filter((role) => !tiers.includes(role)).sort(),
+  );
+  for (const tier of tiers) assert.equal(codeRoles.includes(tier), true, tier);
+});
+
 test("an agent system prompt carries the host precedence statement above and below the upstream text", () => {
   const root = makeTempDir("agent-precedence");
   const pluginDir = writePluginFixture(root, {
@@ -387,6 +419,9 @@ test("the host mapping tells a T3 parent how to run agents, models, background w
 
   assert.match(mapping, /`agents\/pistack-poteto-agent\.md` beside this file/);
   assert.match(mapping, /target: \{ providerInstanceId: "pi", model: "provider\/model" \}/);
+  assert.match(mapping, /options: \{ thinking: "<level>" \}/);
+  assert.match(mapping, /append it as\s+`provider\/model:<level>`/);
+  assert.match(mapping, /If the level is `off` and the model does not list `off`, omit/);
   assert.match(mapping, /`mode: "async"`/);
   assert.match(mapping, /`isolation: "worktree"`/);
   assert.match(mapping, /Never use `t3_thread_launch` or `create_threads`/);

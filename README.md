@@ -150,6 +150,20 @@ In a noninteractive session, set roles with `PISTACK_MODELS`:
 PISTACK_MODELS='feature=provider/model,bug-fix=provider/other-model' pi
 ```
 
+Add a thinking level to a role with a `:level` suffix. The levels are `off`, `minimal`, `low`,
+`medium`, `high`, `xhigh`, and `max`:
+
+```bash
+PISTACK_MODELS='feature=provider/model:medium,judgment=provider/other-model:high' pi
+```
+
+Role names are lowercase letters, digits, and hyphens. A model value is printable ASCII with no spaces or markup characters, at most 128 characters. A config entry that breaks these rules stops the adapter at startup with an error that names the file, so fix the key there and restart Pi.
+
+A role without a level passes none, so the delegation backend applies its own default. A role you leave unset inherits the
+session model and the session thinking level, so a session at high thinking makes every
+inheriting delegate expensive. The `pstack_adapter` tool's `set_model` action takes the same
+level in its `thinking` parameter. A level the model does not offer is clamped by Pi at run time.
+
 ## Run Pi noninteractively
 
 A noninteractive session, such as `pi --print`, cannot answer the download question. To allow
@@ -188,7 +202,7 @@ settings to `.pi/pi-pstack-adapter.json`. Environment variables override both fi
 | `PISTACK_UPSTREAM_PLUGIN_PATH` | Selects the plugin directory inside the checkout. |
 | `PISTACK_ALLOW_BOOTSTRAP` | Allows a noninteractive first download. |
 | `PISTACK_CACHE_DIR` | Changes the cache directory. |
-| `PISTACK_MODELS` | Assigns models as comma-separated `role=provider/model` pairs. |
+| `PISTACK_MODELS` | Assigns models as comma-separated `role=provider/model[:thinking]` pairs. |
 | `PISTACK_DELEGATION` | Sets the delegation provider to try first: `t3` (default) or `pi-subagents`. The config file key is `delegation`. |
 
 ## Security and trust

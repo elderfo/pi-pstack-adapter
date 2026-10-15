@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { CERTIFIED } from "./certified.ts";
+import { safeEcho } from "./echo.ts";
 import { DEFAULT_NAMESPACE, validateNamespace } from "./namespace.ts";
 import { expandHome } from "./paths.ts";
 import { DEFAULT_DELEGATION, DELEGATION_PROVIDERS, isDelegationProvider } from "./delegation.ts";
@@ -66,8 +67,9 @@ export function readConfigFile(path: string): ConfigLayer | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
-  } catch (error) {
-    throw new Error(`${path} is not valid JSON: ${(error as Error).message}`);
+  } catch {
+    // The parser's message quotes raw file text, which can reach the agent. Say only where to look.
+    throw new Error(`${path} is not valid JSON. Fix the syntax in that file and restart Pi.`);
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error(`${path} must contain a JSON object.`);
@@ -87,7 +89,139 @@ export function updateConfigFile(path: string, patch: ConfigFile): ConfigFile {
   return next;
 }
 
-/** `role=provider/model,role2=provider/model2` */
+/** Thinking levels Pi accepts as a `:level` suffix on a model id. */
+export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+
+export function isThinkingLevel(value: string): value is ThinkingLevel {
+  return (THINKING_LEVELS as readonly string[]).includes(value);
+}
+
+export interface ModelSpec {
+  readonly model: string;
+  readonly thinking?: ThinkingLevel;
+}
+
+/**
+ * Splits `provider/model[:thinking]`. Only a known level is a suffix, so a model id that
+ * itself contains a colon, such as `ollama/qwen:7b`, stays whole. Pi parses ids the same way.
+ */
+export function splitModelSpec(spec: string): ModelSpec {
+  const separator = spec.lastIndexOf(":");
+  if (separator > 0) {
+    const suffix = spec.slice(separator + 1).toLowerCase();
+    if (isThinkingLevel(suffix)) return { model: spec.slice(0, separator), thinking: suffix };
+  }
+  return { model: spec };
+}
+
+export function joinModelSpec(spec: ModelSpec): string {
+  return spec.thinking === undefined ? spec.model : `${spec.model}:${spec.thinking}`;
+}
+
+export interface AvailableModel {
+  readonly id: string;
+  readonly reasoning?: boolean;
+}
+
+export type ModelAssignment =
+  | { readonly kind: "inherit" }
+  | { readonly kind: "assign"; readonly spec: ModelSpec }
+  | { readonly kind: "rejected"; readonly message: string };
+
+/** Validates a `set_model` request. `available` holds `provider/id` entries from the registry. */
+export function planModelAssignment(
+  model: string,
+  thinking: string | undefined,
+  available: readonly AvailableModel[],
+): ModelAssignment {
+  if (model.trim().toLowerCase() === "inherit") {
+    if (thinking?.trim()) {
+      return {
+        kind: "rejected",
+        message:
+          "A role that inherits the parent session has no thinking level of its own. Pass a `provider/model` with `thinking`, or drop `thinking`.",
+      };
+    }
+    return { kind: "inherit" };
+  }
+  const whole = model.trim();
+  // A registry id that itself ends in a level word, such as `x/model:low`, wins over a split.
+  const exact = available.some((candidate) => candidate.id === whole);
+  const spec = exact ? { model: whole } : splitModelSpec(whole);
+  const requested = thinking?.trim().toLowerCase() || undefined;
+  if (requested !== undefined && !isThinkingLevel(requested)) {
+    return {
+      kind: "rejected",
+      message: `Unknown thinking level \`${safeEcho(thinking).replaceAll('"', "")}\`. Use one of ${THINKING_LEVELS.map((level) => `\`${level}\``).join(", ")}.`,
+    };
+  }
+  if (requested !== undefined && spec.thinking !== undefined && spec.thinking !== requested) {
+    return {
+      kind: "rejected",
+      message: `\`model\` names thinking \`${spec.thinking}\` but \`thinking\` says \`${requested}\`. Pass one of them.`,
+    };
+  }
+  const level = requested !== undefined && isThinkingLevel(requested) ? requested : spec.thinking;
+  if (!isValidModelSpec(spec.model)) return { kind: "rejected", message: invalidModelMessage(spec.model) };
+  if (exact && requested === undefined && splitModelSpec(whole).thinking !== undefined) {
+    // Stored whole, `x/model:low` would read back as model `x/model` at thinking `low`.
+    return {
+      kind: "rejected",
+      message: `Model \`${whole}\` ends in a thinking-level word, so a plain assignment would be misread. Pass \`thinking\` explicitly, for example \`high\`.`,
+    };
+  }
+  const known = available.find((candidate) => candidate.id === spec.model);
+  if (!known) {
+    return {
+      kind: "rejected",
+      message: `No model \`${spec.model}\` is available in this Pi installation. Call this tool with action "models" for real ids, or pass "inherit".`,
+    };
+  }
+  if (level !== undefined && level !== "off" && known.reasoning === false) {
+    return {
+      kind: "rejected",
+      message: `Model \`${spec.model}\` does not support thinking. Drop \`thinking\`, or pick a reasoning model.`,
+    };
+  }
+  const assigned: ModelSpec = { model: spec.model, thinking: level };
+  if (!isValidModelSpec(joinModelSpec(assigned))) return { kind: "rejected", message: invalidModelMessage(joinModelSpec(assigned)) };
+  return { kind: "assign", spec: assigned };
+}
+
+/** Role names reach generated markdown and status tables, so they stay plain kebab-case. */
+const ROLE_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
+/**
+ * A model spec is also rendered into markdown the agent reads, so it is printable ASCII with the
+ * markup characters removed. An allow-list of ASCII keeps invisible text (tag characters, zero-width
+ * and bidi controls) out; catalogue ids such as OpenRouter's `~anthropic/...` aliases are ASCII.
+ * A trailing colon is never a valid id or level.
+ */
+const PRINTABLE_ASCII = /^[\x21-\x7e]+$/;
+const MARKUP_CHARACTERS = /[`|<>[\]()\\*]/;
+
+const MAX_MODEL_SPEC_LENGTH = 128;
+
+export function isValidModelSpec(model: string): boolean {
+  const plain = (value: string) => PRINTABLE_ASCII.test(value) && !MARKUP_CHARACTERS.test(value) && !value.endsWith(":");
+  if (model.length > MAX_MODEL_SPEC_LENGTH || !plain(model)) return false;
+  // `x/model::high` splits to `x/model:`, which is no model id.
+  return plain(splitModelSpec(model).model);
+}
+
+export function isValidRole(role: string): boolean {
+  return ROLE_PATTERN.test(role);
+}
+
+export function invalidRoleMessage(role: string): string {
+  return `Invalid role name ${safeEcho(role)}. Use lowercase letters, digits, and hyphens, starting with a letter, for example "bug-fix".`;
+}
+
+function invalidModelMessage(model: unknown): string {
+  return `Invalid model value ${typeof model === "string" ? `(${model.length} characters)` : safeEcho(model)}. Use provider/model or provider/model:thinking with no spaces or markup characters, at most 128 characters.`;
+}
+
+/** `role=provider/model[:thinking],role2=provider/model2` */
 export function parseModelRoles(value: string): Record<string, string> {
   const roles: Record<string, string> = {};
   for (const pair of value.split(",")) {
@@ -95,9 +229,15 @@ export function parseModelRoles(value: string): Record<string, string> {
     if (trimmed === "") continue;
     const separator = trimmed.indexOf("=");
     if (separator <= 0) {
-      throw new Error(`Invalid model role assignment ${JSON.stringify(trimmed)}. Use role=provider/model.`);
+      throw new Error(`Invalid model role assignment ${safeEcho(trimmed)}. Use role=provider/model or role=provider/model:thinking.`);
     }
-    roles[trimmed.slice(0, separator).trim()] = trimmed.slice(separator + 1).trim();
+    const role = trimmed.slice(0, separator).trim();
+    const model = trimmed.slice(separator + 1).trim();
+    if (!isValidRole(role)) throw new Error(invalidRoleMessage(role));
+    // An empty value is an unset variable that expanded to nothing, not a model.
+    if (model === "") continue;
+    if (!isValidModelSpec(model)) throw new Error(invalidModelMessage(model));
+    roles[role] = model;
   }
   return roles;
 }
@@ -111,7 +251,13 @@ export function environmentLayer(env: NodeJS.ProcessEnv): ConfigLayer {
   if (env[ENV.pluginPath]) values.pluginPath = env[ENV.pluginPath];
   if (env[ENV.cacheDir]) values.cacheDir = env[ENV.cacheDir];
   if (env[ENV.allowBootstrap]) values.allowBootstrap = !NEGATIVE.has((env[ENV.allowBootstrap] as string).trim().toLowerCase());
-  if (env[ENV.models]) values.models = parseModelRoles(env[ENV.models] as string);
+  if (env[ENV.models]) {
+    try {
+      values.models = parseModelRoles(env[ENV.models] as string);
+    } catch (error) {
+      throw new Error(`${ENV.models}: ${(error as Error).message}`);
+    }
+  }
   if (env[ENV.delegation]) values.delegation = (env[ENV.delegation] as string).trim().toLowerCase();
   return { label: "environment", values };
 }
@@ -134,7 +280,7 @@ export function mergeConfig(layers: readonly ConfigLayer[]): AdapterConfig {
         merged.ref = undefined;
       }
       if (key === "models") {
-        merged.models = { ...merged.models, ...(value as Record<string, string>) };
+        merged.models = { ...merged.models, ...validatedModels(value, layer.label) };
       } else {
         (merged as Record<string, unknown>)[key] = value;
       }
@@ -162,6 +308,25 @@ export function mergeConfig(layers: readonly ConfigLayer[]): AdapterConfig {
   };
 }
 
+/** A bad `models` entry fails with the layer that holds it, so status can still be reached after a fix. */
+function validatedModels(value: unknown, label: string): Record<string, string> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${label} sets \`models\` to something other than an object of role to provider/model.`);
+  }
+  const models: Record<string, string> = {};
+  for (const [role, model] of Object.entries(value)) {
+    if (!isValidRole(role)) {
+      throw new Error(`${label}: ${invalidRoleMessage(role)} Edit that key in \`models\` in the named file, then restart Pi.`);
+    }
+    if (model === "") continue;
+    if (typeof model !== "string" || !isValidModelSpec(model)) {
+      throw new Error(`${label}: role ${safeEcho(role)}. ${invalidModelMessage(model)}`);
+    }
+    Object.defineProperty(models, role, { value: model, enumerable: true, writable: true, configurable: true });
+  }
+  return models;
+}
+
 /**
  * The certified commit is the default, not a floor. Naming a ref or a repository without a
  * commit means the user asked for that ref, so the pin must get out of the way and trust
@@ -179,7 +344,7 @@ function validateDelegation(value: string | undefined, layers: readonly ConfigLa
   if (isDelegationProvider(value)) return value;
   const owner = [...layers].reverse().find((layer) => layer.values.delegation === value);
   throw new Error(
-    `${owner?.label ?? "config"} sets \`delegation\` to ${JSON.stringify(value)}. Use one of ${DELEGATION_PROVIDERS.map((id) => `"${id}"`).join(", ")}, or remove it to prefer "${DEFAULT_DELEGATION}".`,
+    `${owner?.label ?? "config"} sets \`delegation\` to ${safeEcho(value)}. Use one of ${DELEGATION_PROVIDERS.map((id) => `"${id}"`).join(", ")}, or remove it to prefer "${DEFAULT_DELEGATION}".`,
   );
 }
 

@@ -27,6 +27,13 @@ Roles used by pstack workflows.
 The status report lists the same roles, so read it back rather than trusting this table if the
 adapter has been upgraded.
 
+Each role also has a thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or
+`max`. Upstream pstack calls this a reasoning budget and encodes it in the model slug. A role with
+no thinking level passes none, so the delegation backend applies its own default. A role left on
+`inherit` uses the parent session's model and thinking level, so a parent at high thinking makes
+every inheriting child expensive. Model choice often affects cost more than thinking level does,
+so consider a cheaper model for the bulk roles as well.
+
 Steps.
 
 1. Call the adapter tool with `action: "models"` to list the provider and model ids this Pi
@@ -34,13 +41,40 @@ Steps.
 2. Ask the user which model each role should use. Offer the listed ids, and offer
    `inherit` for any role they do not care about. Use the structured question tool when it is
    available; otherwise ask in plain text. Only ids from step 1 are accepted.
-3. For each answered role, call the adapter tool with `action: "set_model"`, the role, and the
-   chosen `provider/model` id. Pass `scope: "project"` when the user wants the choice to apply
-   only to this repository.
-4. Read back `action: "status"` and show the user what was written.
+3. Ask for a thinking level. Do not assume the user wants none. Skip this step only when every
+   role is on `inherit`. It applies to every role that got a model in step 2. A role on
+   `inherit` cannot have a level, so tell the user that and say that those roles follow the
+   parent session's level. Ask one single-select question first. Put the whole choice in each option
+   title so the user can pick without opening anything else, for example "Balanced: code roles
+   medium, judgment high, strongest-judgment xhigh (suggested)".
+
+   | choice | code roles (`feature`, `refactoring`, `bug-fix`, `perf-issue`, `hillclimb`) | `judgment` | `strongest-judgment` |
+   | --- | --- | --- | --- |
+   | Balanced (suggest this first) | `medium` | `high` | `xhigh` |
+   | Low cost | `low` | `medium` | `high` |
+   | Maximum quality | `high` | `xhigh` | `max` |
+   | Backend default | none | none | none |
+   | Custom | ask once per column, as a single-select of level names | | |
+
+   These are starting points, not measurements. They keep the heaviest reasoning on the roles
+   that make the hardest calls. Offer Custom for a user who wants different levels. Ask once for
+   the code roles, once for `judgment`, and once for `strongest-judgment`. Ask a role on its own
+   only when the user says it should differ from its group. Backend default passes no level and
+   leaves the choice to the delegation backend. A Custom user who wants thinking disabled picks
+   `off`.
+   A model may not offer every level. A level it lacks is clamped when it runs, so say that
+   instead of asking again. The tool rejects any level other than `off` on a model that has no reasoning support.
+   When it does, set that role with no level and tell the user which role has none.
+4. For each role, call the adapter tool with `action: "set_model"`, the role, the chosen
+   `provider/model` id, and `thinking` when step 3 picked a level. Pass `scope: "project"` when
+   the user wants the choice to apply only to this repository. Calling `set_model` for a role
+   again without `thinking` clears a level set earlier, so always pass it again.
+5. Read back `action: "status"` and show the user what was written, including the thinking
+   column.
 
 For a scripted environment, set `PISTACK_MODELS` instead, for example
-`PISTACK_MODELS=feature=anthropic/claude-sonnet-4-5,bug-fix=openai/gpt-5`. The environment wins
+`PISTACK_MODELS=feature=anthropic/claude-sonnet-4-5:medium,bug-fix=openai/gpt-5:high`. The
+optional `:level` suffix sets the thinking level. The environment wins
 over both config files, so CI never needs this dialog.
 
 ## Upstream source

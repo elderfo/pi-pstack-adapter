@@ -1,7 +1,7 @@
 import { CERTIFIED } from "./certified.ts";
 import { CAPABILITY_LABELS, MODEL_ROLES, TIER_ORDER } from "./registry.ts";
 import type { AdapterConfig } from "./config.ts";
-import { trustWarning } from "./config.ts";
+import { splitModelSpec, trustWarning } from "./config.ts";
 import { DELEGATION_BACKENDS, delegationOrder } from "./delegation.ts";
 import type { PrerequisiteReport } from "./capabilities.ts";
 import type {
@@ -88,14 +88,17 @@ export function renderStatus(input: StatusInput): string {
 
   lines.push(`## Model roles`);
   lines.push("");
-  lines.push(`| role | model |`);
-  lines.push(`| --- | --- |`);
-  for (const role of MODEL_ROLES) {
-    lines.push(`| ${role} | ${config.models[role] ?? "inherit (parent session model)"} |`);
-  }
+  lines.push(`| role | model | thinking |`);
+  lines.push(`| --- | --- | --- |`);
   const extra = Object.keys(config.models).filter((role) => !MODEL_ROLES.includes(role)).sort();
-  for (const role of extra) {
-    lines.push(`| ${role} | ${config.models[role]} |`);
+  for (const role of [...MODEL_ROLES, ...extra]) {
+    const configured = config.models[role];
+    if (configured === undefined) {
+      lines.push(`| ${role} | inherit (parent session model) | inherit (parent session thinking) |`);
+      continue;
+    }
+    const spec = splitModelSpec(configured);
+    lines.push(`| ${role} | ${spec.model} | ${spec.thinking ?? "backend default"} |`);
   }
   lines.push("");
 
