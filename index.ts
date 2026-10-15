@@ -13,13 +13,20 @@ import {
   type AdapterConfig,
   type ConfigFile,
   type ConfigLayer,
+  THINKING_LEVELS,
   environmentLayer,
+  invalidRoleMessage,
+  isValidModelSpec,
+  isValidRole,
+  joinModelSpec,
   mergeConfig,
+  planModelAssignment,
   readConfigFile,
   trustWarning,
   updateConfigFile,
 } from "./src/config.ts";
 import { generate } from "./src/generate.ts";
+import { safeEcho } from "./src/echo.ts";
 import { MODE_ENTRY_TYPE, modeFromEntries, modeInstruction } from "./src/mode.ts";
 import { CONFIG_FILE_NAME, agentDir, cacheRoot } from "./src/paths.ts";
 import { bashToolContext, probeExecutables } from "./src/executables.ts";
@@ -56,9 +63,8 @@ export default function (pi: ExtensionAPI) {
     startupError = undefined;
     modeActive = modeFromEntries(ctx.sessionManager.getBranch() as never[]);
 
-    const config = loadConfig(ctx);
     try {
-      state = await bringUpUpstream(config, ctx);
+      state = await bringUpUpstream(loadConfig(ctx), ctx);
     } catch (error) {
       startupError = error as Error;
       if (ctx.hasUI) ctx.ui.notify(`pstack adapter: ${(error as Error).message}`, "error");
@@ -135,6 +141,11 @@ export default function (pi: ExtensionAPI) {
       skill: Type.Optional(Type.String({ description: "Skill name for `check`, with or without the namespace prefix" })),
       role: Type.Optional(Type.String({ description: "pstack model role for `set_model`" })),
       model: Type.Optional(Type.String({ description: "`provider/model` id, or `inherit` to clear the role" })),
+      thinking: Type.Optional(
+        Type.String({
+          description: `Thinking level for \`set_model\`: ${THINKING_LEVELS.join(", ")}. Omit to pass no level, which also clears a level set earlier.`,
+        }),
+      ),
       repo: Type.Optional(Type.String({ description: "Upstream repository URL for `set_source`" })),
       ref: Type.Optional(Type.String({ description: "Branch, tag, or commit for `set_source`" })),
       localPath: Type.Optional(Type.String({ description: "Local pstack checkout for `set_source`" })),
@@ -195,6 +206,7 @@ export default function (pi: ExtensionAPI) {
       skill?: string;
       role?: string;
       model?: string;
+      thinking?: string;
       repo?: string;
       ref?: string;
       localPath?: string;
@@ -234,7 +246,7 @@ export default function (pi: ExtensionAPI) {
       case "models":
         return renderModels(ctx);
       case "set_model":
-        return setModel(params.role, params.model, params.scope ?? "user", ctx);
+        return setModel(params.role, params.model, params.thinking, params.scope ?? "user", ctx);
       case "set_source":
         return setSource(params, params.scope ?? "user", ctx);
       default:
@@ -254,7 +266,7 @@ export default function (pi: ExtensionAPI) {
       (candidate) => candidate.generatedName === requested || candidate.generatedName === `${prefix}${bare}`,
     );
     if (!skill) {
-      return `No pstack skill named ${JSON.stringify(requested)}. Run the adapter tool with action "status" for the full list.`;
+      return `No pstack skill named ${safeEcho(requested)}. Run the adapter tool with action "status" for the full list.`;
     }
     const resolved = shellState(ctx, pi.getActiveTools());
     // An inactive bash tool or an unresolved shell is already a blocker, so do not spawn anything.
@@ -274,27 +286,36 @@ export default function (pi: ExtensionAPI) {
   function renderModels(ctx: ExtensionContext): string {
     const scoped = ctx.scopedModels ?? [];
     const models = scoped.length > 0 ? scoped.map((entry) => entry.model) : ctx.modelRegistry.getAvailable();
-    const ids = models.map((model) => `${model.provider}/${model.id}`).sort();
+    const ids = models.map((model) => `${model.provider}/${model.id}`).filter(isValidModelSpec).sort();
     if (ids.length === 0) return "No models are available in this Pi installation.";
     return `Available model ids.\n\n${ids.map((id) => `- \`${id}\``).join("\n")}`;
   }
 
-  function setModel(role: string | undefined, model: string | undefined, scope: "user" | "project", ctx: ExtensionContext): string {
+  function setModel(
+    role: string | undefined,
+    model: string | undefined,
+    thinking: string | undefined,
+    scope: "user" | "project",
+    ctx: ExtensionContext,
+  ): string {
     if (!role) return "set_model needs a `role`.";
     if (!model) return "set_model needs a `model`, or `inherit` to clear the role.";
-    const clearing = model.trim().toLowerCase() === "inherit";
-    if (!clearing && !ctx.modelRegistry.getAvailable().some((candidate) => `${candidate.provider}/${candidate.id}` === model)) {
-      return `No model \`${model}\` is available in this Pi installation. Call this tool with action "models" for real ids, or pass "inherit".`;
-    }
+    if (!isValidRole(role)) return invalidRoleMessage(role);
+    const available = ctx.modelRegistry
+      .getAvailable()
+      .map((candidate) => ({ id: `${candidate.provider}/${candidate.id}`, reasoning: candidate.reasoning }));
+    const plan = planModelAssignment(model, thinking, available);
+    if (plan.kind === "rejected") return plan.message;
     const path = configPath(scope, ctx);
-    const current = readConfigFile(path)?.values.models ?? {};
-    const models = { ...current };
-    if (clearing) delete models[role];
-    else models[role] = model;
+    const stored = readConfigFile(path)?.values.models;
+    const models = typeof stored === "object" && stored !== null && !Array.isArray(stored) ? { ...stored } : {};
+    if (plan.kind === "inherit") delete models[role];
+    else models[role] = joinModelSpec(plan.spec);
     updateConfigFile(path, { models });
-    return clearing
-      ? `Role \`${role}\` now inherits the parent session model. Written to ${path}.`
-      : `Role \`${role}\` now uses \`${model}\`. Written to ${path}.`;
+    if (plan.kind === "inherit") return `Role \`${role}\` now inherits the parent session model and thinking. Written to ${path}.`;
+    return plan.spec.thinking === undefined
+      ? `Role \`${role}\` now uses \`${plan.spec.model}\` at the model's default thinking. Written to ${path}.`
+      : `Role \`${role}\` now uses \`${plan.spec.model}\` with thinking \`${plan.spec.thinking}\`. Written to ${path}.`;
   }
 
   async function setSource(

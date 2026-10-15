@@ -483,9 +483,18 @@ function t3Section(namespace: string): string {
   path of \`agents/${namespace}-poteto-agent.md\` beside this file. The \`agent prompts\` row of
   the status report gives that directory.
 - Model: a role configured as \`provider/model\` becomes
-  \`target: { providerInstanceId: "pi", model: "provider/model" }\`. An unconfigured role omits
-  \`target\`, so the child inherits the parent. For a different model family, call
-  \`${T3_CAPABILITIES_TOOL}\` and use a provider and model it lists.
+  \`target: { providerInstanceId: "pi", model: "provider/model" }\`. Read the thinking column of
+  the \`model roles\` table in the \`pstack_adapter\` \`status\` report. When it names a level, add it to
+  \`target.options\` under the option id that \`${T3_CAPABILITIES_TOOL}\` lists for that model's
+  thinking setting. For Pi models the id is \`thinking\`, as in \`options: { thinking: "<level>" }\`.
+  A role whose thinking reads "backend default" omits \`options\`, so the backend applies its own
+  default. An unconfigured role omits \`target\`, so the child inherits the parent model and
+  thinking.
+- If the model does not list the level, use the highest level it lists that is below the requested
+  one, and tell the user. If it lists none below the requested level, or lists no thinking option,
+  omit \`options\` and tell the user. If the level is \`off\` and the model does not list \`off\`, omit
+  \`options\` and tell the user, because the closest listed level would turn thinking on.
+  For a different model family, call \`${T3_CAPABILITIES_TOOL}\` and use a provider and model it lists.
 - Background: \`mode: "async"\`. A finished child wakes this thread, so end the turn instead of
   polling. Call \`${T3_STATUS_TOOL}\` only when you need a result mid-turn.
 - Call \`${T3_CAPABILITIES_TOOL}\` or \`${T3_STATUS_TOOL}\` only when the \`check\` report allows it.
@@ -508,7 +517,10 @@ function subagentSection(namespace: string): string {
 
 - Agent names are namespaced, for example \`${namespace}-poteto-agent\`. Call
   \`${SUBAGENT_TOOL}({ action: "list" })\` to see them.
-- Model: pass a role's \`provider/model\` as \`model\`. An unconfigured role omits \`model\`.
+- Model: pass a role's \`provider/model\` as \`model\`. When the thinking column of the \`model roles\`
+  table in the \`pstack_adapter\` \`status\` report names a level for the role, append it as
+  \`provider/model:<level>\`. A role whose thinking reads "backend default" gets no suffix, so
+  pi-subagents applies its own default. An unconfigured role omits \`model\`.
 - Background: \`async: true\`.`;
 }
 
@@ -524,7 +536,7 @@ that names a Cursor tool, path, or model.
 | \`run_in_background: true\` | \`mode: "async"\` on \`delegate_task\`, or \`async: true\` on \`subagent\`. |
 | \`AskUserQuestion\`, \`AskQuestion\` | the \`ask_user\` tool. |
 | \`TodoWrite\`, \`TaskCreate\`, \`TaskUpdate\` | no Pi equivalent. Keep an uncommitted \`todo.md\` checklist instead. |
-| \`claude-opus-5-5-xhigh\`, \`grok-4.7-xhigh-fast\`, other Cursor model slugs | the role models configured by \`/skill:${namespace}-setup\`. Call the \`pstack_adapter\` tool with \`action: "status"\` to read the current role table. An unconfigured role inherits the parent model, so omit \`target\` or \`model\`. |
+| \`claude-opus-5-5-xhigh\`, \`grok-4.7-xhigh-fast\`, other Cursor model slugs | the role models configured by \`/skill:${namespace}-setup\`. Call the \`pstack_adapter\` tool with \`action: "status"\` to read the current role table. An effort word in a slug, such as \`-xhigh\` or \`-max\`, is not a model id. The role table's thinking column carries that level, and \`-fast\` has no equivalent. An unconfigured role inherits the parent model and thinking, so omit \`target\` or \`model\`. |
 | a role line valued \`auto\` or \`inherit-parent\` | an unconfigured role. Omit \`target\` or \`model\` so the child runs on the parent model. |
 | \`~/.cursor/rules/pstack-models.mdc\` | adapter configuration written by \`/skill:${namespace}-setup\`. |
 | role lines \`feature, refactoring\`, \`bug-fix\`, \`perf-issue\`, \`hillclimb\`, \`judgment and prose\`, \`hardest tasks\` | adapter roles \`feature\` or \`refactoring\`, \`bug-fix\`, \`perf-issue\`, \`hillclimb\`, \`judgment\`, and \`strongest-judgment\`. |

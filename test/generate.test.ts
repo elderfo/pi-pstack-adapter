@@ -387,6 +387,9 @@ test("the host mapping tells a T3 parent how to run agents, models, background w
 
   assert.match(mapping, /`agents\/pistack-poteto-agent\.md` beside this file/);
   assert.match(mapping, /target: \{ providerInstanceId: "pi", model: "provider\/model" \}/);
+  assert.match(mapping, /options: \{ thinking: "<level>" \}/);
+  assert.match(mapping, /append it as\s+`provider\/model:<level>`/);
+  assert.match(mapping, /If the level is `off` and the model does not list `off`, omit/);
   assert.match(mapping, /`mode: "async"`/);
   assert.match(mapping, /`isolation: "worktree"`/);
   assert.match(mapping, /Never use `t3_thread_launch` or `create_threads`/);

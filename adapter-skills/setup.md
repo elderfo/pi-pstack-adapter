@@ -27,6 +27,12 @@ Roles used by pstack workflows.
 The status report lists the same roles, so read it back rather than trusting this table if the
 adapter has been upgraded.
 
+Each role also has a thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or
+`max`. Upstream pstack calls this a reasoning budget and encodes it in the model slug. A role with
+no thinking level passes none, so the delegation backend applies its own default. A role left on `inherit` uses the parent
+session's model and thinking level, so a parent at high thinking makes every inheriting child
+expensive. Set a level on the roles that do the bulk of the work.
+
 Steps.
 
 1. Call the adapter tool with `action: "models"` to list the provider and model ids this Pi
@@ -36,11 +42,15 @@ Steps.
    available; otherwise ask in plain text. Only ids from step 1 are accepted.
 3. For each answered role, call the adapter tool with `action: "set_model"`, the role, and the
    chosen `provider/model` id. Pass `scope: "project"` when the user wants the choice to apply
-   only to this repository.
+   only to this repository. When the user wants a thinking level, pass `thinking` as well. Ask
+   for it per role, and suggest a lower level for code-writing roles than for `judgment` or
+   `strongest-judgment`. The tool rejects a level on a model that has no reasoning support. A level the model does not
+   offer, such as `max` on a model that stops at `high`, is accepted and clamped when it runs.
 4. Read back `action: "status"` and show the user what was written.
 
 For a scripted environment, set `PISTACK_MODELS` instead, for example
-`PISTACK_MODELS=feature=anthropic/claude-sonnet-4-5,bug-fix=openai/gpt-5`. The environment wins
+`PISTACK_MODELS=feature=anthropic/claude-sonnet-4-5:medium,bug-fix=openai/gpt-5:high`. The
+optional `:level` suffix sets the thinking level. The environment wins
 over both config files, so CI never needs this dialog.
 
 ## Upstream source
