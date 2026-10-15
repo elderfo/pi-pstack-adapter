@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. release-please writes new entries from Conventional Commit PR titles.
 
+## [0.5.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.4.0...v0.5.0) (2026-10-15)
+
+
+### Features
+
+* **models:** add a per-role thinking level ([#12](https://github.com/elderfo/pi-pstack-adapter/issues/12)) ([ae99d0c](https://github.com/elderfo/pi-pstack-adapter/commit/ae99d0cb9ab6c516a6847eb47ea44a0b5ec7c141))
+
 ## [0.4.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.3.0...v0.4.0) (2026-10-14)
 
 
