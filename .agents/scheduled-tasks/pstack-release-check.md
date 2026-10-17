@@ -40,8 +40,9 @@ Daily check for a new upstream pstack release in elderfo/pi-pstack-adapter. If o
 ## 2. Set up an isolated checkout
 
 Do not edit the project's main checkout. The branch is `chore/certify-pstack-<newVersion>` and the worktree path is `<repo-parent>/pi-pstack-adapter-certify-<newVersion>`, where `<repo-parent>` is the parent directory of the project checkout.
-- If `git worktree list` already shows that path, an earlier run was interrupted. Resume in it: inspect its commits and changes, and continue from the first unfinished step below. Never delete earlier work. Resumed work still passes every gate in step 3 at its final head before step 4.
-- If the branch exists locally or on origin without a worktree, run `git fetch origin chore/certify-pstack-<newVersion>` when it is on origin, then `git worktree add "<path>" chore/certify-pstack-<newVersion>`.
+- If `git worktree list` already shows that path, check that `git -C "<path>" branch --show-current` prints `chore/certify-pstack-<newVersion>`. If it prints anything else, stop and report the mismatch. Otherwise an earlier run was interrupted. Resume in it: inspect its commits and changes, and continue from the first unfinished step below. Never delete earlier work. Resumed work still passes every gate in step 3 at its final head before step 4.
+- If the branch exists locally without a worktree, run `git worktree add "<path>" chore/certify-pstack-<newVersion>`.
+- If it exists only on origin, run `git fetch origin "refs/heads/chore/certify-pstack-<newVersion>:refs/remotes/origin/chore/certify-pstack-<newVersion>"`, then `git worktree add --track -b chore/certify-pstack-<newVersion> "<path>" origin/chore/certify-pstack-<newVersion>`.
 - Otherwise run `git worktree add -b chore/certify-pstack-<newVersion> "<path>" origin/main`.
 Work only in that directory from now on, using absolute paths. Follow the `worktree-setup` skill (install dependencies with `npm ci`).
 
