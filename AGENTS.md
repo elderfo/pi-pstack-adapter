@@ -41,6 +41,9 @@ revision changes, inspect every upstream skill and agent before updating the cer
 Update `src/registry.ts`, `docs/compatibility.md`, and the tests in the same change.
 Follow `.agents/skills/certify-pstack-revision/SKILL.md` for the full procedure.
 
+A daily T3 Code scheduled task runs that procedure when upstream publishes a new pstack version.
+To recreate, change, or audit that task, follow `.agents/scheduled-tasks/pstack-release-check.md`.
+
 A support tier is a verification claim. Follow the evidence rules in `docs/compatibility.md`.
 Unknown upstream skills remain `experimental` until an end-to-end Pi run supports a stronger
 claim.
