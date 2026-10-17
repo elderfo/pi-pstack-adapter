@@ -4,7 +4,7 @@ The compatibility registry in `src/registry.ts` assigns one support tier to ever
 certified pstack revision. Generation reads it, the wrapper frontmatter publishes it, and
 `/pistack-status` reports it.
 
-Certified revision: pstack `0.15.23` at `dbf49813a39c1a5389c5e28cb8e4c1c2379e2454` in
+Certified revision: pstack `0.15.25` at `101b274dd991f694e1f7024be2157e5f3adf07de` in
 `https://github.com/cursor/plugins`.
 
 ## Platforms
@@ -21,8 +21,9 @@ executables in the shell the skills run in, with Pi's `shellCommandPrefix` appli
 that matters most, because Git Bash adds `/usr/bin` and `/mingw64/bin` to the `PATH` Pi
 started with. A shell that is missing, inactive, or cannot run a command blocks every workflow.
 
-Windows evidence at the certified revision, pstack `0.15.23`, on Windows 11 with Git for
-Windows 2.53, Node 22, Bun 1.3, and Pi 1.2.0:
+Windows evidence was last gathered at pstack `0.15.23`, on Windows 11 with Git for Windows 2.53,
+Node 22, Bun 1.3, and Pi 1.2.0. CI runs the unit suite on Windows at `0.15.25`; the rest of this
+list has not been rerun there:
 
 - The unit suite and the type check pass. `npm run test:isolated` passes from Git Bash: Pi
   registers all 54 skills, and a later run reuses the cache without the network. CI runs the
@@ -41,6 +42,10 @@ Windows 2.53, Node 22, Bun 1.3, and Pi 1.2.0:
   `check-plan.mjs` ran on Node. Upstream's helper suite passed 61 of 63 tests under Bun. The two
   failures fake the Graphite `gt` CLI with a shell script, which Bun cannot spawn on Windows.
   Both fail at `0.15.9` too, and the adapter does not gate on `gt`.
+- At `0.15.25`, `orch.ts` resolves the stack frontier through `gh`, or `origin` with
+  `--forge origin`, instead of `gt`. `poteto-mode` already requires `gh`. `worktree-audit.sh`
+  reads PR state through `origin` when it is installed, otherwise `gh`, and reports no PR state
+  when neither works. Neither helper has run on Windows at `0.15.25`.
 - At pstack `0.15.9`, `show-me-your-work/scripts/log.sh`, `watch-pr`, and `orch.ts` also ran
   in Git Bash. None of them changed in a way that adds an executable or a path assumption.
 - Git for Windows bundles `git`, `curl`, `nproc`, and the POSIX tools the skill bodies call,
@@ -143,7 +148,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `teach` | `/skill:pistack-teach` | `delegation` | - | It runs the how and why skills, both of which need subagents. |
 | `why` | `/skill:pistack-why` | `delegation` | `git`, `gh` | Default posture spawns one investigator subagent per evidence category plus a synthesizer. |
 
-### experimental (6)
+### experimental (7)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
@@ -152,6 +157,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `poteto-mode` | `/skill:pistack-poteto-mode` | `delegation`, `structured-question` | `git`, `gh` | Sticky-mode hosting plus references to Cursor built-in and plugin skills only partially map to Pi. |
 | `recall` | `/skill:pistack-recall` | `delegation` | `git`, `gh` | Core corpus is Cursor's on-disk transcript JSONL, so only the git/gh and shared-record half survives. |
 | `reflect` | `/skill:pistack-reflect` | `delegation` | - | Transcript mining and create-skill routing are Cursor-specific, though the digest fallback partly works. |
+| `sharpen` | `/skill:pistack-sharpen` | - | - | New in pstack 0.15.25 and not yet run end to end in Pi. Its body is prompt-only, with no tool, delegation, or executable, and it runs only when you type it. |
 | `swarm` | `/skill:pistack-swarm` | `delegation` | - | Cloud background workers and cloud_base_branch have no Pi mapping; only local fan-out approximates it. |
 
 ### unsupported (1)
