@@ -4,7 +4,7 @@ The compatibility registry in `src/registry.ts` assigns one support tier to ever
 certified pstack revision. Generation reads it, the wrapper frontmatter publishes it, and
 `/pistack-status` reports it.
 
-Certified revision: pstack `0.15.25` at `101b274dd991f694e1f7024be2157e5f3adf07de` in
+Certified revision: pstack `0.15.26` at `0b8e952052d482ee6de06deebf14d590d77b1b34` in
 `https://github.com/cursor/plugins`.
 
 ## Platforms
@@ -22,7 +22,7 @@ that matters most, because Git Bash adds `/usr/bin` and `/mingw64/bin` to the `P
 started with. A shell that is missing, inactive, or cannot run a command blocks every workflow.
 
 Windows evidence was last gathered at pstack `0.15.23`, on Windows 11 with Git for Windows 2.53,
-Node 22, Bun 1.3, and Pi 1.2.0. CI runs the unit suite on Windows at `0.15.25`; the rest of this
+Node 22, Bun 1.3, and Pi 1.2.0. CI runs the unit suite on Windows at `0.15.26`; the rest of this
 list has not been rerun there:
 
 - The unit suite and the type check pass. `npm run test:isolated` passes from Git Bash: Pi
@@ -148,11 +148,12 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `teach` | `/skill:pistack-teach` | `delegation` | - | It runs the how and why skills, both of which need subagents. |
 | `why` | `/skill:pistack-why` | `delegation` | `git`, `gh` | Default posture spawns one investigator subagent per evidence category plus a synthesizer. |
 
-### experimental (7)
+### experimental (8)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
 | `automate-me` | `/skill:pistack-automate-me` | `delegation`, `structured-question` | `git`, `gh` | Mining step depends on Cursor transcript files and the built-in create-skill skill, with no Pi equivalent. |
+| `create-formal-verification-skill` | `/skill:pistack-create-formal-verification-skill` | - | - | New in pstack 0.15.26 and not yet run end to end in Pi. It runs only when you type it and delegates nothing. It installs or runs whichever verification tool it picks, such as TLA+, makes a scratch change that breaks product code and then drops it, and writes a project-local skill, which in Pi belongs under `.pi/skills/`. |
 | `poteto-help` | `/skill:pistack-poteto-help` | - | - | Its answers describe Cursor setup, the slash menu, and Custom Modes. A request for work runs poteto-mode, which is experimental. It asks a multiple-choice question only when the need is unclear. Its README and guide links resolve under the status report's plugin directory. |
 | `poteto-mode` | `/skill:pistack-poteto-mode` | `delegation`, `structured-question` | `git`, `gh` | Sticky-mode hosting plus references to Cursor built-in and plugin skills only partially map to Pi. |
 | `recall` | `/skill:pistack-recall` | `delegation` | `git`, `gh` | Core corpus is Cursor's on-disk transcript JSONL, so only the git/gh and shared-record half survives. |

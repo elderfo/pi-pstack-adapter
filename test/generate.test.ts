@@ -223,6 +223,18 @@ test("skills added in pstack 0.15.25 publish their reviewed tiers", () => {
   assert.equal(result.diagnostics.some((d) => d.message.includes("new to this upstream revision")), false);
 });
 
+test("skills added in pstack 0.15.26 publish their reviewed tiers", () => {
+  const root = makeTempDir("tiers-01526");
+  const pluginDir = writePluginFixture(root, { skills: [{ name: "create-formal-verification-skill", body: "b\n" }] });
+  const result = run({ pluginDir, cacheRoot: join(root, "cache") });
+  const wrapper = readFileSync(join(result.skillsDir, "pistack-create-formal-verification-skill", "SKILL.md"), "utf8");
+
+  assert.equal(/pistack-support-tier: (\S+)/.exec(wrapper)?.[1], "experimental");
+  assert.match(wrapper, /not yet run end to end in Pi/);
+  assert.match(wrapper, /in Pi belongs under `\.pi\/skills\/`/);
+  assert.equal(result.diagnostics.some((d) => d.message.includes("new to this upstream revision")), false);
+});
+
 test("the host mapping covers Cursor vocabulary new in pstack 0.15.25", () => {
   const root = makeTempDir("host-mapping-01525");
   const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });
