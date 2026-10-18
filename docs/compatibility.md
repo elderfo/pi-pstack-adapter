@@ -4,7 +4,7 @@ The compatibility registry in `src/registry.ts` assigns one support tier to ever
 certified pstack revision. Generation reads it, the wrapper frontmatter publishes it, and
 `/pistack-status` reports it.
 
-Certified revision: pstack `0.15.25` at `101b274dd991f694e1f7024be2157e5f3adf07de` in
+Certified revision: pstack `0.15.26` at `0b8e952052d482ee6de06deebf14d590d77b1b34` in
 `https://github.com/cursor/plugins`.
 
 ## Platforms
@@ -21,17 +21,48 @@ executables in the shell the skills run in, with Pi's `shellCommandPrefix` appli
 that matters most, because Git Bash adds `/usr/bin` and `/mingw64/bin` to the `PATH` Pi
 started with. A shell that is missing, inactive, or cannot run a command blocks every workflow.
 
-Windows evidence was last gathered at pstack `0.15.23`, on Windows 11 with Git for Windows 2.53,
-Node 22, Bun 1.3, and Pi 1.2.0. CI runs the unit suite on Windows at `0.15.25`; the rest of this
-list has not been rerun there:
+Windows evidence was last gathered at pstack `0.15.26`, on Windows 11 Pro with Git for Windows
+2.53.0, Node 22.23.2, Bun 1.3.14, and Pi 1.3.0:
 
-- The unit suite and the type check pass. `npm run test:isolated` passes from Git Bash: Pi
-  registers all 54 skills, and a later run reuses the cache without the network. CI runs the
-  unit suite on Windows for every change.
-- The certification probe passes on an LF export of the tree: no diagnostics, 52 bodies
-  byte-identical, and none mismatched. The adapter's cache checkout matches that export byte for
-  byte.
-- `in-your-own-words`, `ketchup`, and `poteto-help` ran end to end in the isolated install, with
+- The type check and unit suite pass: 173 tests passed, none failed, and four symlink tests
+  skipped because Windows requires Developer Mode or administrator rights. The seven scheduled
+  integration tests pass with no skips: six cache-containment cases, including a Windows 8.3
+  short-path case, and a formal-verification wrapper regression.
+  Run these separately with `npm run test:integration`; their CI lane is daily and manually
+  dispatchable, not per PR. The existing unit-suite CI matrix still covers all three platforms.
+- The isolated install passes from Git Bash: the cold run registers no skills without bootstrap
+  permission, the permitted run registers all 56 skills, and a later run reuses the cache
+  without bootstrap permission. The local CLIProxyAPI provider requires its extension, config,
+  and model catalog in the sandbox; a scratch copy of the install script supplies them. Its
+  tool probe still reports no `subagent` or `ask_user`. Sandbox credentials are removed on exit.
+- The certification probe passes on an LF export of the pinned tree: 56 skills, two agents,
+  no diagnostics, 54 bodies byte-identical, `setup-pstack` replaced, and none mismatched.
+  All 171 files in the isolated installed cache match the LF export byte for byte.
+- `create-formal-verification-skill` completed in the isolated install without `subagent` or
+  `ask_user`. It generated `.pi/skills/verify-inventory-reservations/SKILL.md` and a dependency-free
+  Node 22 explicit-state verifier that imports the fixture's actual reserve/release functions.
+  It checked 49 reachable states and 490 transitions for stock 0–3 and five request IDs, caught
+  six mutant copies, then caught a removed retry guard in the actual product file. Restoring
+  that file restored the passing result and its original hash. This supports `adapted`: the
+  generated skill path is mapped to Pi. It does not certify TLA+, proof assistants, installation
+  of other verifiers, unbounded inputs, or real database/async concurrency.
+- The revised `ketchup` ran read-only in a separate fixture. It listed both supplied product
+  choices (CSV versus JSON and seven versus thirty days of history), drew a Mermaid sequence
+  diagram for a late-retry edge case it reproduced, and left the fixture unchanged. It did not
+  contact GitHub for this fixture-only task.
+- Installed status reports show native Windows plugin and generated-skill paths and `tested`
+  trust at the certified commit. `/pistack-check` clears the formal-verification workflow and
+  `ketchup`, but still names `uptime` as missing for `benchmark-checklist`. Delegation and
+  structured questions remain unavailable in the isolated install; no delegating tier changed.
+- A cache inside a Git worktree must own its worktree, Git directory, and common directory before
+  bootstrap or reuse can change Git state. The Windows run exposed ancestor discovery from an
+  empty nested cache; this is fixed. Regressions also cover incomplete metadata, a foreign Git
+  file, foreign worktree/common directory settings, and short paths, while checking that the
+  enclosing repository's HEAD, config, index, and tracked bytes stay unchanged.
+
+Historical coverage below has not been rerun at `0.15.26` unless stated otherwise:
+
+- At `0.15.23`, `in-your-own-words`, `ketchup`, and `poteto-help` ran end to end in the isolated install, with
   no `subagent` or `ask_user` tool. `ketchup` reported a commit and a pending decision with
   Mermaid diagrams and changed nothing. `poteto-help` answered with `/pistack-mode on` and read
   the guide from the `plugin directory` row, whose Windows path it resolved.
@@ -123,10 +154,11 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `typescript-best-practices` | `/skill:pistack-typescript-best-practices` | - | - | - |
 | `unslop` | `/skill:pistack-unslop` | - | - | - |
 
-### adapted (2)
+### adapted (3)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
+| `create-formal-verification-skill` | `/skill:pistack-create-formal-verification-skill` | - | - | Manual invocation only; no delegation. It installs or runs the verification tool it chooses and temporarily breaks product code to prove the check. Generated skills belong under `.pi/skills/` in Pi. Verified on a Windows Node finite-state fixture; other toolchains need their own prerequisites. |
 | `create-verification-skill` | `/skill:pistack-create-verification-skill` | - | - | Only the generated skill's output path needs remapping to Pi's skill directory. |
 | `ketchup` | `/skill:pistack-ketchup` | - | - | Read-only. Pi has no `/visualize` skill or image generation, so its visuals are Mermaid diagrams and screenshots that already exist. It checks PR and CI state only for work the chat touched. |
 

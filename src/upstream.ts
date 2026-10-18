@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { MANIFEST_RELATIVE_PATH } from "./manifest.ts";
@@ -202,7 +202,7 @@ async function reuseCheckout(
   wanted: string,
   pluginPath: string,
 ): Promise<{ commit: string; pluginDir: string } | undefined> {
-  if (!existsSync(join(dir, ".git"))) return undefined;
+  if (!(await isCacheCheckout(git, dir))) return undefined;
   if ((await git(["cat-file", "-e", `${wanted}^{commit}`], dir)).code !== 0) return undefined;
 
   // A read-only cache cannot take the setting. That is fine while its files are already LF, and
@@ -307,15 +307,43 @@ async function headCommit(git: GitRunner, dir: string): Promise<string> {
   return result.code === 0 ? result.stdout.trim() : "";
 }
 
+/**
+ * Git discovers ancestor repositories from an empty cache inside a project. A successful
+ * rev-parse alone therefore does not authorize config, fetch, or checkout. Adapter caches
+ * must own both their worktree and standalone metadata, including the common directory.
+ */
+async function isCacheCheckout(git: GitRunner, dir: string): Promise<boolean> {
+  const metadata = join(dir, ".git");
+  try {
+    const entry = lstatSync(metadata);
+    if (!entry.isDirectory() || entry.isSymbolicLink()) return false;
+    const identity = await git([
+      "rev-parse", "--show-toplevel", "--absolute-git-dir", "--git-common-dir",
+    ], dir);
+    if (identity.code !== 0) return false;
+    const paths = identity.stdout.trim().split(/\r?\n/);
+    if (paths.length !== 3) return false;
+    return [dir, metadata, metadata].every((expected, index) => {
+      const actual = paths[index];
+      return actual !== undefined && relative(realpathSync.native(expected), realpathSync.native(resolve(dir, actual))) === "";
+    });
+  } catch {
+    return false;
+  }
+}
+
 async function bootstrap(git: GitRunner, dir: string, repo: string, ref: string, pluginPath: string): Promise<void> {
   mkdirSync(dir, { recursive: true });
-  if ((await git(["rev-parse", "--git-dir"], dir)).code === 0) {
+  if (await isCacheCheckout(git, dir)) {
     await git(["remote", "set-url", "origin", repo], dir);
   } else {
     // A half-created or damaged cache is disposable. Start it over rather than repairing it.
     rmSync(dir, { recursive: true, force: true });
     mkdirSync(dir, { recursive: true });
     await expect(git(["init", "--quiet", "."], dir), "initialize the adapter cache checkout");
+    if (!(await isCacheCheckout(git, dir))) {
+      throw new Error(`The pstack adapter cache at ${dir} could not verify ownership of its Git worktree and metadata after initialization. Check directory permissions and inherited Git directory overrides, then start Pi again.`);
+    }
     await expect(git(["remote", "add", "origin", repo], dir), `add ${repo} as the cache remote`);
   }
   await pinLineEndings(git, dir);

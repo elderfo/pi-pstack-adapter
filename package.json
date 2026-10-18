@@ -47,6 +47,7 @@
   "scripts": {
     "check": "tsc --noEmit",
     "test": "node --experimental-strip-types --test test/*.test.ts",
+    "test:integration": "node --experimental-strip-types --test test/integration/*.test.ts",
     "test:isolated": "bash test/isolated-install.sh"
   },
   "devDependencies": {
