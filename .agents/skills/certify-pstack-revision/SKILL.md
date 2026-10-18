@@ -15,7 +15,8 @@ Certification is a verification claim: every upstream skill at the new commit ha
 | `src/registry.ts` | one `SKILL_REGISTRY` entry per upstream skill: `tier`, `capabilities`, `executables`, `note` |
 | `docs/compatibility.md` | certified-revision line, per-tier tables and their counts, Windows evidence |
 | `test/host.test.ts` | literal certified commit in the status-report test |
-| `test/generate.test.ts` | a tier test for the skills new in this revision |
+| `test/registry.test.ts` | in-process tier and prerequisite tests for new skills |
+| `test/integration/` | disk-writing wrapper regressions, including manual-invocation frontmatter |
 | `src/generate.ts` | `hostMappingDocument`, only when upstream introduces new Cursor vocabulary |
 
 release-please owns `CHANGELOG.md`, `VERSION`, and the version fields. Leave them alone; the PR title `feat(pstack): certify pstack <version> ...` produces the release.
@@ -37,7 +38,7 @@ Keep scratch work in `.work/`; ensure `.work/` is in `.git/info/exclude`. Leave 
 
 2. **Export the tree.** `rm -rf .work/inputs/pstack-new && mkdir -p .work/inputs/pstack-new && git -C "$U" -c core.autocrlf=false archive "$NEW" pstack | tar -x -C .work/inputs/pstack-new`. Use `git archive`, not `git clone` from a partial clone; the clone fails with `fetch-pack: invalid index-pack output`. Keep `-c core.autocrlf=false`: `git archive` applies `autocrlf`, which Git for Windows enables system-wide. Without it, the export is CRLF while the adapter's cache checkout is LF, so the probe and every comparison read bytes Pi never loads.
 
-3. **Baseline.** Run `npm ci` if `node_modules` is missing, then `npm run check` and `npm test`; both green before any edit. Probe the new tree with the unchanged adapter:
+3. **Baseline.** Run `npm ci` if `node_modules` is missing, then `npm run check`, `npm test`, and `npm run test:integration`; all green before any edit. Probe the new tree with the unchanged adapter:
    ```bash
    node --experimental-strip-types --no-warnings .agents/skills/certify-pstack-revision/scripts/probe.ts .work/inputs/pstack-new/pstack "$NEW" .work/outputs/probe-before
    ```
@@ -56,7 +57,7 @@ Keep scratch work in `.work/`; ensure `.work/` is in `.git/info/exclude`. Leave 
 7. **Edit together.** Update every file in the table above in one change. Keep docs table counts equal to the registry.
 
 8. **Verify.** All of these, at the final head:
-   - `npm run check` and `npm test` pass. The test `the registry classifies every skill in the certified revision` fails if `CERTIFIED.skillCount` and the registry disagree.
+   - `npm run check`, `npm test`, and `npm run test:integration` pass. The test `the registry classifies every skill in the certified revision` fails if `CERTIFIED.skillCount` and the registry disagree. Keep new in-process tier tests in `test/registry.test.ts`; put tests that write files or spawn processes in `test/integration/`. The integration CI lane is daily/manual across all three supported platforms, so run it locally for every certification.
    - Re-run `probe.ts` into a fresh cache root: `ok: true`, an empty `diagnostics` list, skill count = upstream skills + adapter skills, and `mismatched` empty. `ok` tolerates `info` diagnostics, so read the list too.
    - `npm run test:isolated` prints `PASS: <n> skills`. It derives `<n>` from the packed package, so a missing file in the tarball fails it.
    - **End-to-end run per new skill.** Keep the sandbox with `bash test/isolated-install.sh --keep` and set `R` to the path it prints after `kept:`. The sandbox holds a copy of `auth.json`, so arm its removal at once with `[ -d "$R/pi" ] && trap "rm -rf '$R'" EXIT`, and confirm it is gone when you finish. When Pi gets its provider from an extension, the sandbox reaches no model: copy the files Pi and that extension read for the provider into `$R/pi` (see "Keep every certified platform working" in `AGENTS.md`), and pass `-e <provider extension>` on every `pi` call below, since the sandbox settings load no extensions. Before recording any result, rerun the script's tool probe with the extension loaded, `PI_CODING_AGENT_DIR=$R/pi PISTACK_CACHE_DIR=$R/cache PISTACK_PROBE_OUT=$R/ext.json pi -e $R/probe.ts -e <provider extension> -nbt -p ok`, and confirm the `tools` list in `$R/ext.json` still lacks `subagent` and `ask_user`; an extension that adds them would let a delegating skill earn evidence the sandbox is meant to deny. The run executes upstream content under your tool permissions, so build each fixture as a throwaway repo under `.work/scratch/` holding only what the skill needs to find something real. Then run:

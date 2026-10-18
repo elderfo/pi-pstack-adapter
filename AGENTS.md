@@ -31,7 +31,7 @@ Read the files for the branch you are changing:
 - Status and prerequisite reports: `src/status.ts`
 - Adapter-owned skill bodies: `adapter-skills/`
 
-Use the matching test file under `test/` as the behavior reference. Tests create fixture plugins
+Use the matching test files under `test/` and `test/integration/` as the behavior reference. Tests create fixture plugins
 and local Git repositories so the unit suite does not need network access.
 
 ## Keep certification claims in sync
@@ -100,6 +100,11 @@ npm run check
 npm test
 ```
 
+Run `npm run test:integration` for changes to source resolution, cache handling, wrapper generation,
+or their tests, and for every certification. It covers real-Git containment and disk-writing wrapper
+regressions separately from the per-PR suite. New tests that spawn processes or write files belong
+under `test/integration/`; in-process tests belong directly under `test/`.
+
 Run `npm run test:isolated` when a change affects installation, package contents, bootstrap,
 resource discovery, cache reuse, or startup behavior. The isolated test requires configured Pi
 provider credentials.
@@ -109,6 +114,8 @@ provider credentials.
 Linux, macOS, and native Windows are certified. CI in `.github/workflows/ci.yml` runs the check
 and the unit suite on all three. Do not drop a platform from that matrix without also dropping
 its claim in `src/status.ts`, `README.md`, and `docs/compatibility.md`.
+The separate `.github/workflows/integration.yml` lane runs integration tests on the same three
+platforms daily and on manual dispatch, rather than on each PR.
 
 Windows needs the most care in adapter-owned code:
 

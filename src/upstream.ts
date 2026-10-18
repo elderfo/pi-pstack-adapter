@@ -318,14 +318,14 @@ async function isCacheCheckout(git: GitRunner, dir: string): Promise<boolean> {
     const entry = lstatSync(metadata);
     if (!entry.isDirectory() || entry.isSymbolicLink()) return false;
     const identity = await git([
-      "rev-parse", "--show-toplevel", "--absolute-git-dir", "--path-format=absolute", "--git-common-dir",
+      "rev-parse", "--show-toplevel", "--absolute-git-dir", "--git-common-dir",
     ], dir);
     if (identity.code !== 0) return false;
     const paths = identity.stdout.trim().split(/\r?\n/);
     if (paths.length !== 3) return false;
     return [dir, metadata, metadata].every((expected, index) => {
       const actual = paths[index];
-      return actual !== undefined && relative(realpathSync.native(expected), realpathSync.native(actual)) === "";
+      return actual !== undefined && relative(realpathSync.native(expected), realpathSync.native(resolve(dir, actual))) === "";
     });
   } catch {
     return false;
@@ -342,7 +342,7 @@ async function bootstrap(git: GitRunner, dir: string, repo: string, ref: string,
     mkdirSync(dir, { recursive: true });
     await expect(git(["init", "--quiet", "."], dir), "initialize the adapter cache checkout");
     if (!(await isCacheCheckout(git, dir))) {
-      throw new Error(`The pstack adapter cache at ${dir} does not own its Git worktree and metadata. Clear inherited Git directory overrides and start Pi again.`);
+      throw new Error(`The pstack adapter cache at ${dir} could not verify ownership of its Git worktree and metadata after initialization. Check directory permissions and inherited Git directory overrides, then start Pi again.`);
     }
     await expect(git(["remote", "add", "origin", repo], dir), `add ${repo} as the cache remote`);
   }

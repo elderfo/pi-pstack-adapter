@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { test } from "node:test";
 import { mergeConfig } from "../../src/config.ts";
 import { checkoutDir } from "../../src/paths.ts";
@@ -74,14 +74,18 @@ for (const state of ["empty", "incomplete-metadata", "foreign-gitfile", "foreign
       // Keep the red run safe: observe real Git discovery, but stop BEFORE a buggy
       // implementation could mutate the ancestor's origin, config, index, or HEAD.
       const guardedGit: GitRunner = async (args, cwd) => {
+        // Keep ownership probes usable on Git versions before 2.31.
+        if (args.includes("--path-format=absolute")) {
+          return { code: 129, stdout: "", stderr: "unsupported --path-format (pre-2.31 Git)" };
+        }
         const safeDiscovery = ["rev-parse", "cat-file", "init"].includes(args[0] ?? "");
         if (!safeDiscovery && cwd) {
           const top = await systemGit(["rev-parse", "--show-toplevel"], cwd);
           if (top.code === 0 && relative(realpathSync.native(cwd), realpathSync.native(top.stdout.trim())) !== "") {
             throw new Error(`would mutate enclosing repository: git ${args.join(" ")}`);
           }
-          const common = await systemGit(["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd);
-          if (common.code === 0 && relative(realpathSync.native(join(cwd, ".git")), realpathSync.native(common.stdout.trim())) !== "") {
+          const common = await systemGit(["rev-parse", "--git-common-dir"], cwd);
+          if (common.code === 0 && relative(realpathSync.native(join(cwd, ".git")), realpathSync.native(resolve(cwd, common.stdout.trim()))) !== "") {
             throw new Error(`would mutate foreign Git metadata: git ${args.join(" ")}`);
           }
         }
