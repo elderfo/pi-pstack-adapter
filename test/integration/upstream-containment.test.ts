@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { test } from "node:test";
 import { mergeConfig } from "../../src/config.ts";
@@ -17,8 +17,10 @@ function git(args: readonly string[], cwd: string): string {
 }
 
 // Run only on the scheduled integration lane: these tests spawn Git and write fixtures.
-for (const state of ["empty", "incomplete-metadata", "foreign-gitfile", "foreign-worktree", "foreign-common-dir"] as const) {
-  test(`a nested ${state} cache cannot change its enclosing repository`, async () => {
+for (const state of ["empty", "incomplete-metadata", "foreign-gitfile", "foreign-worktree", "foreign-common-dir", "short-path"] as const) {
+  test(`a nested ${state} cache cannot change its enclosing repository`, {
+    skip: state === "short-path" && process.platform !== "win32" && "8.3 path aliases are Windows-specific",
+  }, async (context) => {
     const scratch = join(import.meta.dirname, "..", "..", ".work", "scratch");
     mkdirSync(scratch, { recursive: true });
     const root = mkdtempSync(join(scratch, "containment-"));
@@ -46,7 +48,19 @@ for (const state of ["empty", "incomplete-metadata", "foreign-gitfile", "foreign
         index: readFileSync(join(owner, ".git", "index")),
         file: readFileSync(join(owner, "original.txt")),
       };
-      const cacheDir = join(owner, "cache");
+      let cacheOwner = owner;
+      if (state === "short-path") {
+        const short = spawnSync("cmd.exe", ["/d", "/s", "/c", `for %I in ("${owner}") do @echo %~sI`], {
+          encoding: "utf8", windowsVerbatimArguments: true,
+        });
+        assert.equal(short.status, 0, short.stderr);
+        cacheOwner = short.stdout.trim();
+        if (relative(cacheOwner, owner) === "") {
+          context.skip("this Windows filesystem has no 8.3 alias for the fixture");
+          return;
+        }
+      }
+      const cacheDir = join(cacheOwner, "cache");
       const dir = checkoutDir(cacheDir, upstream);
       mkdirSync(dir, { recursive: true });
       if (state === "incomplete-metadata") mkdirSync(join(dir, ".git", "info"), { recursive: true });
@@ -63,11 +77,11 @@ for (const state of ["empty", "incomplete-metadata", "foreign-gitfile", "foreign
         const safeDiscovery = ["rev-parse", "cat-file", "init"].includes(args[0] ?? "");
         if (!safeDiscovery && cwd) {
           const top = await systemGit(["rev-parse", "--show-toplevel"], cwd);
-          if (top.code === 0 && relative(cwd, top.stdout.trim()) !== "") {
+          if (top.code === 0 && relative(realpathSync.native(cwd), realpathSync.native(top.stdout.trim())) !== "") {
             throw new Error(`would mutate enclosing repository: git ${args.join(" ")}`);
           }
           const common = await systemGit(["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd);
-          if (common.code === 0 && relative(join(cwd, ".git"), common.stdout.trim()) !== "") {
+          if (common.code === 0 && relative(realpathSync.native(join(cwd, ".git")), realpathSync.native(common.stdout.trim())) !== "") {
             throw new Error(`would mutate foreign Git metadata: git ${args.join(" ")}`);
           }
         }
@@ -77,7 +91,7 @@ for (const state of ["empty", "incomplete-metadata", "foreign-gitfile", "foreign
       try {
         const first = await resolveSource({ config, mayBootstrap: true, git: guardedGit });
         assert.equal(first.commit, commit);
-        assert.equal(relative(dir, git(["rev-parse", "--show-toplevel"], dir)), "");
+        assert.equal(relative(realpathSync.native(dir), realpathSync.native(git(["rev-parse", "--show-toplevel"], dir))), "");
         assert.equal(readFileSync(join(first.pluginDir, "skills", "unslop", "SKILL.md"), "utf8").endsWith("upstream\n"), true);
         const offlineGit: GitRunner = async (args, cwd) => {
           assert.notEqual(args[0], "fetch", "warm cache must not reach the network");

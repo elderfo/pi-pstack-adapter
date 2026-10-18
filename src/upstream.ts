@@ -325,7 +325,7 @@ async function isCacheCheckout(git: GitRunner, dir: string): Promise<boolean> {
     if (paths.length !== 3) return false;
     return [dir, metadata, metadata].every((expected, index) => {
       const actual = paths[index];
-      return actual !== undefined && relative(realpathSync(expected), realpathSync(actual)) === "";
+      return actual !== undefined && relative(realpathSync.native(expected), realpathSync.native(actual)) === "";
     });
   } catch {
     return false;
