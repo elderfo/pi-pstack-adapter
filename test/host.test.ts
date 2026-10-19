@@ -481,6 +481,43 @@ test("the status report shows every model role, configured or inherited", () => 
   }
 });
 
+test("the status report shows an unconfigured role on general once general is set", () => {
+  const root = makeTempDir("roles-general");
+  const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });
+  const source: ResolvedSource = {
+    selection: { kind: "local", path: root },
+    trust: "local",
+    commit: "",
+    checkoutDir: root,
+    pluginDir,
+  };
+  const report = renderStatus({
+    adapterVersion: "0.1.0",
+    config: mergeConfig([
+      {
+        label: "global",
+        values: { localPath: root, models: { "strongest-judgment": "anthropic/one:xhigh", general: "openai/two:high" } },
+      } as never,
+    ]),
+    source,
+    upstreamVersion: "0.15.2",
+    generation: generate({ source, namespace: "pistack", cacheRoot: join(root, "cache"), adapterVersion: "0.1.0", force: true }),
+    capabilities: detectCapabilities([]),
+    platform: "supported",
+    platformName: "linux",
+    modeActive: false,
+    cacheRoot: join(root, "cache"),
+    bootstrapped: false,
+  });
+
+  assert.match(report, /\| strongest-judgment \| anthropic\/one \| xhigh \|/);
+  assert.match(report, /\| general \| openai\/two \| high \|/);
+  assert.doesNotMatch(report, /inherit \(parent session/);
+  for (const role of MODEL_ROLES.filter((name) => name !== "strongest-judgment" && name !== "general")) {
+    assert.match(report, new RegExp(`\\| ${role} \\| openai/two \\(from general\\) \\| high \\(from general\\) \\|`));
+  }
+});
+
 test("an uncertified platform is warned about rather than claimed as supported", () => {
   const root = makeTempDir("winstatus");
   const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });

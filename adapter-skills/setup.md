@@ -9,8 +9,9 @@ Three things are configurable. Model roles, the upstream source, and the delegat
 ## Model roles
 
 pstack skills name a model per role. In Pi those names mean nothing, so each role maps to a
-model in your own catalogue. A role you never configure inherits the parent session model,
-which is a working default, not a failure.
+model in your own catalogue. A role you never configure uses the `general` role. When `general` is
+unconfigured too, the role inherits the model of whichever agent starts it, which is a working
+default, not a failure.
 
 Roles used by pstack workflows.
 
@@ -23,6 +24,7 @@ Roles used by pstack workflows.
 | `hillclimb` | sustained metric improvement |
 | `judgment` | prose, review, and judgment delegates |
 | `strongest-judgment` | the hardest cross-cutting changes |
+| `general` | every other delegate: explorers, investigators, swarm and verification workers, ad-hoc helpers, and any unconfigured role |
 
 The status report lists the same roles, so read it back rather than trusting this table if the
 adapter has been upgraded.
@@ -30,9 +32,11 @@ adapter has been upgraded.
 Each role also has a thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or
 `max`. Upstream pstack calls this a reasoning budget and encodes it in the model slug. A role with
 no thinking level passes none, so the delegation backend applies its own default. A role left on
-`inherit` uses the parent session's model and thinking level, so a parent at high thinking makes
-every inheriting child expensive. Model choice often affects cost more than thinking level does,
-so consider a cheaper model for the bulk roles as well.
+`inherit` with `general` also on `inherit` uses the model and thinking level of the agent that
+starts it. A `strongest-judgment` delegate at `xhigh` would then start every helper at `xhigh`, so
+configure `general` to stop that. A role's level is a ceiling: delegates may lower it for routine
+work, but never raise it. Model choice often affects cost more than thinking level does, so
+consider a cheaper model for the bulk roles as well.
 
 Steps.
 
@@ -45,10 +49,10 @@ Steps.
    role is on `inherit`. It applies to every role that got a model in step 2. A role on
    `inherit` cannot have a level, so tell the user that and say that those roles follow the
    parent session's level. Ask one single-select question first. Put the whole choice in each option
-   title so the user can pick without opening anything else, for example "Balanced: code roles
+   title so the user can pick without opening anything else, for example "Balanced: code and general roles
    medium, judgment high, strongest-judgment xhigh (suggested)".
 
-   | choice | code roles (`feature`, `refactoring`, `bug-fix`, `perf-issue`, `hillclimb`) | `judgment` | `strongest-judgment` |
+   | choice | code and general roles (`feature`, `refactoring`, `bug-fix`, `perf-issue`, `hillclimb`, `general`) | `judgment` | `strongest-judgment` |
    | --- | --- | --- | --- |
    | Balanced (suggest this first) | `medium` | `high` | `xhigh` |
    | Low cost | `low` | `medium` | `high` |
@@ -58,7 +62,7 @@ Steps.
 
    These are starting points, not measurements. They keep the heaviest reasoning on the roles
    that make the hardest calls. Offer Custom for a user who wants different levels. Ask once for
-   the code roles, once for `judgment`, and once for `strongest-judgment`. Ask a role on its own
+   the code and general roles, once for `judgment`, and once for `strongest-judgment`. Ask a role on its own
    only when the user says it should differ from its group. Backend default passes no level and
    leaves the choice to the delegation backend. A Custom user who wants thinking disabled picks
    `off`.

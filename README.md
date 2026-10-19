@@ -135,8 +135,10 @@ skill.
 
 ## Choose models for pstack roles
 
-pstack assigns work to named model roles such as `feature`, `bug-fix`, and `judgment`. A role you
-leave unset uses the current Pi session model.
+pstack assigns work to named model roles such as `feature`, `bug-fix`, and `judgment`. The
+`general` role covers every other delegate, such as explorers, swarm workers, and ad-hoc helpers.
+A role you leave unset uses `general`, and uses the model of the agent that starts it only when
+`general` is unset too.
 
 To list the models in your Pi installation and assign them to roles, run the setup skill:
 
@@ -159,9 +161,11 @@ PISTACK_MODELS='feature=provider/model:medium,judgment=provider/other-model:high
 
 Role names are lowercase letters, digits, and hyphens. A model value is printable ASCII with no spaces or markup characters, at most 128 characters. A config entry that breaks these rules stops the adapter at startup with an error that names the file, so fix the key there and restart Pi.
 
-A role without a level passes none, so the delegation backend applies its own default. A role you leave unset inherits the
-session model and the session thinking level, so a session at high thinking makes every
-inheriting delegate expensive. The `pstack_adapter` tool's `set_model` action takes the same
+A role without a level passes none, so the delegation backend applies its own default. A role's
+level is a ceiling: a delegate may lower it for routine work but never raises it. A role you leave
+unset, with `general` unset too, inherits the model and thinking level of the agent that starts
+it. A `strongest-judgment` delegate at `xhigh` would then start every helper at `xhigh`, so set
+`general` to keep helpers at a cheaper level. The `pstack_adapter` tool's `set_model` action takes the same
 level in its `thinking` parameter. A level the model does not offer is clamped by Pi at run time.
 
 ## Run Pi noninteractively
