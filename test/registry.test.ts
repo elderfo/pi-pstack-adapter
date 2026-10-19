@@ -12,3 +12,13 @@ test("the Windows-verified formal verification workflow is adapted without uncon
   assert.match(entry.note ?? "", /`\.pi\/skills\/` in Pi/);
   assert.match(entry.note ?? "", /other toolchains need their own prerequisites/);
 });
+
+test("the formal verification maintenance workflow stays experimental and gates on git", () => {
+  const entry = entryFor("maintain-formal-verification-skill");
+  assert.equal(entry.tier, "experimental");
+  assert.deepEqual(entry.capabilities, []);
+  assert.deepEqual(entry.executables, ["git"]);
+  assert.match(entry.note ?? "", /not yet run end to end in Pi/);
+  assert.match(entry.note ?? "", /temporarily breaks product code/);
+  assert.match(entry.note ?? "", /`\.pi\/skills\/`/);
+});

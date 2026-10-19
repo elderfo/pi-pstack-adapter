@@ -4,7 +4,7 @@ The compatibility registry in `src/registry.ts` assigns one support tier to ever
 certified pstack revision. Generation reads it, the wrapper frontmatter publishes it, and
 `/pistack-status` reports it.
 
-Certified revision: pstack `0.15.26` at `0b8e952052d482ee6de06deebf14d590d77b1b34` in
+Certified revision: pstack `0.15.28` at `d457567332aa6989e753ea289f30ea2bfbc80bc0` in
 `https://github.com/cursor/plugins`.
 
 ## Platforms
@@ -20,6 +20,10 @@ The tiers below apply on every supported platform. `/pistack-check` looks for pe
 executables in the shell the skills run in, with Pi's `shellCommandPrefix` applied. On Windows
 that matters most, because Git Bash adds `/usr/bin` and `/mingw64/bin` to the `PATH` Pi
 started with. A shell that is missing, inactive, or cannot run a command blocks every workflow.
+
+At `0.15.28`, CI runs the unit suite on Windows, but the evidence below was not regathered.
+No upstream helper script changed between `0.15.26` and `0.15.28`, and the one new skill,
+`maintain-formal-verification-skill`, needs only `git`, which Git for Windows bundles.
 
 Windows evidence was last gathered at pstack `0.15.26`, on Windows 11 Pro with Git for Windows
 2.53.0, Node 22.23.2, Bun 1.3.14, and Pi 1.3.0:
@@ -180,11 +184,12 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `teach` | `/skill:pistack-teach` | `delegation` | - | It runs the how and why skills, both of which need subagents. |
 | `why` | `/skill:pistack-why` | `delegation` | `git`, `gh` | Default posture spawns one investigator subagent per evidence category plus a synthesizer. |
 
-### experimental (7)
+### experimental (8)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
 | `automate-me` | `/skill:pistack-automate-me` | `delegation`, `structured-question` | `git`, `gh` | Mining step depends on Cursor transcript files and the built-in create-skill skill, with no Pi equivalent. |
+| `maintain-formal-verification-skill` | `/skill:pistack-maintain-formal-verification-skill` | - | `git` | New in pstack 0.15.28 and not yet run end to end in Pi. Manual invocation only; no delegation. It diffs the covered code with git from the verify skill's sync commit, edits only the verification and the verify skill, and temporarily breaks product code to prove an updated check can still fail. In Pi, look for the verify skill under `.pi/skills/`; the verification tool needs its own prerequisites. |
 | `poteto-help` | `/skill:pistack-poteto-help` | - | - | Its answers describe Cursor setup, the slash menu, and Custom Modes. A request for work runs poteto-mode, which is experimental. It asks a multiple-choice question only when the need is unclear. Its README and guide links resolve under the status report's plugin directory. |
 | `poteto-mode` | `/skill:pistack-poteto-mode` | `delegation`, `structured-question` | `git`, `gh` | Sticky-mode hosting plus references to Cursor built-in and plugin skills only partially map to Pi. |
 | `recall` | `/skill:pistack-recall` | `delegation` | `git`, `gh` | Core corpus is Cursor's on-disk transcript JSONL, so only the git/gh and shared-record half survives. |
