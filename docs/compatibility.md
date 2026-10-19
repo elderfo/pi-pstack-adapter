@@ -243,8 +243,10 @@ through `delegate_task`. That run is the evidence the tier rules above require.
 
 ## Skills the adapter replaces
 
-`setup-pstack` writes a Cursor `.mdc` rule and nothing else, so the adapter substitutes its own
-body and publishes it as `/skill:pistack-setup`. The upstream skill stays represented, and the
+`setup-pstack` writes a Cursor `.mdc` rule, so the adapter substitutes its own body and
+publishes it as `/skill:pistack-setup`. Upstream's optional closing offers to run
+`create-verification-skill` and `create-formal-verification-skill` are left out of the Pi body;
+both skills stay available by name. The upstream skill stays represented, and the
 wrapper frontmatter records `pistack-upstream-skill: setup-pstack`.
 
 ## Unknown skills
