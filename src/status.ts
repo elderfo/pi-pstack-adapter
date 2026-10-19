@@ -1,5 +1,5 @@
 import { CERTIFIED } from "./certified.ts";
-import { CAPABILITY_LABELS, MODEL_ROLES, TIER_ORDER } from "./registry.ts";
+import { CAPABILITY_LABELS, GENERAL_ROLE, MODEL_ROLES, TIER_ORDER } from "./registry.ts";
 import type { AdapterConfig } from "./config.ts";
 import { splitModelSpec, trustWarning } from "./config.ts";
 import { DELEGATION_BACKENDS, delegationOrder } from "./delegation.ts";
@@ -91,8 +91,14 @@ export function renderStatus(input: StatusInput): string {
   lines.push(`| role | model | thinking |`);
   lines.push(`| --- | --- | --- |`);
   const extra = Object.keys(config.models).filter((role) => !MODEL_ROLES.includes(role)).sort();
+  const general = config.models[GENERAL_ROLE];
   for (const role of [...MODEL_ROLES, ...extra]) {
     const configured = config.models[role];
+    if (configured === undefined && general !== undefined) {
+      const spec = splitModelSpec(general);
+      lines.push(`| ${role} | ${spec.model} (from ${GENERAL_ROLE}) | ${spec.thinking ?? "backend default"} (from ${GENERAL_ROLE}) |`);
+      continue;
+    }
     if (configured === undefined) {
       lines.push(`| ${role} | inherit (parent session model) | inherit (parent session thinking) |`);
       continue;

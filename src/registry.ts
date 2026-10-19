@@ -90,7 +90,13 @@ export const CAPABILITY_LABELS: Readonly<Record<CapabilityId, string>> = {
 
 export const ADAPTER_OWNED = "(adapter-owned)";
 
-/** Model roles pstack workflows name. A role with no configured model inherits the parent. */
+/**
+ * Model roles pstack workflows name. `general` covers every delegate no other role names. A role
+ * with no configured model falls back to `general`, and inherits the parent only when `general`
+ * is unconfigured too.
+ */
+export const GENERAL_ROLE = "general";
+
 export const MODEL_ROLES: readonly string[] = [
   "feature",
   "refactoring",
@@ -99,6 +105,7 @@ export const MODEL_ROLES: readonly string[] = [
   "hillclimb",
   "judgment",
   "strongest-judgment",
+  GENERAL_ROLE,
 ];
 
 export function entryFor(upstreamName: string, generatedBareName?: string): RegistryEntry {

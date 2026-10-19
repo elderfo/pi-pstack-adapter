@@ -459,6 +459,17 @@ ${agentSystemPrompt(notes, upstreamPrompt)}
 `;
 }
 
+/**
+ * A child that starts its own agents would otherwise hand them its own model and thinking, so a
+ * strongest-judgment delegate's helpers would all run at its level. The rule travels in every brief.
+ */
+const NESTED_DELEGATION_RULE = `Nested delegation: every agent that delegates, a child included, gives each new child an
+  explicit role, using \`general\` when no other role fits, and never lets it inherit the delegating
+  agent's model or thinking. Put this line in each brief, verbatim, just before any read-only or
+  no-commit rule: "If you start agents, give each the model and thinking of its own pstack role from the
+  \`pstack_adapter\` status report, using \`general\` when no role fits. Never let one inherit your
+  model or thinking, and never raise a role above its configured level."`;
+
 function delegationSection(namespace: string, preferred: DelegationProvider): string {
   const sections = delegationOrder(preferred).map((backend) => (backend.id === "t3" ? t3Section(namespace) : subagentSection(namespace)));
   const order = delegationOrder(preferred).map((backend) => `\`${backend.tool}\``).join(", then ");
@@ -488,8 +499,9 @@ function t3Section(namespace: string): string {
   \`target.options\` under the option id that \`${T3_CAPABILITIES_TOOL}\` lists for that model's
   thinking setting. For Pi models the id is \`thinking\`, as in \`options: { thinking: "<level>" }\`.
   A role whose thinking reads "backend default" omits \`options\`, so the backend applies its own
-  default. An unconfigured role omits \`target\`, so the child inherits the parent model and
-  thinking.
+  default. An unconfigured role uses the \`general\` role. Only when \`general\` is unconfigured
+  too does the child omit \`target\` and inherit the parent model and thinking.
+- ${NESTED_DELEGATION_RULE}
 - If the model does not list the level, use the highest level it lists that is below the requested
   one, and tell the user. If it lists none below the requested level, or lists no thinking option,
   omit \`options\` and tell the user. If the level is \`off\` and the model does not list \`off\`, omit
@@ -520,7 +532,9 @@ function subagentSection(namespace: string): string {
 - Model: pass a role's \`provider/model\` as \`model\`. When the thinking column of the \`model roles\`
   table in the \`pstack_adapter\` \`status\` report names a level for the role, append it as
   \`provider/model:<level>\`. A role whose thinking reads "backend default" gets no suffix, so
-  pi-subagents applies its own default. An unconfigured role omits \`model\`.
+  pi-subagents applies its own default. An unconfigured role uses the \`general\` role, and omits
+  \`model\` only when \`general\` is unconfigured too.
+- ${NESTED_DELEGATION_RULE}
 - Background: \`async: true\`.`;
 }
 
@@ -536,12 +550,15 @@ that names a Cursor tool, path, or model.
 | \`run_in_background: true\` | \`mode: "async"\` on \`delegate_task\`, or \`async: true\` on \`subagent\`. |
 | \`AskUserQuestion\`, \`AskQuestion\` | the \`ask_user\` tool. |
 | \`TodoWrite\`, \`TaskCreate\`, \`TaskUpdate\` | no Pi equivalent. Keep an uncommitted \`todo.md\` checklist instead. |
-| \`claude-opus-5-5-xhigh\`, \`grok-4.7-xhigh-fast\`, other Cursor model slugs | the role models configured by \`/skill:${namespace}-setup\`. Call the \`pstack_adapter\` tool with \`action: "status"\` to read the current role table. An effort word in a slug, such as \`-xhigh\` or \`-max\`, is not a model id. The role table's thinking column carries that level, and \`-fast\` has no equivalent. An unconfigured role inherits the parent model and thinking, so omit \`target\` or \`model\`. |
-| "pick each subagent's reasoning level and fast or standard speed", a role's starting level from the \`/setup-pstack\` budget | the thinking column of the \`model roles\` table is a role's starting level. When it names a level, you may move it along \`off\`, \`minimal\`, \`low\`, \`medium\`, \`high\`, \`xhigh\`, \`max\` as the body asks, then pass it by the backend rules in [Delegation](#delegation). A role whose thinking reads "backend default", and an unconfigured role, keep their setting, because they have no level to move. Fast or standard speed has no Pi equivalent, so leave it out. If the backend rejects the moved level, use the role's configured level and say so. |
-| a role line valued \`auto\` or \`inherit-parent\` | an unconfigured role. Omit \`target\` or \`model\` so the child runs on the parent model. |
+| \`claude-opus-5-5-xhigh\`, \`grok-4.7-xhigh-fast\`, other Cursor model slugs | the role models configured by \`/skill:${namespace}-setup\`. Call the \`pstack_adapter\` tool with \`action: "status"\` to read the current role table. An effort word in a slug, such as \`-xhigh\` or \`-max\`, is not a model id. The role table's thinking column carries that level, and \`-fast\` has no equivalent. An unconfigured role uses the \`general\` role. When \`general\` is unconfigured too, omit \`target\` or \`model\` so the child inherits the parent model and thinking. |
+| "pick each subagent's reasoning level and fast or standard speed", a role's starting level from the \`/setup-pstack\` budget | the thinking column of the \`model roles\` table is a role's ceiling. When it names a level, you may lower it along \`max\`, \`xhigh\`, \`high\`, \`medium\`, \`low\`, \`minimal\`, \`off\` as the body asks, then pass it by the backend rules in [Delegation](#delegation). Never raise a role above its configured level, even where the body says to raise it for the hardest work. Send that work to \`strongest-judgment\` at its own level instead. A role whose thinking reads "backend default" keeps that setting, because it has no level to move. An unconfigured role takes the \`general\` role's level as its ceiling, and keeps the parent's setting only when \`general\` is unconfigured too. Fast or standard speed has no Pi equivalent, so leave it out. If the backend rejects the moved level, use the role's configured level and say so. |
+| a role line valued \`auto\` or \`inherit-parent\` | an unconfigured role. Use the \`general\` role, or omit \`target\` or \`model\` only when \`general\` is unconfigured too. |
 | \`~/.cursor/rules/pstack-models.mdc\` | adapter configuration written by \`/skill:${namespace}-setup\`. |
 | role lines \`feature, refactoring\`, \`bug-fix\`, \`perf-issue\`, \`hillclimb\`, \`judgment and prose\`, \`hardest tasks\` | adapter roles \`feature\` or \`refactoring\`, \`bug-fix\`, \`perf-issue\`, \`hillclimb\`, \`judgment\`, and \`strongest-judgment\`. |
-| any other role line, such as \`how explorer\`, \`arena runners\`, or \`interrogate reviewers\` | no adapter role. Omit \`target\` or \`model\` so the child runs on the parent model. |
+| role lines \`how explainer\`, \`why synthesizer\`, \`reflect judgment, divergent, synthesizer\` | adapter role \`judgment\`. |
+| role lines \`how explorer\`, \`why investigators\`, \`reflect tooling\`, \`swarm workers\`, and verification | adapter role \`general\`. |
+| panel role lines \`arena runners\`, \`arena cross-judge pool\`, \`architect runners\`, \`interrogate reviewers\` | the list \`judgment\`, \`general\`, one entry each, so the panel keeps two models when those roles differ. |
+| a delegate no role line names, such as an ad-hoc helper | adapter role \`general\`. |
 | a Custom Mode, "Use as Mode", or Option+Enter / Alt+Enter on \`/poteto-mode\` | \`/${namespace}-mode on\`, which keeps Poteto Mode active for the Pi session until \`/${namespace}-mode off\`. |
 | searching \`~/.cursor/plugins/\` for an installed pstack skill, or comparing \`.cursor-plugin/plugin.json\` versions | the generated skill directory. A pstack skill is \`../<pi-name>/SKILL.md\` beside the current wrapper, where \`<pi-name>\` is its Pi name in [skill names](skill-names.md). Most names only gain the \`${namespace}-\` prefix, but some are renamed. The \`generated skills\` row of the \`pstack_adapter\` tool's \`action: "status"\` report gives that directory's absolute path. A parent passes the absolute path to \`${namespace}-poteto-mode/SKILL.md\` to any \`${namespace}-poteto-agent\` it spawns. |
 | a link that leaves the skill directory, such as \`../../README.md\` or \`../../docs/guide/\` | the same path under the \`plugin directory\` row of the \`pstack_adapter\` status report. That is the upstream checkout at the resolved commit, so read it there, not from a public \`main\` copy. |
