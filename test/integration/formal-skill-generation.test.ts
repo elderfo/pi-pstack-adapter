@@ -59,7 +59,7 @@ test("the formal verification maintenance wrapper preserves manual invocation an
     const wrapper = readFileSync(join(result.skillsDir, "pistack-maintain-formal-verification-skill", "SKILL.md"), "utf8");
     assert.match(wrapper, /^name: pistack-maintain-formal-verification-skill$/m);
     assert.match(wrapper, /^disable-model-invocation: true$/m);
-    assert.match(wrapper, /^  pistack-support-tier: experimental$/m);
+    assert.match(wrapper, /^  pistack-support-tier: dependency-gated$/m);
     assert.match(wrapper, /Requires these executables on PATH: `git`\./);
     assert.equal(extractUpstreamBody(wrapper), body);
     assert.deepEqual(result.diagnostics.filter((diagnostic) => diagnostic.resource === "skill:maintain-formal-verification-skill"), []);

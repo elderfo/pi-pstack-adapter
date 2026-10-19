@@ -235,9 +235,9 @@ test("skills added in pstack 0.15.28 publish their reviewed tiers", () => {
     body,
   });
 
-  assert.match(output, /^  pistack-support-tier: experimental$/m);
+  assert.match(output, /^  pistack-support-tier: dependency-gated$/m);
   assert.match(output, /^disable-model-invocation: true$/m);
-  assert.match(output, /not yet run end to end in Pi/);
+  assert.match(output, /Verified end to end on a Windows Node finite-state fixture/);
   assert.match(output, /`\.pi\/skills\/`/);
   assert.match(output, /Requires these executables on PATH: `git`\./);
   assert.equal(extractUpstreamBody(output), body);
