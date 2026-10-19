@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. release-please writes new entries from Conventional Commit PR titles.
 
+## [0.7.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.6.0...v0.7.0) (2026-10-19)
+
+
+### Features
+
+* **pstack:** certify pstack 0.15.26 with create-formal-verification-skill ([#17](https://github.com/elderfo/pi-pstack-adapter/issues/17)) ([82367d9](https://github.com/elderfo/pi-pstack-adapter/commit/82367d93e372fc49c603f56e79469197a77814a2))
+* **pstack:** certify pstack 0.15.28 with maintain-formal-verification-skill ([#20](https://github.com/elderfo/pi-pstack-adapter/issues/20)) ([0dee303](https://github.com/elderfo/pi-pstack-adapter/commit/0dee303dbd349dfd9726ff6e3c17a8d96ecf95a2))
+* **roles:** add a general role and cap delegate thinking at the configured level ([#19](https://github.com/elderfo/pi-pstack-adapter/issues/19)) ([df1db04](https://github.com/elderfo/pi-pstack-adapter/commit/df1db045c49907665b7a2ef504b3ab52da287502))
+
 ## [0.6.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.5.0...v0.6.0) (2026-10-17)
 
 
