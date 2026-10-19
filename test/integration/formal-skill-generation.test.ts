@@ -36,3 +36,34 @@ test("the formal verification wrapper preserves manual invocation and publishes 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("the formal verification maintenance wrapper preserves manual invocation and gates on git", () => {
+  const scratch = join(import.meta.dirname, "..", "..", ".work", "scratch");
+  mkdirSync(scratch, { recursive: true });
+  const root = mkdtempSync(join(scratch, "formal-maintain-wrapper-"));
+  try {
+    const body = "# Maintain formal verification\n\nRerun each check against the current code.\n";
+    const pluginDir = writePluginFixture(root, { skills: [{
+      name: "maintain-formal-verification-skill",
+      frontmatter: "name: maintain-formal-verification-skill\ndescription: Fixture.\ndisable-model-invocation: true",
+      body,
+    }] });
+    const commit = "0".repeat(40);
+    const result = generate({
+      source: {
+        selection: { kind: "git", repo: "https://example.test/plugins", ref: commit },
+        trust: "untested-repo", commit, checkoutDir: root, pluginDir,
+      },
+      namespace: "pistack", cacheRoot: join(root, "cache"), adapterVersion: "test",
+    });
+    const wrapper = readFileSync(join(result.skillsDir, "pistack-maintain-formal-verification-skill", "SKILL.md"), "utf8");
+    assert.match(wrapper, /^name: pistack-maintain-formal-verification-skill$/m);
+    assert.match(wrapper, /^disable-model-invocation: true$/m);
+    assert.match(wrapper, /^  pistack-support-tier: dependency-gated$/m);
+    assert.match(wrapper, /Requires these executables on PATH: `git`\./);
+    assert.equal(extractUpstreamBody(wrapper), body);
+    assert.deepEqual(result.diagnostics.filter((diagnostic) => diagnostic.resource === "skill:maintain-formal-verification-skill"), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

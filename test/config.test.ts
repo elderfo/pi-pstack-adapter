@@ -71,6 +71,13 @@ test("an untested ref and a custom repository get different warnings", () => {
   assert.match(trustWarning("untested-repo", customRepo) ?? "", /outside the tested trust boundary/);
 });
 
+test("a pin to the previously certified pstack 0.15.26 commit loses tested trust", () => {
+  const previous = mergeConfig([layer("global", { pinnedCommit: "0b8e952052d482ee6de06deebf14d590d77b1b34" })]);
+  assert.equal(trustOf(previous), "untested-ref");
+  const current = mergeConfig([layer("global", { pinnedCommit: CERTIFIED.commit })]);
+  assert.equal(trustOf(current), "tested");
+});
+
 test("repository identity ignores a .git suffix and trailing slash", () => {
   const config = mergeConfig([layer("global", { repo: `${CERTIFIED.repo}.git/` })]);
   assert.equal(trustOf(config), "tested");

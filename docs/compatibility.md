@@ -4,7 +4,7 @@ The compatibility registry in `src/registry.ts` assigns one support tier to ever
 certified pstack revision. Generation reads it, the wrapper frontmatter publishes it, and
 `/pistack-status` reports it.
 
-Certified revision: pstack `0.15.26` at `0b8e952052d482ee6de06deebf14d590d77b1b34` in
+Certified revision: pstack `0.15.28` at `d457567332aa6989e753ea289f30ea2bfbc80bc0` in
 `https://github.com/cursor/plugins`.
 
 ## Platforms
@@ -21,8 +21,36 @@ executables in the shell the skills run in, with Pi's `shellCommandPrefix` appli
 that matters most, because Git Bash adds `/usr/bin` and `/mingw64/bin` to the `PATH` Pi
 started with. A shell that is missing, inactive, or cannot run a command blocks every workflow.
 
-Windows evidence was last gathered at pstack `0.15.26`, on Windows 11 Pro with Git for Windows
+Windows evidence was last gathered at pstack `0.15.28`, on Windows 11 Pro with Git for Windows
 2.53.0, Node 22.23.2, Bun 1.3.14, and Pi 1.3.0:
+
+- The type check and unit suite pass: 183 tests, 179 passed, none failed, and the four symlink
+  tests skipped. All eight integration tests pass with no skips, including the Windows 8.3
+  short-path case and both formal-verification wrapper regressions.
+- The isolated install passes from Git Bash with the same CLIProxyAPI scratch copy as below: 57
+  skills, no `subagent` or `ask_user` with the provider extension loaded, and cache reuse without
+  bootstrap permission. The installed checkout's 172 files match an LF export of the pinned tree
+  byte for byte. The probe reports 57 skills, two agents, no diagnostics, 55 bodies
+  byte-identical, `setup-pstack` replaced, and none mismatched.
+- The installed status report shows `tested` trust at the certified commit, and
+  `/pistack-check pistack-maintain-formal-verification-skill` clears the workflow. `git` is
+  its only executable, and Git for Windows bundles it.
+- `maintain-formal-verification-skill` ran in the isolated install against a fixture whose
+  `.pi/skills/` verify skill recorded a sync commit, followed by a rename of a covered function
+  and a new batch function that wrote the guarded state without its duplicate-ID guard. It
+  found the skill, ran the stale check (it crashed on the rename), read all three commits since
+  the sync commit, renamed the call, extended the harness to the new function, and reported the
+  bug with the commit that introduced it and a two-step counterexample. It proved the updated
+  check could pass and fail by temporarily fixing and then breaking the product file, restored
+  it, moved the sync commit, and committed only the verification and verify-skill changes.
+  This supports `dependency-gated` on `git`.
+- The changed `create-formal-verification-skill` reran in the isolated install. It generated
+  `.pi/skills/verify-inventory-ledger/SKILL.md` with the coverage record and sync commit new in
+  `0.15.28`, plus a dependency-free Node verifier over the real functions (28 states, 168 calls).
+  The check caught six deliberate breaks, and the product file's content was unchanged after
+  each restore. `adapted` still holds.
+
+Earlier Windows evidence, gathered at pstack `0.15.26` with the same toolchain:
 
 - The type check and unit suite pass: 173 tests passed, none failed, and four symlink tests
   skipped because Windows requires Developer Mode or administrator rights. The seven scheduled
@@ -162,7 +190,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `create-verification-skill` | `/skill:pistack-create-verification-skill` | - | - | Only the generated skill's output path needs remapping to Pi's skill directory. |
 | `ketchup` | `/skill:pistack-ketchup` | - | - | Read-only. Pi has no `/visualize` skill or image generation, so its visuals are Mermaid diagrams and screenshots that already exist. It checks PR and CI state only for work the chat touched. |
 
-### dependency-gated (13)
+### dependency-gated (14)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
@@ -174,6 +202,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `figure-it-out` | `/skill:pistack-figure-it-out` | `delegation` | - | Phase B fan-out and the architect/arena routing require parallel subagents. |
 | `how` | `/skill:pistack-how` | `delegation` | - | Every path spawns explorer or explainer subagents; nothing runs inline. |
 | `interrogate` | `/skill:pistack-interrogate` | `delegation` | `git` | Multi-model adversarial review is entirely one subagent per configured model. |
+| `maintain-formal-verification-skill` | `/skill:pistack-maintain-formal-verification-skill` | - | `git` | Verified end to end on a Windows Node finite-state fixture at pstack 0.15.28. Manual invocation only; no delegation. It diffs the covered code with git from the verify skill's sync commit, edits only the verification and the verify skill, and temporarily breaks product code to prove an updated check can still fail. In Pi, look for the verify skill under `.pi/skills/`; the verification tool needs its own prerequisites. |
 | `maintain-verification-skill` | `/skill:pistack-maintain-verification-skill` | `delegation` | - | Source wave launches one read-only subagent per feature file. |
 | `no-comments` | `/skill:pistack-no-comments` | `delegation` | `git` | Step 1 must spawn the comment-sicko agent; the skill only triages its report. |
 | `show-me-your-work` | `/skill:pistack-show-me-your-work` | `delegation` | - | The mandatory cross-model review of the trail requires spawning a different-family subagent. |
@@ -238,8 +267,10 @@ through `delegate_task`. That run is the evidence the tier rules above require.
 
 ## Skills the adapter replaces
 
-`setup-pstack` writes a Cursor `.mdc` rule and nothing else, so the adapter substitutes its own
-body and publishes it as `/skill:pistack-setup`. The upstream skill stays represented, and the
+`setup-pstack` writes a Cursor `.mdc` rule, so the adapter substitutes its own body and
+publishes it as `/skill:pistack-setup`. Upstream's optional closing offers to run
+`create-verification-skill` and `create-formal-verification-skill` are left out of the Pi body;
+both skills stay available by name. The upstream skill stays represented, and the
 wrapper frontmatter records `pistack-upstream-skill: setup-pstack`.
 
 ## Unknown skills

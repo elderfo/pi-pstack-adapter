@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { extractUpstreamBody, generate } from "../src/generate.ts";
+import { extractUpstreamBody, generate, wrapper } from "../src/generate.ts";
 import { CERTIFIED } from "../src/certified.ts";
 import { isThinkingLevel } from "../src/config.ts";
-import { ADAPTER_SKILLS, MODEL_ROLES, SKILL_REGISTRY } from "../src/registry.ts";
+import { ADAPTER_SKILLS, MODEL_ROLES, SKILL_REGISTRY, entryFor } from "../src/registry.ts";
 import type { DelegationProvider, ResolvedSource } from "../src/types.ts";
 import { makeTempDir, readTree, writePluginFixture } from "./support/fixture.ts";
 
@@ -221,6 +221,26 @@ test("skills added in pstack 0.15.25 publish their reviewed tiers", () => {
   assert.equal(/pistack-support-tier: (\S+)/.exec(wrapper)?.[1], "experimental");
   assert.match(wrapper, /not yet run end to end in Pi/);
   assert.equal(result.diagnostics.some((d) => d.message.includes("new to this upstream revision")), false);
+});
+
+test("skills added in pstack 0.15.28 publish their reviewed tiers", () => {
+  const body = "# Maintain\n\nRerun the check.\n";
+  const output = wrapper({
+    generatedName: "pistack-maintain-formal-verification-skill",
+    upstreamName: "maintain-formal-verification-skill",
+    frontmatter: { name: "maintain-formal-verification-skill", description: "Fixture.", "disable-model-invocation": "true" },
+    entry: entryFor("maintain-formal-verification-skill"),
+    namespace: "pistack",
+    adapterVersion: "test",
+    body,
+  });
+
+  assert.match(output, /^  pistack-support-tier: dependency-gated$/m);
+  assert.match(output, /^disable-model-invocation: true$/m);
+  assert.match(output, /Verified end to end on a Windows Node finite-state fixture/);
+  assert.match(output, /`\.pi\/skills\/`/);
+  assert.match(output, /Requires these executables on PATH: `git`\./);
+  assert.equal(extractUpstreamBody(output), body);
 });
 
 test("the host mapping covers Cursor vocabulary new in pstack 0.15.25", () => {
