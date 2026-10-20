@@ -223,6 +223,41 @@ test("skills added in pstack 0.15.25 publish their reviewed tiers", () => {
   assert.equal(result.diagnostics.some((d) => d.message.includes("new to this upstream revision")), false);
 });
 
+test("the pstack 0.15.29 sharpen wrapper keeps the prompt-rewrite body and manual invocation", () => {
+  const body = [
+    "I want a deeper version of this task, not a bigger one. Before rewriting it, do four things:",
+    "",
+    "1. Say what a top professional in this field would do here that I'm not asking for.",
+    "",
+    "Then rewrite my prompt to ask for exactly that.",
+    "",
+    "Leave choices that are mine to make open instead of deciding them.",
+    "",
+  ].join("\n");
+  const output = wrapper({
+    generatedName: "pistack-sharpen",
+    upstreamName: "sharpen",
+    frontmatter: {
+      name: "sharpen",
+      description: "Make a task deeper, not bigger, then rewrite the prompt. Use for /sharpen.",
+      "disable-model-invocation": "true",
+    },
+    entry: entryFor("sharpen"),
+    namespace: "pistack",
+    adapterVersion: "test",
+    body,
+  });
+
+  assert.match(output, /^  pistack-support-tier: experimental$/m);
+  assert.match(output, /^disable-model-invocation: true$/m);
+  assert.match(output, /then rewrite the prompt/);
+  assert.match(output, /hands back a rewritten prompt and does not do the task/);
+  const upstream = extractUpstreamBody(output);
+  assert.equal(upstream, body);
+  assert.match(upstream ?? "", /Then rewrite my prompt to ask for exactly that\./);
+  assert.doesNotMatch(upstream ?? "", /then do the work/);
+});
+
 test("skills added in pstack 0.15.28 publish their reviewed tiers", () => {
   const body = "# Maintain\n\nRerun the check.\n";
   const output = wrapper({
