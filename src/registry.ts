@@ -53,7 +53,7 @@ export const SKILL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   "recall": { tier: "experimental", capabilities: ["delegation"], executables: ["git", "gh"], note: "Core corpus is Cursor's on-disk transcript JSONL, so only the git/gh and shared-record half survives." },
   "reflect": { tier: "experimental", capabilities: ["delegation"], executables: [], note: "Transcript mining and create-skill routing are Cursor-specific, though the digest fallback partly works." },
   "setup-pstack": { tier: "native", capabilities: [], executables: [], rename: "setup", replacement: "setup.md", note: "The upstream body only writes a Cursor .mdc rule, so the adapter replaces it with a Pi setup workflow." },
-  "sharpen": { tier: "experimental", capabilities: [], executables: [], note: "New in pstack 0.15.25 and not yet run end to end in Pi. Its body is prompt-only, with no tool, delegation, or executable, and it runs only when you type it." },
+  "sharpen": { tier: "experimental", capabilities: [], executables: [], note: "New in pstack 0.15.25 and not yet run end to end in Pi. Since pstack 0.15.29 it hands back a rewritten prompt and does not do the task. Its body is prompt-only, with no tool, delegation, or executable, and it runs only when you type it." },
   "show-me-your-work": { tier: "dependency-gated", capabilities: ["delegation"], executables: [], note: "The mandatory cross-model review of the trail requires spawning a different-family subagent." },
   "swarm": { tier: "experimental", capabilities: ["delegation"], executables: [], note: "Cloud background workers and cloud_base_branch have no Pi mapping; only local fan-out approximates it." },
   "tdd": { tier: "native", capabilities: [], executables: [] },

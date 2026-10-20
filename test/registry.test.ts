@@ -22,3 +22,12 @@ test("the Windows-verified formal verification maintenance workflow is dependenc
   assert.match(entry.note ?? "", /temporarily breaks product code/);
   assert.match(entry.note ?? "", /`\.pi\/skills\/`/);
 });
+
+test("sharpen stays experimental and states it returns a rewritten prompt since pstack 0.15.29", () => {
+  const entry = entryFor("sharpen");
+  assert.equal(entry.tier, "experimental");
+  assert.deepEqual(entry.capabilities, []);
+  assert.deepEqual(entry.executables, []);
+  assert.match(entry.note ?? "", /not yet run end to end in Pi/);
+  assert.match(entry.note ?? "", /hands back a rewritten prompt and does not do the task/);
+});
