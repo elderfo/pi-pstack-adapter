@@ -41,4 +41,5 @@ test("statechart is experimental and gated on node, java, and npx", () => {
   assert.match(entry.note ?? "", /`TLA2TOOLS`/);
   assert.match(entry.note ?? "", /npx -y @mermaid-js\/mermaid-cli/);
   assert.match(entry.note ?? "", /scratch folder outside the repository/);
+  assert.match(entry.note ?? "", /full process permissions/);
 });
