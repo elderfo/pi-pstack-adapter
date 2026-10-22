@@ -67,3 +67,43 @@ test("the formal verification maintenance wrapper preserves manual invocation an
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("the statechart wrapper preserves manual invocation and gates on node, java, and npx", () => {
+  const scratch = join(import.meta.dirname, "..", "..", ".work", "scratch");
+  mkdirSync(scratch, { recursive: true });
+  const root = mkdtempSync(join(scratch, "statechart-wrapper-"));
+  try {
+    const body = "# Statechart\n\nDraw what the user sees from a TLA+ model.\n";
+    // Inert stand-ins for the nested scripts the body runs from `<skill dir>/scripts`; never executed.
+    const supportFiles = {
+      "scripts/statechart.mjs": "// fixture\nexport {};\n",
+      "scripts/model/Example.cfg": "SPECIFICATION Spec\n",
+    };
+    const pluginDir = writePluginFixture(root, { skills: [{
+      name: "statechart",
+      frontmatter: "name: statechart\ndescription: Fixture.\ndisable-model-invocation: true",
+      body,
+      files: supportFiles,
+    }] });
+    const commit = "0".repeat(40);
+    const result = generate({
+      source: {
+        selection: { kind: "git", repo: "https://example.test/plugins", ref: commit },
+        trust: "untested-repo", commit, checkoutDir: root, pluginDir,
+      },
+      namespace: "pistack", cacheRoot: join(root, "cache"), adapterVersion: "test",
+    });
+    const wrapper = readFileSync(join(result.skillsDir, "pistack-statechart", "SKILL.md"), "utf8");
+    assert.match(wrapper, /^name: pistack-statechart$/m);
+    assert.match(wrapper, /^disable-model-invocation: true$/m);
+    assert.match(wrapper, /^  pistack-support-tier: dependency-gated$/m);
+    assert.match(wrapper, /Requires these executables on PATH: `node`, `java`, `npx`\./);
+    assert.equal(extractUpstreamBody(wrapper), body);
+    for (const [path, content] of Object.entries(supportFiles)) {
+      assert.equal(readFileSync(join(result.skillsDir, "pistack-statechart", path), "utf8"), content, path);
+    }
+    assert.deepEqual(result.diagnostics.filter((diagnostic) => diagnostic.resource === "skill:statechart"), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

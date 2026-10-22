@@ -4,7 +4,7 @@ The compatibility registry in `src/registry.ts` assigns one support tier to ever
 certified pstack revision. Generation reads it, the wrapper frontmatter publishes it, and
 `/pistack-status` reports it.
 
-Certified revision: pstack `0.15.29` at `88d47514b82e7c44f00f2b2a72ff6dd12158038c` in
+Certified revision: pstack `0.15.30` at `eb4db2b55b2b7dec3d9282754cddf0a56bf4ff10` in
 `https://github.com/cursor/plugins`.
 
 ## Platforms
@@ -21,8 +21,47 @@ executables in the shell the skills run in, with Pi's `shellCommandPrefix` appli
 that matters most, because Git Bash adds `/usr/bin` and `/mingw64/bin` to the `PATH` Pi
 started with. A shell that is missing, inactive, or cannot run a command blocks every workflow.
 
-Windows evidence was last gathered at pstack `0.15.28`, on Windows 11 Pro with Git for Windows
-2.53.0, Node 22.23.2, Bun 1.3.14, and Pi 1.3.0:
+Windows evidence was last gathered at pstack `0.15.30`, on Windows 11 Pro with Git for Windows
+2.53.0, Node 22.23.2, Bun 1.3.14, Pi 1.3.0, and a portable Temurin JDK 21.0.12 with the latest
+`tla2tools.jar`:
+
+- The type check and unit suite pass: 187 tests, 183 passed, none failed, and the four symlink
+  tests skipped. All nine integration tests pass with no skips, including the Windows 8.3
+  short-path case and the statechart wrapper regression with its nested support files.
+- The isolated install passes from Git Bash with the CLIProxyAPI scratch copy described below:
+  58 skills, no `subagent` or `ask_user` with the provider extension loaded, and cache reuse
+  without bootstrap permission. The installed checkout's 184 files match an LF export of the
+  pinned tree byte for byte. The probe reports 58 skills, two agents, no diagnostics, 56 bodies
+  byte-identical, `setup-pstack` replaced, and none mismatched. The 11 statechart support files
+  sit beside the generated wrapper and match upstream.
+- The installed status report shows `tested` trust at the certified commit. `/pistack-check`
+  ran for all 58 skills. Each delegating skill names the missing `delegation` capability,
+  `benchmark-checklist` still names `uptime`, and every other skill clears.
+  `/pistack-check pistack-statechart` names `java` until a JDK is on PATH, then clears.
+  Git Bash rewrites a leading `/` in a `pi -p` argument into a Windows path, so pass
+  `MSYS2_ARG_CONV_EXCL='/pistack;/skill'` when scripting these commands.
+- `statechart` ran in the isolated install against a checkout fixture whose 5-second timeout
+  shows "Try again" while the first charge is still in flight. From the code, it wrote a TLA+
+  model and a mapping, and TLC found the rule "A customer is never charged twice for one cart"
+  broken (20 model states, 9 chart states). It rendered both charts to PNG, and the numbered
+  five-step bug path read correctly. A replay script drove the real module with a fake gateway
+  and clock and reproduced two charges. The fixture repository stayed clean. Two upstream
+  defects needed workarounds. `--png` calls `spawnSync("npx")`, which cannot start `npx.cmd`
+  on Windows, so the PNGs were rendered by running `npx` directly. Renaming a directory onto an
+  existing one fails with `EPERM` on Windows, not `ENOTEMPTY` or `EEXIST`, so every rerun
+  into an existing output folder fails and leaves it unchanged until the folder is deleted.
+  This supports `dependency-gated` with those workarounds in its note.
+- Upstream's own `scripts/test/statechart.test.mjs` does not pass on Windows: of 58 tests, 41
+  pass, 2 skip, 12 fail, and 3 hang. The two defects above cause eight failures. Three expect
+  `/` in paths that Windows prints with `\`, and one of those also sets `TMPDIR`, which Node
+  ignores on Windows. One runs a fake `java` shell script, which Windows cannot start. The three
+  hangs wait for TLC to write into `TMPDIR`, which Node ignores on Windows, so they never see
+  it start.
+- `poteto-help` routed a request to show a PM a double-charge path to
+  `/skill:pistack-statechart`. It named the `pistack-` prefix and listed the missing `java` and
+  `TLA2TOOLS` prerequisites.
+
+Earlier Windows evidence, gathered at pstack `0.15.28` with the same toolchain:
 
 - The type check and unit suite pass: 183 tests, 179 passed, none failed, and the four symlink
   tests skipped. All eight integration tests pass with no skips, including the Windows 8.3
@@ -190,7 +229,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `create-verification-skill` | `/skill:pistack-create-verification-skill` | - | - | Only the generated skill's output path needs remapping to Pi's skill directory. |
 | `ketchup` | `/skill:pistack-ketchup` | - | - | Read-only. Pi has no `/visualize` skill or image generation, so its visuals are Mermaid diagrams and screenshots that already exist. It checks PR and CI state only for work the chat touched. |
 
-### dependency-gated (14)
+### dependency-gated (15)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
@@ -206,6 +245,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `maintain-verification-skill` | `/skill:pistack-maintain-verification-skill` | `delegation` | - | Source wave launches one read-only subagent per feature file. |
 | `no-comments` | `/skill:pistack-no-comments` | `delegation` | `git` | Step 1 must spawn the comment-sicko agent; the skill only triages its report. |
 | `show-me-your-work` | `/skill:pistack-show-me-your-work` | `delegation` | - | The mandatory cross-model review of the trail requires spawning a different-family subagent. |
+| `statechart` | `/skill:pistack-statechart` | - | `node`, `java`, `npx` | Verified end to end on a Windows checkout fixture at pstack 0.15.30. Manual invocation only; no delegation or structured question. Its scripts run under `node` and run TLC with `java`, or the binary in `JAVA`, and need `TLA2TOOLS` set to a downloaded `tla2tools.jar`. The prerequisite check looks for `java` on PATH even when `JAVA` is set. `--png`, which its chart and hand-off steps use, runs `npx -y @mermaid-js/mermaid-cli`, which downloads and runs that package. It imports the `.map.mjs` mapping file as JavaScript with full process permissions, so review an existing mapping before you run it. Each run replaces its whole output folder and deletes the previous contents, so run it in a scratch folder outside the repository with a dedicated output folder. Git for Windows bundles none of these executables. On native Windows, `--png` cannot start `npx` (`spawnSync npx ENOENT`), so render each `.mmd` with `npx -y @mermaid-js/mermaid-cli -i <chart>.mmd -o <chart>.png` yourself. A rerun into an existing output folder also fails with `EPERM` and leaves the old folder in place, so give each rerun a fresh `--out` folder. Delete an old output folder only after you check its path and confirm every file in it is disposable, because a manual delete skips the script's check for files it did not write. |
 | `teach` | `/skill:pistack-teach` | `delegation` | - | It runs the how and why skills, both of which need subagents. |
 | `why` | `/skill:pistack-why` | `delegation` | `git`, `gh` | Default posture spawns one investigator subagent per evidence category plus a synthesizer. |
 
