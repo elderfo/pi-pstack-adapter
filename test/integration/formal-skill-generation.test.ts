@@ -74,10 +74,16 @@ test("the statechart wrapper preserves manual invocation and gates on node, java
   const root = mkdtempSync(join(scratch, "statechart-wrapper-"));
   try {
     const body = "# Statechart\n\nDraw what the user sees from a TLA+ model.\n";
+    // Inert stand-ins for the nested scripts the body runs from `<skill dir>/scripts`; never executed.
+    const supportFiles = {
+      "scripts/statechart.mjs": "// fixture\nexport {};\n",
+      "scripts/model/Example.cfg": "SPECIFICATION Spec\n",
+    };
     const pluginDir = writePluginFixture(root, { skills: [{
       name: "statechart",
       frontmatter: "name: statechart\ndescription: Fixture.\ndisable-model-invocation: true",
       body,
+      files: supportFiles,
     }] });
     const commit = "0".repeat(40);
     const result = generate({
@@ -93,6 +99,9 @@ test("the statechart wrapper preserves manual invocation and gates on node, java
     assert.match(wrapper, /^  pistack-support-tier: experimental$/m);
     assert.match(wrapper, /Requires these executables on PATH: `node`, `java`, `npx`\./);
     assert.equal(extractUpstreamBody(wrapper), body);
+    for (const [path, content] of Object.entries(supportFiles)) {
+      assert.equal(readFileSync(join(result.skillsDir, "pistack-statechart", path), "utf8"), content, path);
+    }
     assert.deepEqual(result.diagnostics.filter((diagnostic) => diagnostic.resource === "skill:statechart"), []);
   } finally {
     rmSync(root, { recursive: true, force: true });
