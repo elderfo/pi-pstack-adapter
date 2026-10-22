@@ -67,3 +67,34 @@ test("the formal verification maintenance wrapper preserves manual invocation an
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("the statechart wrapper preserves manual invocation and gates on node, java, and npx", () => {
+  const scratch = join(import.meta.dirname, "..", "..", ".work", "scratch");
+  mkdirSync(scratch, { recursive: true });
+  const root = mkdtempSync(join(scratch, "statechart-wrapper-"));
+  try {
+    const body = "# Statechart\n\nDraw what the user sees from a TLA+ model.\n";
+    const pluginDir = writePluginFixture(root, { skills: [{
+      name: "statechart",
+      frontmatter: "name: statechart\ndescription: Fixture.\ndisable-model-invocation: true",
+      body,
+    }] });
+    const commit = "0".repeat(40);
+    const result = generate({
+      source: {
+        selection: { kind: "git", repo: "https://example.test/plugins", ref: commit },
+        trust: "untested-repo", commit, checkoutDir: root, pluginDir,
+      },
+      namespace: "pistack", cacheRoot: join(root, "cache"), adapterVersion: "test",
+    });
+    const wrapper = readFileSync(join(result.skillsDir, "pistack-statechart", "SKILL.md"), "utf8");
+    assert.match(wrapper, /^name: pistack-statechart$/m);
+    assert.match(wrapper, /^disable-model-invocation: true$/m);
+    assert.match(wrapper, /^  pistack-support-tier: experimental$/m);
+    assert.match(wrapper, /Requires these executables on PATH: `node`, `java`, `npx`\./);
+    assert.equal(extractUpstreamBody(wrapper), body);
+    assert.deepEqual(result.diagnostics.filter((diagnostic) => diagnostic.resource === "skill:statechart"), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -31,3 +31,14 @@ test("sharpen stays experimental and states it returns a rewritten prompt since 
   assert.match(entry.note ?? "", /not yet run end to end in Pi/);
   assert.match(entry.note ?? "", /hands back a rewritten prompt and does not do the task/);
 });
+
+test("statechart is experimental and gated on node, java, and npx", () => {
+  const entry = entryFor("statechart");
+  assert.equal(entry.tier, "experimental");
+  assert.deepEqual(entry.capabilities, []);
+  assert.deepEqual(entry.executables, ["node", "java", "npx"]);
+  assert.match(entry.note ?? "", /not yet run end to end in Pi/);
+  assert.match(entry.note ?? "", /`TLA2TOOLS`/);
+  assert.match(entry.note ?? "", /npx -y @mermaid-js\/mermaid-cli/);
+  assert.match(entry.note ?? "", /scratch folder outside the repository/);
+});

@@ -278,6 +278,25 @@ test("skills added in pstack 0.15.28 publish their reviewed tiers", () => {
   assert.equal(extractUpstreamBody(output), body);
 });
 
+test("the pstack 0.15.30 statechart wrapper publishes its tier, gates, and manual invocation", () => {
+  const body = "# Statechart\n\nRun `node <skill dir>/scripts/statechart.mjs --help`.\n";
+  const output = wrapper({
+    generatedName: "pistack-statechart",
+    upstreamName: "statechart",
+    frontmatter: { name: "statechart", description: "Fixture.", "disable-model-invocation": "true" },
+    entry: entryFor("statechart"),
+    namespace: "pistack",
+    adapterVersion: "test",
+    body,
+  });
+
+  assert.match(output, /^  pistack-support-tier: experimental$/m);
+  assert.match(output, /^disable-model-invocation: true$/m);
+  assert.match(output, /Requires these executables on PATH: `node`, `java`, `npx`\./);
+  assert.match(output, /`TLA2TOOLS`/);
+  assert.equal(extractUpstreamBody(output), body);
+});
+
 test("the host mapping covers Cursor vocabulary new in pstack 0.15.25", () => {
   const root = makeTempDir("host-mapping-01525");
   const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });

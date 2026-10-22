@@ -4,7 +4,7 @@ The compatibility registry in `src/registry.ts` assigns one support tier to ever
 certified pstack revision. Generation reads it, the wrapper frontmatter publishes it, and
 `/pistack-status` reports it.
 
-Certified revision: pstack `0.15.29` at `88d47514b82e7c44f00f2b2a72ff6dd12158038c` in
+Certified revision: pstack `0.15.30` at `eb4db2b55b2b7dec3d9282754cddf0a56bf4ff10` in
 `https://github.com/cursor/plugins`.
 
 ## Platforms
@@ -209,7 +209,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `teach` | `/skill:pistack-teach` | `delegation` | - | It runs the how and why skills, both of which need subagents. |
 | `why` | `/skill:pistack-why` | `delegation` | `git`, `gh` | Default posture spawns one investigator subagent per evidence category plus a synthesizer. |
 
-### experimental (7)
+### experimental (8)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
@@ -219,6 +219,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `recall` | `/skill:pistack-recall` | `delegation` | `git`, `gh` | Core corpus is Cursor's on-disk transcript JSONL, so only the git/gh and shared-record half survives. |
 | `reflect` | `/skill:pistack-reflect` | `delegation` | - | Transcript mining and create-skill routing are Cursor-specific, though the digest fallback partly works. |
 | `sharpen` | `/skill:pistack-sharpen` | - | - | New in pstack 0.15.25 and not yet run end to end in Pi. Since pstack 0.15.29 it hands back a rewritten prompt and does not do the task. Its body is prompt-only, with no tool, delegation, or executable, and it runs only when you type it. |
+| `statechart` | `/skill:pistack-statechart` | - | `node`, `java`, `npx` | New in pstack 0.15.30 and not yet run end to end in Pi. Manual invocation only; no delegation or structured question. Its scripts run under `node` and run TLC with `java`, or the binary in `JAVA`, and need `TLA2TOOLS` set to a downloaded `tla2tools.jar`. The prerequisite check looks for `java` on PATH even when `JAVA` is set. `--png`, which its chart and hand-off steps use, runs `npx -y @mermaid-js/mermaid-cli`, which downloads and runs that package. It imports the `.map.mjs` mapping file it scaffolds and writes output next to its input, so run it in a scratch folder outside the repository. Git for Windows bundles none of these executables. |
 | `swarm` | `/skill:pistack-swarm` | `delegation` | - | Cloud background workers and cloud_base_branch have no Pi mapping; only local fan-out approximates it. |
 
 ### unsupported (1)
