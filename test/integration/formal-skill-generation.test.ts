@@ -96,7 +96,7 @@ test("the statechart wrapper preserves manual invocation and gates on node, java
     const wrapper = readFileSync(join(result.skillsDir, "pistack-statechart", "SKILL.md"), "utf8");
     assert.match(wrapper, /^name: pistack-statechart$/m);
     assert.match(wrapper, /^disable-model-invocation: true$/m);
-    assert.match(wrapper, /^  pistack-support-tier: experimental$/m);
+    assert.match(wrapper, /^  pistack-support-tier: dependency-gated$/m);
     assert.match(wrapper, /Requires these executables on PATH: `node`, `java`, `npx`\./);
     assert.equal(extractUpstreamBody(wrapper), body);
     for (const [path, content] of Object.entries(supportFiles)) {
