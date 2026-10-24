@@ -278,7 +278,7 @@ test("skills added in pstack 0.15.28 publish their reviewed tiers", () => {
   assert.equal(extractUpstreamBody(output), body);
 });
 
-test("the pstack 0.15.30 statechart wrapper publishes its tier, gates, and manual invocation", () => {
+test("the pstack 0.15.32 statechart wrapper publishes its tier, gates, and manual invocation", () => {
   const body = "# Statechart\n\nRun `node <skill dir>/scripts/statechart.mjs --help`.\n";
   const output = wrapper({
     generatedName: "pistack-statechart",
@@ -292,9 +292,42 @@ test("the pstack 0.15.30 statechart wrapper publishes its tier, gates, and manua
 
   assert.match(output, /^  pistack-support-tier: dependency-gated$/m);
   assert.match(output, /^disable-model-invocation: true$/m);
-  assert.match(output, /Requires these executables on PATH: `node`, `java`, `npx`\./);
+  assert.match(output, /Requires these executables on PATH: `node`, `npm`\./);
   assert.match(output, /`TLA2TOOLS`/);
+  assert.match(output, /`mise`/);
   assert.equal(extractUpstreamBody(output), body);
+});
+
+test("ketchup-video, new in pstack 0.15.32, publishes experimental with manual invocation", () => {
+  const body = "# Ketchup video\n\nFollow ketchup, but render a short silent video.\n";
+  const output = wrapper({
+    generatedName: "pistack-ketchup-video",
+    upstreamName: "ketchup-video",
+    frontmatter: { name: "ketchup-video", description: "Catch up as a video. Use for /ketchup-video.", "disable-model-invocation": "true" },
+    entry: entryFor("ketchup-video"),
+    namespace: "pistack",
+    adapterVersion: "test",
+    body,
+  });
+
+  assert.match(output, /^  pistack-support-tier: experimental$/m);
+  assert.match(output, /^disable-model-invocation: true$/m);
+  assert.match(output, /not yet run end to end in Pi/);
+  assert.doesNotMatch(output, /Requires these executables on PATH/);
+  assert.equal(extractUpstreamBody(output), body);
+});
+
+test("the host mapping forbids editing a skill in the plugin cache, new in pstack 0.15.32", () => {
+  const root = makeTempDir("host-mapping-01532");
+  const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });
+  const result = run({ pluginDir, cacheRoot: join(root, "cache") });
+  const mapping = readFileSync(join(result.outDir, "adapter", "host-mapping.md"), "utf8");
+  const row = mapping.split("\n").find((line) => line.startsWith("| a skill under `plugins/cache/`"));
+
+  assert.ok(row, "the host mapping needs a row for reflect's plugins/cache/ rule");
+  assert.match(row, /`plugin directory` or `generated skills` row/);
+  assert.match(row, /Never edit a file there/);
+  assert.match(row, /Copy the skill to a Pi skill location and edit the copy/);
 });
 
 test("the host mapping covers Cursor vocabulary new in pstack 0.15.25", () => {

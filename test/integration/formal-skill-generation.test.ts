@@ -68,7 +68,7 @@ test("the formal verification maintenance wrapper preserves manual invocation an
   }
 });
 
-test("the statechart wrapper preserves manual invocation and gates on node, java, and npx", () => {
+test("the statechart wrapper preserves manual invocation and gates on node and npm", () => {
   const scratch = join(import.meta.dirname, "..", "..", ".work", "scratch");
   mkdirSync(scratch, { recursive: true });
   const root = mkdtempSync(join(scratch, "statechart-wrapper-"));
@@ -97,7 +97,7 @@ test("the statechart wrapper preserves manual invocation and gates on node, java
     assert.match(wrapper, /^name: pistack-statechart$/m);
     assert.match(wrapper, /^disable-model-invocation: true$/m);
     assert.match(wrapper, /^  pistack-support-tier: dependency-gated$/m);
-    assert.match(wrapper, /Requires these executables on PATH: `node`, `java`, `npx`\./);
+    assert.match(wrapper, /Requires these executables on PATH: `node`, `npm`\./);
     assert.equal(extractUpstreamBody(wrapper), body);
     for (const [path, content] of Object.entries(supportFiles)) {
       assert.equal(readFileSync(join(result.skillsDir, "pistack-statechart", path), "utf8"), content, path);
