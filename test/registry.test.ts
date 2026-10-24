@@ -42,7 +42,7 @@ test("statechart is dependency-gated on node and npm since pstack 0.15.32 and na
   assert.match(entry.note ?? "", /at pstack 0\.15\.30, before pstack 0\.15\.32 rewrote its scripts/);
   assert.match(entry.note ?? "", /no Pi run has exercised the 0\.15\.32 scripts/);
   assert.match(entry.note ?? "", /`TLA2TOOLS`/);
-  assert.match(entry.note ?? "", /`mise`, about 305 MB/);
+  assert.match(entry.note ?? "", /A cold install of both downloads about 305 MB/);
   assert.match(entry.note ?? "", /`pele` and `@resvg\/resvg-js` once with `npm`/);
   assert.match(entry.note ?? "", /`EPERM`.*give each rerun a fresh `--out` folder/);
   assert.doesNotMatch(entry.note ?? "", /mermaid-cli/);

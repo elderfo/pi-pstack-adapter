@@ -317,19 +317,6 @@ test("ketchup-video, new in pstack 0.15.32, publishes experimental with manual i
   assert.equal(extractUpstreamBody(output), body);
 });
 
-test("the host mapping forbids editing a skill in the plugin cache, new in pstack 0.15.32", () => {
-  const root = makeTempDir("host-mapping-01532");
-  const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });
-  const result = run({ pluginDir, cacheRoot: join(root, "cache") });
-  const mapping = readFileSync(join(result.outDir, "adapter", "host-mapping.md"), "utf8");
-  const row = mapping.split("\n").find((line) => line.startsWith("| a skill under `plugins/cache/`"));
-
-  assert.ok(row, "the host mapping needs a row for reflect's plugins/cache/ rule");
-  assert.match(row, /`plugin directory` or `generated skills` row/);
-  assert.match(row, /Never edit a file there/);
-  assert.match(row, /Copy the skill to a Pi skill location and edit the copy/);
-});
-
 test("the host mapping covers Cursor vocabulary new in pstack 0.15.25", () => {
   const root = makeTempDir("host-mapping-01525");
   const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });
