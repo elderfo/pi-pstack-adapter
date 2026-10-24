@@ -129,6 +129,7 @@ test("the host mapping forbids editing a skill in the plugin cache, new in pstac
     assert.match(row, /Never edit a file there/);
     assert.match(row, /copy the upstream skill folder from the plugin directory/);
     assert.match(row, /Do not copy a generated wrapper/);
+    assert.match(row, /copy each skill it links to as well, or point the link at that skill's file in the plugin directory/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
