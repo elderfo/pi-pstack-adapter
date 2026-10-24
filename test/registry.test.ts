@@ -39,12 +39,12 @@ test("statechart is dependency-gated on node and npm since pstack 0.15.32 and na
   assert.equal(entry.tier, "dependency-gated");
   assert.deepEqual(entry.capabilities, []);
   assert.deepEqual(entry.executables, ["node", "npm"]);
-  assert.match(entry.note ?? "", /at pstack 0\.15\.30, before pstack 0\.15\.32 rewrote its scripts/);
-  assert.match(entry.note ?? "", /no Pi run has exercised the 0\.15\.32 scripts/);
+  assert.match(entry.note ?? "", /Verified end to end on a Windows checkout fixture at pstack 0\.15\.32, after it rewrote the scripts/);
+  assert.doesNotMatch(entry.note ?? "", /no Pi run has exercised/);
   assert.match(entry.note ?? "", /`TLA2TOOLS`/);
   assert.match(entry.note ?? "", /A cold install of both downloads about 305 MB/);
   assert.match(entry.note ?? "", /`pele` and `@resvg\/resvg-js` once with `npm`/);
-  assert.match(entry.note ?? "", /`EPERM`.*give each rerun a fresh `--out` folder/);
+  assert.match(entry.note ?? "", /`EPERM`.*[Gg]ive each rerun a fresh `--out` folder/);
   assert.doesNotMatch(entry.note ?? "", /mermaid-cli/);
   assert.match(entry.note ?? "", /scratch folder outside the repository/);
   assert.match(entry.note ?? "", /full process permissions/);
@@ -60,8 +60,9 @@ test("ketchup-video, new in pstack 0.15.32, stays experimental with no gates", (
   assert.equal(entry.tier, "experimental");
   assert.deepEqual(entry.capabilities, []);
   assert.deepEqual(entry.executables, []);
-  assert.match(entry.note ?? "", /not yet run end to end in Pi/);
+  assert.match(entry.note ?? "", /One end-to-end Pi run on native Windows/);
   assert.match(entry.note ?? "", /names no renderer/);
+  assert.match(entry.note ?? "", /whether a Pi client plays it inline is unverified/);
   const docs = readFileSync(join(import.meta.dirname, "..", "docs", "compatibility.md"), "utf8");
   const row = docs.split("\n").find((line) => line.startsWith("| `ketchup-video` |"));
   assert.equal(row, `| \`ketchup-video\` | \`/skill:pistack-ketchup-video\` | - | - | ${entry.note} |`);

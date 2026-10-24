@@ -21,14 +21,50 @@ executables in the shell the skills run in, with Pi's `shellCommandPrefix` appli
 that matters most, because Git Bash adds `/usr/bin` and `/mingw64/bin` to the `PATH` Pi
 started with. A shell that is missing, inactive, or cannot run a command blocks every workflow.
 
-No Windows evidence has been gathered at pstack `0.15.32`. That release rewrote the statechart
-scripts: `--png` now installs its renderer with `npm`, and TLC comes from `TLA2TOOLS` or from
-`mise`. The statechart findings below describe the `0.15.30` scripts, and the `npx` defect they
-name no longer applies to that code path. The `EPERM` retry gap is still in the `0.15.32` code.
+Windows evidence was last gathered at pstack `0.15.32`, on Windows 11 Pro with Git for Windows
+2.53.0, Node 22.23.2, npm 10.9.8, Pi 1.3.0, mise 2026.10.8, and ffmpeg 8.1. No JDK was on
+PATH and `TLA2TOOLS` was unset, so statechart took the `mise` path:
 
-Windows evidence was last gathered at pstack `0.15.30`, on Windows 11 Pro with Git for Windows
+- The type check and unit suite pass: 189 tests, 185 passed, none failed, and the four symlink
+  tests skipped. All ten integration tests pass with no skips, including the Windows 8.3
+  short-path case and the `plugins/cache/` host-mapping regression.
+- The probe on an LF export of the certified commit reports 59 skills, two agents, no
+  diagnostics, 57 bodies byte-identical, `setup-pstack` replaced, and none mismatched. That
+  matches the Linux probe.
+- The isolated install passes from Git Bash with the CLIProxyAPI scratch copy described below:
+  59 skills, no `subagent` or `ask_user` with the provider extension loaded, and cache reuse
+  without bootstrap permission. `/pistack-check` clears `pistack-statechart`, with `node` and
+  `npm` on PATH, and `pistack-ketchup-video`.
+- The 0.15.32 statechart scripts run on native Windows from a cold machine. `from-chart` on
+  upstream's own `upload.mmd` with `--png` installed `pele` and `@resvg/resvg-js` with `npm`
+  under `~/.cache/statechart/`, installed TLC 1.7.4 and Java temurin-25 with `mise`, drew the
+  chart back unchanged, and rendered the PNG. The `npx` defect from `0.15.30` is gone. A rerun
+  into the same `--out` folder still fails with `EPERM` and exit code 2. It leaves the old folder
+  unchanged, and it names the temporary folder that holds the new files.
+- `statechart` ran in the isolated install against a checkout fixture whose 5-second timeout
+  shows "Try again" while the first charge is still in flight. From the code, it wrote a TLA+
+  model and a mapping. TLC found the rule "The customer is charged at most once for one cart"
+  broken, and also found that a declined charge leaves the screen on "Paying" (19 model states
+  and 33 steps, drawn as 10 chart states and 15 arrows). The PNGs rendered through `--png` with
+  no workaround, and the numbered five-step double-charge path read correctly. A replay test
+  drove the real module with a fake gateway and clock and reproduced both bugs, and the
+  regenerate script it wrote rebuilt every chart into a fresh folder. The fixture repository
+  stayed clean. This supports `dependency-gated` for the 0.15.32 scripts.
+- Upstream's own `scripts/test/statechart.test.mjs` still does not pass on Windows. Of its 150
+  tests, the first 126 ran: 99 pass, 3 skip for missing fonts, and 24 fail. The 127th, which
+  kills a run during TLC, waits for TLC to write into `TMPDIR`, which Node ignores on Windows,
+  and hangs. The remaining tests were not run. Ten failures are the `EPERM` rename. Six fake
+  `mise` with a shell script, which Windows cannot start. Five expect the temporary folder that
+  `TMPDIR` names, and three expect `/` in paths that Windows prints with `\`.
+- `ketchup-video` ran in the isolated install after a session that fixed a pricing bug and
+  committed the fix. It drew four slides with `ffmpeg` and the Windows Arial font, rendered a
+  16-second 1280x720 mp4 outside the repository, and left the repository unchanged. The slides
+  read correctly. Its reply embedded the video as an HTML `video` tag. Whether a Pi client plays
+  it inline was not checked, so the skill stays `experimental`.
+
+Earlier Windows evidence, gathered at pstack `0.15.30` on Windows 11 Pro with Git for Windows
 2.53.0, Node 22.23.2, Bun 1.3.14, Pi 1.3.0, and a portable Temurin JDK 21.0.12 with the latest
-`tla2tools.jar`:
+`tla2tools.jar`. Its statechart findings describe the scripts that `0.15.32` replaced:
 
 - The type check and unit suite pass: 187 tests, 183 passed, none failed, and the four symlink
   tests skipped. All nine integration tests pass with no skips, including the Windows 8.3
@@ -250,7 +286,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `maintain-verification-skill` | `/skill:pistack-maintain-verification-skill` | `delegation` | - | Source wave launches one read-only subagent per feature file. |
 | `no-comments` | `/skill:pistack-no-comments` | `delegation` | `git` | Step 1 must spawn the comment-sicko agent; the skill only triages its report. |
 | `show-me-your-work` | `/skill:pistack-show-me-your-work` | `delegation` | - | The mandatory cross-model review of the trail requires spawning a different-family subagent. |
-| `statechart` | `/skill:pistack-statechart` | - | `node`, `npm` | Verified end to end on a Windows checkout fixture at pstack 0.15.30, before pstack 0.15.32 rewrote its scripts; no Pi run has exercised the 0.15.32 scripts. Manual invocation only; no delegation or structured question. Its scripts run under `node`. `--png`, which its chart and hand-off steps use, and `render` install `pele` and `@resvg/resvg-js` once with `npm`, with npm install scripts ignored, into `statechart/` under `XDG_CACHE_HOME` or `~/.cache`, which needs the network. The scripts then import those packages with full process permissions. `fc-match` is optional and only sets the PNG font. TLC runs from `TLA2TOOLS`, the path to a downloaded `tla2tools.jar`, with the binary in `JAVA` or `java` from PATH. Without `TLA2TOOLS`, it uses TLC 1.7.4 from `mise`, with the binary in `JAVA` or Java temurin-25 from `mise`, and installs whichever is missing with `mise`. A cold install of both downloads about 305 MB. Either `mise` or `TLA2TOOLS` with Java works, so the prerequisite check gates only on `node` and `npm`, and the script names what is missing when neither is set up. It imports the `.map.mjs` mapping file as JavaScript with full process permissions, so review an existing mapping before you run it. Each run replaces its whole output folder and deletes the previous contents, so run it in a scratch folder outside the repository with a dedicated output folder. Git for Windows bundles none of these executables. Since pstack 0.15.32, `--png` runs `npm` through a shell on Windows instead of starting `npx`. On native Windows, the replace step still retries only on `ENOTEMPTY` and `EEXIST`, so expect a rerun into an existing output folder to fail with `EPERM` and leave the old folder in place, and give each rerun a fresh `--out` folder. Delete an old output folder only after you check its path and confirm every file in it is disposable, because a manual delete skips the script's check for files it did not write. |
+| `statechart` | `/skill:pistack-statechart` | - | `node`, `npm` | Verified end to end on a Windows checkout fixture at pstack 0.15.32, after it rewrote the scripts, and before that at pstack 0.15.30. Manual invocation only; no delegation or structured question. Its scripts run under `node`. `--png`, which its chart and hand-off steps use, and `render` install `pele` and `@resvg/resvg-js` once with `npm`, with npm install scripts ignored, into `statechart/` under `XDG_CACHE_HOME` or `~/.cache`, which needs the network. The scripts then import those packages with full process permissions. `fc-match` is optional and only sets the PNG font. TLC runs from `TLA2TOOLS`, the path to a downloaded `tla2tools.jar`, with the binary in `JAVA` or `java` from PATH. Without `TLA2TOOLS`, it uses TLC 1.7.4 from `mise`, with the binary in `JAVA` or Java temurin-25 from `mise`, and installs whichever is missing with `mise`. A cold install of both downloads about 305 MB. Either `mise` or `TLA2TOOLS` with Java works, so the prerequisite check gates only on `node` and `npm`, and the script names what is missing when neither is set up. It imports the `.map.mjs` mapping file as JavaScript with full process permissions, so review an existing mapping before you run it. Each run replaces its whole output folder and deletes the previous contents, so run it in a scratch folder outside the repository with a dedicated output folder. Git for Windows bundles none of these executables. Since pstack 0.15.32, `--png` runs `npm` through a shell on Windows instead of starting `npx`, and that works on native Windows. On native Windows, the replace step still retries only on `ENOTEMPTY` and `EEXIST`, so a rerun into an existing output folder fails with `EPERM`, leaves the old folder in place, and leaves the new files in a temporary folder that it names. Give each rerun a fresh `--out` folder. Delete an old output folder only after you check its path and confirm every file in it is disposable, because a manual delete skips the script's check for files it did not write. |
 | `teach` | `/skill:pistack-teach` | `delegation` | - | It runs the how and why skills, both of which need subagents. |
 | `why` | `/skill:pistack-why` | `delegation` | `git`, `gh` | Default posture spawns one investigator subagent per evidence category plus a synthesizer. |
 
@@ -259,7 +295,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
 | `automate-me` | `/skill:pistack-automate-me` | `delegation`, `structured-question` | `git`, `gh` | Mining step depends on Cursor transcript files and the built-in create-skill skill, with no Pi equivalent. |
-| `ketchup-video` | `/skill:pistack-ketchup-video` | - | - | New in pstack 0.15.32 and not yet run end to end in Pi. Manual invocation only; no delegation or structured question. It follows ketchup, read-only, but shows what happened as a short silent slide video rendered outside the repository, with the waiting calls as text under it. Its body names no renderer, so it needs whatever video tool the session has, such as `ffmpeg`, and Pi has no image generation. Whether a Pi client shows the embedded video is unverified. When the render fails, it says so in one line and gives only the calls. |
+| `ketchup-video` | `/skill:pistack-ketchup-video` | - | - | New in pstack 0.15.32. One end-to-end Pi run on native Windows drew its slides and rendered an mp4 with `ffmpeg` alone. Manual invocation only; no delegation or structured question. It follows ketchup, read-only, but shows what happened as a short silent slide video rendered outside the repository, with the waiting calls as text under it. Its body names no renderer, so it needs whatever video tool the session has, such as `ffmpeg`, and Pi has no image generation. Its reply embedded the video as an HTML `video` tag with the file path, and whether a Pi client plays it inline is unverified. When the render fails, it says so in one line and gives only the calls. |
 | `poteto-help` | `/skill:pistack-poteto-help` | - | - | Its answers describe Cursor setup, the slash menu, and Custom Modes. A request for work runs poteto-mode, which is experimental. It asks a multiple-choice question only when the need is unclear. Its README and guide links resolve under the status report's plugin directory. |
 | `poteto-mode` | `/skill:pistack-poteto-mode` | `delegation`, `structured-question` | `git`, `gh` | Sticky-mode hosting plus references to Cursor built-in and plugin skills only partially map to Pi. |
 | `recall` | `/skill:pistack-recall` | `delegation` | `git`, `gh` | Core corpus is Cursor's on-disk transcript JSONL, so only the git/gh and shared-record half survives. |

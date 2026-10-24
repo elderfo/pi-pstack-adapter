@@ -312,7 +312,7 @@ test("ketchup-video, new in pstack 0.15.32, publishes experimental with manual i
 
   assert.match(output, /^  pistack-support-tier: experimental$/m);
   assert.match(output, /^disable-model-invocation: true$/m);
-  assert.match(output, /not yet run end to end in Pi/);
+  assert.match(output, /One end-to-end Pi run on native Windows/);
   assert.doesNotMatch(output, /Requires these executables on PATH/);
   assert.equal(extractUpstreamBody(output), body);
 });
