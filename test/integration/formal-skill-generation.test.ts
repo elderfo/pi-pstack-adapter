@@ -68,7 +68,7 @@ test("the formal verification maintenance wrapper preserves manual invocation an
   }
 });
 
-test("the statechart wrapper preserves manual invocation and gates on node, java, and npx", () => {
+test("the statechart wrapper preserves manual invocation and gates on node and npm", () => {
   const scratch = join(import.meta.dirname, "..", "..", ".work", "scratch");
   mkdirSync(scratch, { recursive: true });
   const root = mkdtempSync(join(scratch, "statechart-wrapper-"));
@@ -97,12 +97,39 @@ test("the statechart wrapper preserves manual invocation and gates on node, java
     assert.match(wrapper, /^name: pistack-statechart$/m);
     assert.match(wrapper, /^disable-model-invocation: true$/m);
     assert.match(wrapper, /^  pistack-support-tier: dependency-gated$/m);
-    assert.match(wrapper, /Requires these executables on PATH: `node`, `java`, `npx`\./);
+    assert.match(wrapper, /Requires these executables on PATH: `node`, `npm`\./);
     assert.equal(extractUpstreamBody(wrapper), body);
     for (const [path, content] of Object.entries(supportFiles)) {
       assert.equal(readFileSync(join(result.skillsDir, "pistack-statechart", path), "utf8"), content, path);
     }
     assert.deepEqual(result.diagnostics.filter((diagnostic) => diagnostic.resource === "skill:statechart"), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the host mapping forbids editing a skill in the plugin cache, new in pstack 0.15.32", () => {
+  const scratch = join(import.meta.dirname, "..", "..", ".work", "scratch");
+  mkdirSync(scratch, { recursive: true });
+  const root = mkdtempSync(join(scratch, "host-mapping-01532-"));
+  try {
+    const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });
+    const commit = "0".repeat(40);
+    const result = generate({
+      source: {
+        selection: { kind: "git", repo: "https://example.test/plugins", ref: commit },
+        trust: "untested-repo", commit, checkoutDir: root, pluginDir,
+      },
+      namespace: "pistack", cacheRoot: join(root, "cache"), adapterVersion: "test",
+    });
+    const mapping = readFileSync(join(result.outDir, "adapter", "host-mapping.md"), "utf8");
+    const row = mapping.split("\n").find((line) => line.startsWith("| a skill under `plugins/cache/`"));
+    assert.ok(row, "the host mapping needs a row for reflect's plugins/cache/ rule");
+    assert.match(row, /`plugin directory` or `generated skills` row/);
+    assert.match(row, /Never edit a file there/);
+    assert.match(row, /copy the upstream skill folder from the plugin directory/);
+    assert.match(row, /Do not copy a generated wrapper/);
+    assert.match(row, /copy each skill it links to as well, or point the link at that skill's file in the plugin directory/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

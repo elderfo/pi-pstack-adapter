@@ -278,7 +278,7 @@ test("skills added in pstack 0.15.28 publish their reviewed tiers", () => {
   assert.equal(extractUpstreamBody(output), body);
 });
 
-test("the pstack 0.15.30 statechart wrapper publishes its tier, gates, and manual invocation", () => {
+test("the pstack 0.15.32 statechart wrapper publishes its tier, gates, and manual invocation", () => {
   const body = "# Statechart\n\nRun `node <skill dir>/scripts/statechart.mjs --help`.\n";
   const output = wrapper({
     generatedName: "pistack-statechart",
@@ -292,8 +292,28 @@ test("the pstack 0.15.30 statechart wrapper publishes its tier, gates, and manua
 
   assert.match(output, /^  pistack-support-tier: dependency-gated$/m);
   assert.match(output, /^disable-model-invocation: true$/m);
-  assert.match(output, /Requires these executables on PATH: `node`, `java`, `npx`\./);
+  assert.match(output, /Requires these executables on PATH: `node`, `npm`\./);
   assert.match(output, /`TLA2TOOLS`/);
+  assert.match(output, /`mise`/);
+  assert.equal(extractUpstreamBody(output), body);
+});
+
+test("ketchup-video, new in pstack 0.15.32, publishes experimental with manual invocation", () => {
+  const body = "# Ketchup video\n\nFollow ketchup, but render a short silent video.\n";
+  const output = wrapper({
+    generatedName: "pistack-ketchup-video",
+    upstreamName: "ketchup-video",
+    frontmatter: { name: "ketchup-video", description: "Catch up as a video. Use for /ketchup-video.", "disable-model-invocation": "true" },
+    entry: entryFor("ketchup-video"),
+    namespace: "pistack",
+    adapterVersion: "test",
+    body,
+  });
+
+  assert.match(output, /^  pistack-support-tier: experimental$/m);
+  assert.match(output, /^disable-model-invocation: true$/m);
+  assert.match(output, /not yet run end to end in Pi/);
+  assert.doesNotMatch(output, /Requires these executables on PATH/);
   assert.equal(extractUpstreamBody(output), body);
 });
 
