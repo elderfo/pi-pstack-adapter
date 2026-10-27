@@ -55,7 +55,7 @@ scripts, gathered on Node 26.12.1, Bun, Deno 2.9.8, and mise 2026.10.17:
 - `pele@1.9.0`, installed with `--ignore-scripts`, rendered the fixture's `chart.mmd` to SVG with
   the options that `references/render.md` gives.
 
-Windows evidence was last gathered at pstack `0.15.32`, on Windows 11 Pro with Git for Windows
+Earlier Windows evidence, gathered at pstack `0.15.32` on Windows 11 Pro with Git for Windows
 2.53.0, Node 22.23.2, npm 10.9.8, Pi 1.3.0, mise 2026.10.8, and ffmpeg 8.1. No JDK was on
 PATH and `TLA2TOOLS` was unset, so statechart took the `mise` path:
 
