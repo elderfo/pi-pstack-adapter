@@ -100,7 +100,7 @@ test("the statechart wrapper preserves manual invocation, its nested scripts, an
     const wrapper = readFileSync(join(result.skillsDir, "pistack-statechart", "SKILL.md"), "utf8");
     assert.match(wrapper, /^name: pistack-statechart$/m);
     assert.match(wrapper, /^disable-model-invocation: true$/m);
-    assert.match(wrapper, /^  pistack-support-tier: dependency-gated$/m);
+    assert.match(wrapper, /^  pistack-support-tier: experimental$/m);
     assert.match(wrapper, /Requires these executables on PATH: `node`, `sh`, `dirname`, `sed`\./);
     assert.equal(extractUpstreamBody(wrapper), body);
     for (const [path, content] of Object.entries(supportFiles)) {
