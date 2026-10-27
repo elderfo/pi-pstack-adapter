@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { extractUpstreamBody, generate } from "../../src/generate.ts";
@@ -68,7 +68,7 @@ test("the formal verification maintenance wrapper preserves manual invocation an
   }
 });
 
-test("the statechart wrapper preserves manual invocation and gates on node and npm", () => {
+test("the statechart wrapper preserves manual invocation, its nested scripts, and gates on node", (t) => {
   const scratch = join(import.meta.dirname, "..", "..", ".work", "scratch");
   mkdirSync(scratch, { recursive: true });
   const root = mkdtempSync(join(scratch, "statechart-wrapper-"));
@@ -76,14 +76,18 @@ test("the statechart wrapper preserves manual invocation and gates on node and n
     const body = "# Statechart\n\nDraw what the user sees from a TLA+ model.\n";
     // Inert stand-ins for the nested scripts the body runs from `<skill dir>/scripts`; never executed.
     const supportFiles = {
-      "scripts/statechart.mjs": "// fixture\nexport {};\n",
-      "scripts/model/Example.cfg": "SPECIFICATION Spec\n",
+      "scripts/statechart": "# fixture\nexit 0\n",
+      "scripts/statechart.ts": "// fixture\nexport {};\n",
+      "scripts/passes/reach.ts": "// fixture\nexport {};\n",
+      "scripts/test/corpus/Counter/Counter.cfg": "SPECIFICATION Spec\n",
+      "references/render.md": "# Render a chart\n",
     };
     const pluginDir = writePluginFixture(root, { skills: [{
       name: "statechart",
       frontmatter: "name: statechart\ndescription: Fixture.\ndisable-model-invocation: true",
       body,
       files: supportFiles,
+      executableFiles: ["scripts/statechart"],
     }] });
     const commit = "0".repeat(40);
     const result = generate({
@@ -97,10 +101,16 @@ test("the statechart wrapper preserves manual invocation and gates on node and n
     assert.match(wrapper, /^name: pistack-statechart$/m);
     assert.match(wrapper, /^disable-model-invocation: true$/m);
     assert.match(wrapper, /^  pistack-support-tier: dependency-gated$/m);
-    assert.match(wrapper, /Requires these executables on PATH: `node`, `npm`\./);
+    assert.match(wrapper, /Requires these executables on PATH: `node`\./);
     assert.equal(extractUpstreamBody(wrapper), body);
     for (const [path, content] of Object.entries(supportFiles)) {
       assert.equal(readFileSync(join(result.skillsDir, "pistack-statechart", path), "utf8"), content, path);
+    }
+    // Since pstack 0.15.34 the body runs `<skill dir>/scripts/statechart` directly, so the launcher must stay executable.
+    if (process.platform === "win32") {
+      t.diagnostic("Windows file systems have no executable bit, so only the launcher's bytes are checked.");
+    } else {
+      assert.notEqual(lstatSync(join(result.skillsDir, "pistack-statechart", "scripts", "statechart")).mode & 0o111, 0);
     }
     assert.deepEqual(result.diagnostics.filter((diagnostic) => diagnostic.resource === "skill:statechart"), []);
   } finally {
