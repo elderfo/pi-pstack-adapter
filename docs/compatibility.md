@@ -4,7 +4,7 @@ The compatibility registry in `src/registry.ts` assigns one support tier to ever
 certified pstack revision. Generation reads it, the wrapper frontmatter publishes it, and
 `/pistack-status` reports it.
 
-Certified revision: pstack `0.15.32` at `9580c23696ac8d7abed0c166f2f9918800afb819` in
+Certified revision: pstack `0.15.34` at `519d36aa98955bf680db01bcde5fdfba686dc901` in
 `https://github.com/cursor/plugins`.
 
 ## Platforms
@@ -21,7 +21,41 @@ executables in the shell the skills run in, with Pi's `shellCommandPrefix` appli
 that matters most, because Git Bash adds `/usr/bin` and `/mingw64/bin` to the `PATH` Pi
 started with. A shell that is missing, inactive, or cannot run a command blocks every workflow.
 
-Windows evidence was last gathered at pstack `0.15.32`, on Windows 11 Pro with Git for Windows
+pstack `0.15.34` was certified on Linux, then checked on native Windows 11 (build 26200) with
+Git for Windows, Node 22.23.2, and mise, over SSH from Git Bash. On Windows:
+
+- The type check passes. The unit suite runs 189 tests: 186 pass, none fail, and 3 skip. All ten
+  integration tests pass with no skips. The probe on an LF export of the certified commit
+  matches Linux: 59 skills, two agents, no diagnostics, 57 bodies byte-identical, `setup-pstack`
+  replaced, and none mismatched.
+- The isolated install passes with the CLIProxyAPI scratch copy described below: 59 skills, no
+  `subagent` or `ask_user` with the provider extension loaded, and cache reuse without bootstrap
+  permission. `/pistack-check pistack-statechart` clears.
+- The `0.15.34` statechart scripts crash. On upstream's own `MediaPlayer` corpus model, the
+  launcher exits 1 with an unhandled `spawn /bin/sh ENOENT`, before TLC runs. It writes no
+  output folder and leaves an empty hidden staging folder beside it and an empty `statechart-`
+  folder in the temporary folder. No worker or TLC process is left running. This reproduction
+  lowers `statechart` to `experimental`.
+
+The Windows statechart findings further below describe the `0.15.32` scripts. The other skills
+that changed in `0.15.34` changed only in text. Linux evidence for the `0.15.34` statechart
+scripts, gathered on Node 26.12.1, Bun, Deno 2.9.8, and mise 2026.10.17:
+
+- `/pistack-check pistack-statechart` clears in the isolated install, and `statechart` ran there
+  against a checkout fixture whose 5-second timeout shows "Try again" while the first charge is
+  still in flight. From the code, it wrote a TLA+ model and a `--view` module. TLC found the rule
+  "the shopper is never charged twice for one cart" broken (21 model states), and the report gave
+  the five-step path. A replay test drove the real module with a fake gateway and clock and
+  reproduced two charges, and the regenerate command rebuilt the same chart into a fresh folder.
+  The fixture repository stayed clean.
+- A cold run installed TLC 1.7.4 and Java temurin-25 with `mise`. The `TLA2TOOLS` path, with
+  `JAVA` set and with `java` from PATH, gave the same report and chart. The scripts also ran
+  under Bun and Deno. A rerun into a folder that is not empty exits 2 and writes nothing.
+- Upstream's own suite passes on Linux with `TLA2TOOLS` set: 367 tests, none failed or skipped.
+- `pele@1.9.0`, installed with `--ignore-scripts`, rendered the fixture's `chart.mmd` to SVG with
+  the options that `references/render.md` gives.
+
+Earlier Windows evidence, gathered at pstack `0.15.32` on Windows 11 Pro with Git for Windows
 2.53.0, Node 22.23.2, npm 10.9.8, Pi 1.3.0, mise 2026.10.8, and ffmpeg 8.1. No JDK was on
 PATH and `TLA2TOOLS` was unset, so statechart took the `mise` path:
 
@@ -270,7 +304,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `create-verification-skill` | `/skill:pistack-create-verification-skill` | - | - | Only the generated skill's output path needs remapping to Pi's skill directory. |
 | `ketchup` | `/skill:pistack-ketchup` | - | - | Read-only. Pi has no `/visualize` skill or image generation, so its visuals are Mermaid diagrams and screenshots that already exist. It checks PR and CI state only for work the chat touched. |
 
-### dependency-gated (15)
+### dependency-gated (14)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
@@ -286,11 +320,10 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `maintain-verification-skill` | `/skill:pistack-maintain-verification-skill` | `delegation` | - | Source wave launches one read-only subagent per feature file. |
 | `no-comments` | `/skill:pistack-no-comments` | `delegation` | `git` | Step 1 must spawn the comment-sicko agent; the skill only triages its report. |
 | `show-me-your-work` | `/skill:pistack-show-me-your-work` | `delegation` | - | The mandatory cross-model review of the trail requires spawning a different-family subagent. |
-| `statechart` | `/skill:pistack-statechart` | - | `node`, `npm` | Verified end to end on a Windows checkout fixture at pstack 0.15.32, after it rewrote the scripts, and before that at pstack 0.15.30. Manual invocation only; no delegation or structured question. Its scripts run under `node`. `--png`, which its chart and hand-off steps use, and `render` install `pele` and `@resvg/resvg-js` once with `npm`, with npm install scripts ignored, into `statechart/` under `XDG_CACHE_HOME` or `~/.cache`, which needs the network. The scripts then import those packages with full process permissions. `fc-match` is optional and only sets the PNG font. TLC runs from `TLA2TOOLS`, the path to a downloaded `tla2tools.jar`, with the binary in `JAVA` or `java` from PATH. Without `TLA2TOOLS`, it uses TLC 1.7.4 from `mise`, with the binary in `JAVA` or Java temurin-25 from `mise`, and installs whichever is missing with `mise`. A cold install of both downloads about 305 MB. Either `mise` or `TLA2TOOLS` with Java works, so the prerequisite check gates only on `node` and `npm`, and the script names what is missing when neither is set up. It imports the `.map.mjs` mapping file as JavaScript with full process permissions, so review an existing mapping before you run it. Each run replaces its whole output folder and deletes the previous contents, so run it in a scratch folder outside the repository with a dedicated output folder. Git for Windows bundles none of these executables. Since pstack 0.15.32, `--png` runs `npm` through a shell on Windows instead of starting `npx`, and that works on native Windows. On native Windows, the replace step still retries only on `ENOTEMPTY` and `EEXIST`, so a rerun into an existing output folder fails with `EPERM`, leaves the old folder in place, and leaves the new files in a temporary folder that it names. Give each rerun a fresh `--out` folder. Delete an old output folder only after you check its path and confirm every file in it is disposable, because a manual delete skips the script's check for files it did not write. |
 | `teach` | `/skill:pistack-teach` | `delegation` | - | It runs the how and why skills, both of which need subagents. |
 | `why` | `/skill:pistack-why` | `delegation` | `git`, `gh` | Default posture spawns one investigator subagent per evidence category plus a synthesizer. |
 
-### experimental (8)
+### experimental (9)
 
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
@@ -301,6 +334,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `recall` | `/skill:pistack-recall` | `delegation` | `git`, `gh` | Core corpus is Cursor's on-disk transcript JSONL, so only the git/gh and shared-record half survives. |
 | `reflect` | `/skill:pistack-reflect` | `delegation` | - | Transcript mining and create-skill routing are Cursor-specific, though the digest fallback partly works. Since pstack 0.15.32 it copies a skill out of the plugin cache to a skill location before editing it, and never opens a PR or pushes. |
 | `sharpen` | `/skill:pistack-sharpen` | - | - | New in pstack 0.15.25 and not yet run end to end in Pi. Since pstack 0.15.29 it hands back a rewritten prompt and does not do the task. Its body is prompt-only, with no tool, delegation, or executable, and it runs only when you type it. |
+| `statechart` | `/skill:pistack-statechart` | - | `node`, `sh`, `dirname`, `sed` | Lowered from dependency-gated at pstack 0.15.34, because its new scripts crash on native Windows, a certified platform. There, the launcher starts `/bin/sh` by that path to stop TLC's process group, Node cannot start it even when `sh` is on PATH, and with no error handler the run exits 1 with `spawn /bin/sh ENOENT`. It writes no output and leaves an empty hidden staging folder beside the output folder and an empty `statechart-` folder in the temporary folder, so delete those by hand. `/pistack-check` still clears it there, because the gates are found. Use it from Linux, macOS, or WSL. Verified end to end on a Linux checkout fixture at pstack 0.15.34. The Windows end-to-end evidence from pstack 0.15.32 and 0.15.30 describes the scripts it replaced. Manual invocation only; no delegation or structured question. `scripts/statechart` is a POSIX `sh` launcher for TypeScript scripts, and it runs `dirname` and `sed` on every start. It runs the scripts under Node 22.18 to 22.x or Node 23.6 or later, then Bun 1.1.5 or later, then Deno 2.0 or later, and exits with code 127 when none is found. The prerequisite check gates on `node` but cannot check its version. The command checks a TLA+ spec with TLC and writes `report.md` and TLC output to a new or empty `--out` folder, `SPEC-chart` beside the spec by default, and refuses a folder that is not empty. It also writes `chart.mmd`, except when TLC finds more than 500 states and no rule breaks. It stages its work in a hidden folder beside the output folder and in the system temporary folder, and deletes both. TLC runs from `TLA2TOOLS`, the path to a downloaded `tla2tools.jar`, with the binary in `JAVA` or `java` from PATH. Without `TLA2TOOLS`, it uses TLC 1.7.4 and Java temurin-25 from `mise`, and installs whichever is missing with `mise`, which needs the network. `JAVA` then changes only the binary that runs TLC, and does not skip the `mise` lookup or install of Java. Either `mise` or `TLA2TOOLS` with Java works, so neither is gated, and the script names what is missing when neither is set up. It imports the `--view` module as JavaScript with full process permissions, so review an existing view before you run it. Since pstack 0.15.34 the scripts render no images and do not run `npm`. For an image, the body has the agent install `pele@1.9.0` with `npm` once, outside the repository, which needs `npm` and the network, and render SVG with it. The body does not ask for `--ignore-scripts`, so pass it, and rendering still imports Pele with full process permissions. Run it in a scratch folder outside the repository. Git for Windows bundles `sh`, `dirname`, and `sed`, but not `node`, `mise`, or Java. |
 | `swarm` | `/skill:pistack-swarm` | `delegation` | - | Cloud background workers and cloud_base_branch have no Pi mapping; only local fan-out approximates it. |
 
 ### unsupported (1)

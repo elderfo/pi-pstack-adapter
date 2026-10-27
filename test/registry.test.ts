@@ -34,25 +34,31 @@ test("sharpen stays experimental and states it returns a rewritten prompt since 
   assert.match(entry.note ?? "", /hands back a rewritten prompt and does not do the task/);
 });
 
-test("statechart is dependency-gated on node and npm since pstack 0.15.32 and names its TLC sources", () => {
+test("statechart is experimental at pstack 0.15.34 after its native Windows crash, and names its gates and TLC sources", () => {
   const entry = entryFor("statechart");
-  assert.equal(entry.tier, "dependency-gated");
+  assert.equal(entry.tier, "experimental");
   assert.deepEqual(entry.capabilities, []);
-  assert.deepEqual(entry.executables, ["node", "npm"]);
-  assert.match(entry.note ?? "", /Verified end to end on a Windows checkout fixture at pstack 0\.15\.32, after it rewrote the scripts/);
+  assert.deepEqual(entry.executables, ["node", "sh", "dirname", "sed"]);
+  assert.match(entry.note ?? "", /^Lowered from dependency-gated at pstack 0\.15\.34, because its new scripts crash on native Windows/);
+  assert.match(entry.note ?? "", /`spawn \/bin\/sh ENOENT`/);
+  assert.match(entry.note ?? "", /Verified end to end on a Linux checkout fixture at pstack 0\.15\.34/);
   assert.doesNotMatch(entry.note ?? "", /no Pi run has exercised/);
+  assert.match(entry.note ?? "", /Node 22\.18 to 22\.x or Node 23\.6 or later, then Bun 1\.1\.5 or later, then Deno 2\.0 or later/);
   assert.match(entry.note ?? "", /`TLA2TOOLS`/);
-  assert.match(entry.note ?? "", /A cold install of both downloads about 305 MB/);
-  assert.match(entry.note ?? "", /`pele` and `@resvg\/resvg-js` once with `npm`/);
-  assert.match(entry.note ?? "", /`EPERM`.*[Gg]ive each rerun a fresh `--out` folder/);
-  assert.doesNotMatch(entry.note ?? "", /mermaid-cli/);
+  assert.match(entry.note ?? "", /TLC 1\.7\.4 and Java temurin-25 from `mise`/);
+  assert.match(entry.note ?? "", /`pele@1\.9\.0` with `npm`/);
+  assert.match(entry.note ?? "", /new or empty `--out` folder/);
+  assert.doesNotMatch(entry.note ?? "", /\.map\.mjs|resvg|mermaid-cli/);
+  assert.match(entry.note ?? "", /`--view` module as JavaScript with full process permissions/);
   assert.match(entry.note ?? "", /scratch folder outside the repository/);
-  assert.match(entry.note ?? "", /full process permissions/);
+  assert.doesNotMatch(entry.note ?? "", /expected to fail/);
+  assert.match(entry.note ?? "", /`--ignore-scripts`/);
+  assert.match(entry.note ?? "", /does not skip the `mise` lookup or install of Java/);
   const docs = readFileSync(join(import.meta.dirname, "..", "docs", "compatibility.md"), "utf8");
   const row = docs.split("\n").find((line) => line.startsWith("| `statechart` |"));
-  assert.equal(row, `| \`statechart\` | \`/skill:pistack-statechart\` | - | \`node\`, \`npm\` | ${entry.note} |`);
+  assert.equal(row, `| \`statechart\` | \`/skill:pistack-statechart\` | - | \`node\`, \`sh\`, \`dirname\`, \`sed\` | ${entry.note} |`);
   const tables = docs.split(/^### /m);
-  assert.ok(tables.find((section) => section.startsWith("dependency-gated"))?.includes(row ?? ""));
+  assert.ok(tables.find((section) => section.startsWith("experimental"))?.includes(row ?? ""));
 });
 
 test("ketchup-video, new in pstack 0.15.32, stays experimental with no gates", () => {

@@ -278,8 +278,8 @@ test("skills added in pstack 0.15.28 publish their reviewed tiers", () => {
   assert.equal(extractUpstreamBody(output), body);
 });
 
-test("the pstack 0.15.32 statechart wrapper publishes its tier, gates, and manual invocation", () => {
-  const body = "# Statechart\n\nRun `node <skill dir>/scripts/statechart.mjs --help`.\n";
+test("the pstack 0.15.34 statechart wrapper publishes its tier, gates, and manual invocation", () => {
+  const body = "# Statechart\n\nRun `<skill dir>/scripts/statechart SPEC.tla --view FILE`.\n";
   const output = wrapper({
     generatedName: "pistack-statechart",
     upstreamName: "statechart",
@@ -290,9 +290,9 @@ test("the pstack 0.15.32 statechart wrapper publishes its tier, gates, and manua
     body,
   });
 
-  assert.match(output, /^  pistack-support-tier: dependency-gated$/m);
+  assert.match(output, /^  pistack-support-tier: experimental$/m);
   assert.match(output, /^disable-model-invocation: true$/m);
-  assert.match(output, /Requires these executables on PATH: `node`, `npm`\./);
+  assert.match(output, /Requires these executables on PATH: `node`, `sh`, `dirname`, `sed`\./);
   assert.match(output, /`TLA2TOOLS`/);
   assert.match(output, /`mise`/);
   assert.equal(extractUpstreamBody(output), body);
