@@ -34,25 +34,27 @@ test("sharpen stays experimental and states it returns a rewritten prompt since 
   assert.match(entry.note ?? "", /hands back a rewritten prompt and does not do the task/);
 });
 
-test("statechart is dependency-gated on node since pstack 0.15.34 and names its TLC sources", () => {
+test("statechart is dependency-gated on node and its launcher's tools since pstack 0.15.34 and names its TLC sources", () => {
   const entry = entryFor("statechart");
   assert.equal(entry.tier, "dependency-gated");
   assert.deepEqual(entry.capabilities, []);
-  assert.deepEqual(entry.executables, ["node"]);
+  assert.deepEqual(entry.executables, ["node", "sh", "dirname", "sed"]);
   assert.match(entry.note ?? "", /pstack 0\.15\.34 replaced its scripts again, and no Pi run has exercised the new ones/);
   assert.doesNotMatch(entry.note ?? "", /^Verified end to end/);
   assert.match(entry.note ?? "", /Node 22\.18 to 22\.x or Node 23\.6 or later, then Bun 1\.1\.5 or later, then Deno 2\.0 or later/);
   assert.match(entry.note ?? "", /`TLA2TOOLS`/);
-  assert.match(entry.note ?? "", /TLC 1\.7\.4 from `mise`/);
+  assert.match(entry.note ?? "", /TLC 1\.7\.4 and Java temurin-25 from `mise`/);
   assert.match(entry.note ?? "", /`pele@1\.9\.0` with `npm`/);
   assert.match(entry.note ?? "", /new or empty `--out` folder/);
   assert.doesNotMatch(entry.note ?? "", /\.map\.mjs|resvg|mermaid-cli/);
   assert.match(entry.note ?? "", /`--view` module as JavaScript with full process permissions/);
   assert.match(entry.note ?? "", /scratch folder outside the repository/);
   assert.match(entry.note ?? "", /`\/bin\/sh`.*native Windows/);
+  assert.match(entry.note ?? "", /`--ignore-scripts`/);
+  assert.match(entry.note ?? "", /does not skip the `mise` lookup or install of Java/);
   const docs = readFileSync(join(import.meta.dirname, "..", "docs", "compatibility.md"), "utf8");
   const row = docs.split("\n").find((line) => line.startsWith("| `statechart` |"));
-  assert.equal(row, `| \`statechart\` | \`/skill:pistack-statechart\` | - | \`node\` | ${entry.note} |`);
+  assert.equal(row, `| \`statechart\` | \`/skill:pistack-statechart\` | - | \`node\`, \`sh\`, \`dirname\`, \`sed\` | ${entry.note} |`);
   const tables = docs.split(/^### /m);
   assert.ok(tables.find((section) => section.startsWith("dependency-gated"))?.includes(row ?? ""));
 });

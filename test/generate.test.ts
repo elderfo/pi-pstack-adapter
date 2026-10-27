@@ -292,7 +292,7 @@ test("the pstack 0.15.34 statechart wrapper publishes its tier, gates, and manua
 
   assert.match(output, /^  pistack-support-tier: dependency-gated$/m);
   assert.match(output, /^disable-model-invocation: true$/m);
-  assert.match(output, /Requires these executables on PATH: `node`\./);
+  assert.match(output, /Requires these executables on PATH: `node`, `sh`, `dirname`, `sed`\./);
   assert.match(output, /`TLA2TOOLS`/);
   assert.match(output, /`mise`/);
   assert.equal(extractUpstreamBody(output), body);
