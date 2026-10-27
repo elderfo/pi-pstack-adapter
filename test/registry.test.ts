@@ -39,8 +39,8 @@ test("statechart is dependency-gated on node and its launcher's tools since psta
   assert.equal(entry.tier, "dependency-gated");
   assert.deepEqual(entry.capabilities, []);
   assert.deepEqual(entry.executables, ["node", "sh", "dirname", "sed"]);
-  assert.match(entry.note ?? "", /pstack 0\.15\.34 replaced its scripts again, and no Pi run has exercised the new ones/);
-  assert.doesNotMatch(entry.note ?? "", /^Verified end to end/);
+  assert.match(entry.note ?? "", /^Verified end to end on a Linux checkout fixture at pstack 0\.15\.34/);
+  assert.doesNotMatch(entry.note ?? "", /no Pi run has exercised/);
   assert.match(entry.note ?? "", /Node 22\.18 to 22\.x or Node 23\.6 or later, then Bun 1\.1\.5 or later, then Deno 2\.0 or later/);
   assert.match(entry.note ?? "", /`TLA2TOOLS`/);
   assert.match(entry.note ?? "", /TLC 1\.7\.4 and Java temurin-25 from `mise`/);
