@@ -29,8 +29,9 @@ Roles used by pstack workflows.
 Panels that want several model families, such as `arena`'s runners and cross-judge and
 `interrogate`'s adversaries, use `judgment` and then `general`, one model each. `arena` picks its
 one judge from that pool only when the model is from a family other than the session's model, so
-when both roles share the session's family, it skips the judge and picks alone. Put `judgment`
-and `general` on different families to keep those panels cross-model.
+when both roles share the session's family, it skips the judge and picks alone. When the session
+does not know its own model, it tries the pool in order and says the family check did not run.
+Put `judgment` and `general` on different families to keep those panels cross-model.
 
 The status report lists the same roles, so read it back rather than trusting this table if the
 adapter has been upgraded.

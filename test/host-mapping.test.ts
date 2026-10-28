@@ -47,7 +47,7 @@ test("the host mapping reads only this workspace's Pi sessions as transcripts", 
   const row = rowFor("| `~/.cursor/projects/<slug>/agent-transcripts/`");
   assert.match(row, /`\$PI_SESSION_FILE` is the current session's file\. When it is unset, the current transcript is unavailable.*\*\*skip\*\* a step that needs the current transcript\./);
   assert.match(row, /A child that audits its parent's or another agent's transcript reads the exact path its brief gives, never its own `\$PI_SESSION_FILE`\./);
-  assert.match(row, /`~\/\.pi\/agent\/sessions\/--<path>--\/`, where/);
+  assert.match(row, /Find it with `dirname "\$PI_SESSION_FILE"` first, because `PI_CODING_AGENT_DIR` or a custom session directory moves it\. Only when `\$PI_SESSION_FILE` is unset, use the default `~\/\.pi\/agent\/sessions\/--<path>--\/`, where/);
   assert.match(row, /each `\/`, `\\`, and `:` replaced by `-`, so `\/home\/you\/proj` is `--home-you-proj--`/);
   assert.match(row, /The folder name does not prove whose session a file is: `\/a\/b-c` and `\/a\/b\/c` share one folder, and a custom session directory can hold every project\./);
   assert.match(row, /list candidates with `find <folder> -type f -name '\*\.jsonl'`, which lists regular files and does not follow symbolic links, and never open a symbolic link or any other path, because a link can point at a credential file\. Then read only the first line/);
