@@ -24,7 +24,8 @@ Read the files for the branch you are changing:
 - Config precedence and trust: `src/config.ts`
 - Git resolution, cache repair, and network rules: `src/upstream.ts`
 - Manifest parsing and path containment: `src/manifest.ts`
-- Wrapper and agent generation: `src/generate.ts`
+- Wrapper and agent generation, and the host mapping: `src/generate.ts`
+- Cursor terms the host mapping must cover, scanned by the certification probe: `src/vocabulary.ts`
 - Skill tiers and requirements: `src/registry.ts`
 - Capability probes: `src/capabilities.ts`
 - Delegation backends (T3 Code `delegate_task`, pi-subagents `subagent`) and their order: `src/delegation.ts`
