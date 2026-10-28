@@ -431,7 +431,7 @@ test("the status report names both versions, the resolved commit, the tiers, and
   assert.match(report, /\| adapter version \| 0\.1\.0 \|/);
   assert.match(report, /\| upstream pstack version \| 0\.15\.2 \|/);
   assert.match(report, new RegExp(`\\| resolved commit \\| ${commit} \\|`));
-  assert.match(report, /\| certified commit \| 519d36aa98955bf680db01bcde5fdfba686dc901 \|/);
+  assert.match(report, /\| certified commit \| c742dd61706fbacc1b95f1a20b7b988cf096ce6c \|/);
   assert.match(report, /\| Poteto Mode \| active \|/);
   assert.match(report, /\| cache state \| reused, no network needed \|/);
   const row = (field: string) => new RegExp(`\\| ${field} \\| (.+) \\|`).exec(report)?.[1];

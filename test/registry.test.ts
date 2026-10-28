@@ -69,9 +69,49 @@ test("ketchup-video, new in pstack 0.15.32, stays experimental with no gates", (
   assert.match(entry.note ?? "", /One end-to-end Pi run on native Windows/);
   assert.match(entry.note ?? "", /names no renderer/);
   assert.match(entry.note ?? "", /whether a Pi client plays it inline is unverified/);
+  assert.match(entry.note ?? "", /before pstack 0\.15\.36 added subtitles\. The subtitled video has not run in Pi\./);
+  assert.match(entry.note ?? "", /burns a one-line subtitle into each slide's frames/);
+  assert.doesNotMatch(entry.note ?? "", /silent/);
   const docs = readFileSync(join(import.meta.dirname, "..", "docs", "compatibility.md"), "utf8");
   const row = docs.split("\n").find((line) => line.startsWith("| `ketchup-video` |"));
   assert.equal(row, `| \`ketchup-video\` | \`/skill:pistack-ketchup-video\` | - | - | ${entry.note} |`);
   const tables = docs.split(/^### /m);
   assert.ok(tables.find((section) => section.startsWith("experimental"))?.includes(row ?? ""));
+});
+
+function docsRow(name: string): string | undefined {
+  const docs = readFileSync(join(import.meta.dirname, "..", "docs", "compatibility.md"), "utf8");
+  return docs.split("\n").find((line) => line.startsWith(`| \`${name}\` |`));
+}
+
+test("arena stays dependency-gated and states the pstack 0.15.36 cross-family judge rule in adapter roles", () => {
+  const entry = entryFor("arena");
+  assert.equal(entry.tier, "dependency-gated");
+  assert.deepEqual(entry.capabilities, ["delegation"]);
+  assert.deepEqual(entry.executables, ["git"]);
+  assert.match(entry.note ?? "", /judge must come from a model family other than the parent's/);
+  assert.match(entry.note ?? "", /`judgment` and `general` roles/);
+  assert.match(entry.note ?? "", /skips the judge, picks the base alone/);
+  assert.equal(docsRow("arena"), `| \`arena\` | \`/skill:pistack-arena\` | \`delegation\` | \`git\` | ${entry.note} |`);
+});
+
+test("interrogate stays dependency-gated and states the pstack 0.15.36 run-proven findings", () => {
+  const entry = entryFor("interrogate");
+  assert.equal(entry.tier, "dependency-gated");
+  assert.deepEqual(entry.capabilities, ["delegation"]);
+  assert.deepEqual(entry.executables, ["git"]);
+  assert.match(entry.note ?? "", /`interrogate reviewers` line/);
+  assert.match(entry.note ?? "", /keeps only findings whose command it reruns and sees fail/);
+  assert.match(entry.note ?? "", /applies nothing/);
+  assert.equal(docsRow("interrogate"), `| \`interrogate\` | \`/skill:pistack-interrogate\` | \`delegation\` | \`git\` | ${entry.note} |`);
+});
+
+test("poteto-mode stays experimental and states that Orchestrate has no scripts since pstack 0.15.36", () => {
+  const entry = entryFor("poteto-mode");
+  assert.equal(entry.tier, "experimental");
+  assert.deepEqual(entry.capabilities, ["delegation", "structured-question"]);
+  assert.deepEqual(entry.executables, ["git", "gh"]);
+  assert.match(entry.note ?? "", /the `orch` helpers are gone/);
+  assert.match(entry.note ?? "", /event subscriptions only when the harness has them\. Pi has none\./);
+  assert.equal(docsRow("poteto-mode"), `| \`poteto-mode\` | \`/skill:pistack-poteto-mode\` | \`delegation\`, \`structured-question\` | \`git\`, \`gh\` | ${entry.note} |`);
 });

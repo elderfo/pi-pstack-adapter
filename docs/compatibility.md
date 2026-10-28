@@ -4,7 +4,7 @@ The compatibility registry in `src/registry.ts` assigns one support tier to ever
 certified pstack revision. Generation reads it, the wrapper frontmatter publishes it, and
 `/pistack-status` reports it.
 
-Certified revision: pstack `0.15.34` at `519d36aa98955bf680db01bcde5fdfba686dc901` in
+Certified revision: pstack `0.15.36` at `c742dd61706fbacc1b95f1a20b7b988cf096ce6c` in
 `https://github.com/cursor/plugins`.
 
 ## Platforms
@@ -20,6 +20,12 @@ The tiers below apply on every supported platform. `/pistack-check` looks for pe
 executables in the shell the skills run in, with Pi's `shellCommandPrefix` applied. On Windows
 that matters most, because Git Bash adds `/usr/bin` and `/mingw64/bin` to the `PATH` Pi
 started with. A shell that is missing, inactive, or cannot run a command blocks every workflow.
+
+pstack `0.15.36` was certified on Linux by an unattended run that ran no skill end to end. No
+skill or agent was added or removed, and no tier changed. The skills changed only in text, and
+the Orchestrate playbook's `orch` scripts were deleted; no adapter gate named them. `0.15.36` has
+not been checked on native Windows. The statechart scripts did not change, so the `0.15.34`
+Windows findings below still describe them.
 
 pstack `0.15.34` was certified on Linux, then checked on native Windows 11 (build 26200) with
 Git for Windows, Node 22.23.2, and mise, over SSH from Git Bash. On Windows:
@@ -218,7 +224,8 @@ Historical coverage below has not been rerun at `0.15.26` unless stated otherwis
 - At `0.15.25`, `orch.ts` resolves the stack frontier through `gh`, or `origin` with
   `--forge origin`, instead of `gt`. `poteto-mode` already requires `gh`. `worktree-audit.sh`
   reads PR state through `origin` when it is installed, otherwise `gh`, and reports no PR state
-  when neither works. Neither helper has run on Windows at `0.15.25`.
+  when neither works. Neither helper has run on Windows at `0.15.25`. `orch.ts` was deleted at
+  `0.15.36`.
 - At pstack `0.15.9`, `show-me-your-work/scripts/log.sh`, `watch-pr`, and `orch.ts` also ran
   in Git Bash. None of them changed in a way that adds an executable or a path assumption.
 - Git for Windows bundles `git`, `curl`, `nproc`, and the POSIX tools the skill bodies call,
@@ -309,13 +316,13 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
 | `architect` | `/skill:pistack-architect` | `delegation` | - | Phase B delegates to arena runners, so it cannot run without parallel subagents. |
-| `arena` | `/skill:pistack-arena` | `delegation` | `git` | The whole skill is spawning N candidate subagents plus a judge. |
+| `arena` | `/skill:pistack-arena` | `delegation` | `git` | The whole skill is spawning N candidate subagents plus a judge. Since pstack 0.15.36 the judge must come from a model family other than the parent's. The adapter maps the cross-judge pool to the `judgment` and `general` roles, so the judge runs only when one of those roles is on another family. Otherwise arena skips the judge, picks the base alone, and says so. |
 | `benchmark-checklist` | `/skill:pistack-benchmark-checklist` | - | `uptime`, `nproc` | Its setup step checks load with `uptime` and cores with `nproc`. macOS has no `nproc` without GNU coreutils, and Git Bash on Windows has no `uptime`. |
 | `blast-radius` | `/skill:pistack-blast-radius` | - | `git`, `gh` | Needs git and gh to read the diff, commits, and PR before any analysis. |
 | `correct` | `/skill:pistack-correct` | - | `git` | Mines commit history, then commits fixes and edits lint, CI, and agent instruction files. Run it on a branch you will review. |
 | `figure-it-out` | `/skill:pistack-figure-it-out` | `delegation` | - | Phase B fan-out and the architect/arena routing require parallel subagents. |
 | `how` | `/skill:pistack-how` | `delegation` | - | Every path spawns explorer or explainer subagents; nothing runs inline. |
-| `interrogate` | `/skill:pistack-interrogate` | `delegation` | `git` | Multi-model adversarial review is entirely one subagent per configured model. |
+| `interrogate` | `/skill:pistack-interrogate` | `delegation` | `git` | Multi-model adversarial review is entirely one subagent per configured model. Since pstack 0.15.36 it picks adversaries the way arena picks runners, from the `interrogate reviewers` line, and gives each one its own worktree with the scope's uncommitted changes. Each adversary must prove a finding with a run, and the skill keeps only findings whose command it reruns and sees fail. It reports findings and applies nothing. The rubric, the lead's judgment, and the code-quality lens are gone. |
 | `maintain-formal-verification-skill` | `/skill:pistack-maintain-formal-verification-skill` | - | `git` | Verified end to end on a Windows Node finite-state fixture at pstack 0.15.28. Manual invocation only; no delegation. It diffs the covered code with git from the verify skill's sync commit, edits only the verification and the verify skill, and temporarily breaks product code to prove an updated check can still fail. In Pi, look for the verify skill under `.pi/skills/`; the verification tool needs its own prerequisites. |
 | `maintain-verification-skill` | `/skill:pistack-maintain-verification-skill` | `delegation` | - | Source wave launches one read-only subagent per feature file. |
 | `no-comments` | `/skill:pistack-no-comments` | `delegation` | `git` | Step 1 must spawn the comment-sicko agent; the skill only triages its report. |
@@ -328,9 +335,9 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | upstream skill | Pi skill | capabilities | executables | why |
 | --- | --- | --- | --- | --- |
 | `automate-me` | `/skill:pistack-automate-me` | `delegation`, `structured-question` | `git`, `gh` | Mining step depends on Cursor transcript files and the built-in create-skill skill, with no Pi equivalent. |
-| `ketchup-video` | `/skill:pistack-ketchup-video` | - | - | New in pstack 0.15.32. One end-to-end Pi run on native Windows drew its slides and rendered an mp4 with `ffmpeg` alone. Manual invocation only; no delegation or structured question. It follows ketchup, read-only, but shows what happened as a short silent slide video rendered outside the repository, with the waiting calls as text under it. Its body names no renderer, so it needs whatever video tool the session has, such as `ffmpeg`, and Pi has no image generation. Its reply embedded the video as an HTML `video` tag with the file path, and whether a Pi client plays it inline is unverified. When the render fails, it says so in one line and gives only the calls. |
+| `ketchup-video` | `/skill:pistack-ketchup-video` | - | - | New in pstack 0.15.32. One end-to-end Pi run on native Windows drew its slides and rendered an mp4 with `ffmpeg` alone, before pstack 0.15.36 added subtitles. The subtitled video has not run in Pi. Manual invocation only; no delegation or structured question. It follows ketchup, read-only, but shows what happened as a short slide video with no audio, rendered outside the repository, with the waiting calls as text under it. Since pstack 0.15.36 it burns a one-line subtitle into each slide's frames, in a strip below the slide, and measures each slide's hold by matching the rendered frames to the slide. Its body names no renderer, so it needs whatever video tool the session has, such as `ffmpeg`, and Pi has no image generation. Its reply embedded the video as an HTML `video` tag with the file path, and whether a Pi client plays it inline is unverified. When the render fails, it says so in one line and gives only the calls. |
 | `poteto-help` | `/skill:pistack-poteto-help` | - | - | Its answers describe Cursor setup, the slash menu, and Custom Modes. A request for work runs poteto-mode, which is experimental. It asks a multiple-choice question only when the need is unclear. Its README and guide links resolve under the status report's plugin directory. |
-| `poteto-mode` | `/skill:pistack-poteto-mode` | `delegation`, `structured-question` | `git`, `gh` | Sticky-mode hosting plus references to Cursor built-in and plugin skills only partially map to Pi. |
+| `poteto-mode` | `/skill:pistack-poteto-mode` | `delegation`, `structured-question` | `git`, `gh` | Sticky-mode hosting plus references to Cursor built-in and plugin skills only partially map to Pi. Since pstack 0.15.36 the Orchestrate playbook calls no scripts, because the `orch` helpers are gone, and watches PRs through event subscriptions only when the harness has them. Pi has none. |
 | `recall` | `/skill:pistack-recall` | `delegation` | `git`, `gh` | Core corpus is Cursor's on-disk transcript JSONL, so only the git/gh and shared-record half survives. |
 | `reflect` | `/skill:pistack-reflect` | `delegation` | - | Transcript mining and create-skill routing are Cursor-specific, though the digest fallback partly works. Since pstack 0.15.32 it copies a skill out of the plugin cache to a skill location before editing it, and never opens a PR or pushes. |
 | `sharpen` | `/skill:pistack-sharpen` | - | - | New in pstack 0.15.25 and not yet run end to end in Pi. Since pstack 0.15.29 it hands back a rewritten prompt and does not do the task. Its body is prompt-only, with no tool, delegation, or executable, and it runs only when you type it. |
