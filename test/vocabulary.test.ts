@@ -9,7 +9,8 @@ test("every Cursor term has a host mapping row that names it in the Cursor colum
   for (const delegation of ["t3", "pi-subagents"] as const) {
     const column = mappedCursorNames(hostMappingDocument("pistack", delegation));
     for (const term of CURSOR_TERMS) {
-      assert.ok(column.some((cell) => cell.includes(term.key)), `${delegation}: no row names ${term.key}`);
+      const rows = column.filter((cell) => cell.includes(term.key));
+      assert.equal(rows.length, 1, `${delegation}: ${term.key} must name exactly one row, so another row cannot stand in for it`);
     }
   }
   const keys = CURSOR_TERMS.map((term) => term.key);
@@ -40,7 +41,7 @@ test("every Cursor term matches the upstream wording it was ported for", () => {
     "`~/.cursor/rules/pstack-models.mdc`": ["`~/.cursor/rules/pstack-models.mdc`"],
     "`.cursor/skills/`": ["under `.cursor/skills/`"],
     "`~/.cursor/plugins/`": ["`~/.cursor/plugins/`", ".cursor-plugin/plugin.json"],
-    ".cursor/rules/": [".cursor/rules/team.mdc", "writes an always-applied rule"],
+    "`.cursor/rules/*.mdc`": [".cursor/rules/team.mdc", "writes an always-applied rule"],
     "agent-transcripts": ["the `agent-transcripts/` directory", "~/.cursor/projects/<slug>/"],
     Bugbot: ["Triage every Bugbot comment"],
     "Cursor Automations": ["a Cursor Automation routine", "api2.cursor.sh/automations"],
@@ -57,6 +58,8 @@ test("every Cursor term matches the upstream wording it was ported for", () => {
   for (const term of CURSOR_TERMS) {
     for (const example of examples[term.key] ?? []) assert.match(example, term.pattern, `${term.key}: ${example}`);
   }
+  const rules = CURSOR_TERMS.find((term) => term.key === "`.cursor/rules/*.mdc`");
+  assert.doesNotMatch("`~/.cursor/rules/pstack-models.mdc`", rules?.pattern ?? /$^/, "the model rule has its own row");
   const grep = CURSOR_TERMS.find((term) => term.key === "`Grep`, `Glob`");
   assert.doesNotMatch("grep the topic first", grep?.pattern ?? /$^/, "a lowercase shell grep is not the Cursor tool");
 });
@@ -99,4 +102,14 @@ test("the vocabulary scan reports terms in list order whatever order the files a
 test("the host mapping's Cursor column is the first cell of each table row, header and separator aside", () => {
   const mapping = "intro | not a row\n| pstack / Cursor | Pi equivalent |\n| --- | --- |\n| `X`, `Y` | z \\| w |\r\n| `Q` | r |\n";
   assert.deepEqual(mappedCursorNames(mapping), ["pstack / Cursor", "`X`, `Y`", "`Q`"]);
+});
+
+test("removing the general rules row fails the scan even though the model rule row still names .cursor/rules/", () => {
+  const full = hostMappingDocument("pistack", "t3");
+  const without = full.split("\n").filter((line) => !line.startsWith("| other `.cursor/rules/*.mdc` files")).join("\n");
+  assert.notEqual(without, full);
+  assert.match(without, /\| `~\/\.cursor\/rules\/pstack-models\.mdc` \|/);
+  const files = [file("team", "Read .cursor/rules/team.mdc first.")];
+  assert.deepEqual(vocabularyDiagnostics(files, full), []);
+  assert.deepEqual(vocabularyDiagnostics(files, without).map((d) => d.resource), ["host-mapping:`.cursor/rules/*.mdc`"]);
 });

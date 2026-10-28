@@ -39,7 +39,8 @@ export const CURSOR_TERMS: readonly CursorTerm[] = [
   { key: "`~/.cursor/rules/pstack-models.mdc`", pattern: /pstack-models\.mdc/ },
   { key: "`.cursor/skills/`", pattern: /\.cursor\/skills/ },
   { key: "`~/.cursor/plugins/`", pattern: /\.cursor\/plugins|\.cursor-plugin/ },
-  { key: ".cursor/rules/", pattern: /\.cursor\/rules|always-applied rule/ },
+  // pstack-models.mdc has its own row, so it does not count as a use of the general rule row.
+  { key: "`.cursor/rules/*.mdc`", pattern: /\.cursor\/rules(?!\/pstack-models\.mdc)|always-applied rule/ },
   { key: "agent-transcripts", pattern: /agent-transcripts|\.cursor\/projects/ },
   { key: "Bugbot", pattern: /Bugbot/ },
   { key: "Cursor Automations", pattern: /Cursor [Aa]utomation|cursor\.(sh|com)\/automations/ },
@@ -61,8 +62,10 @@ export interface SkillMarkdown {
 }
 
 /**
- * Every Markdown file under a skill directory, in sorted path order. Symbolic links are not
- * followed, so the scan reads only files inside the checkout, as generation copies them.
+ * Every Markdown file under a skill directory, in sorted path order. Symbolic links below `dir`
+ * are not followed, as generation skips them when it copies support files. `dir` itself comes
+ * from discovery, which lists only real directories, not symbolic links, under the manifest's
+ * skills directory.
  */
 export function skillMarkdown(skill: string, dir: string): SkillMarkdown[] {
   const files: SkillMarkdown[] = [];
