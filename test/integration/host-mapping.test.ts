@@ -26,6 +26,7 @@ test("the host mapping covers Orchestrate vocabulary new in pstack 0.15.36", () 
     assert.match(rowFor("| PR and CI event subscriptions"), /not available in Pi\. Check the PR's live state with `gh pr view` and `gh pr checks`.*do not start a polling loop/);
     assert.match(rowFor("| forking a worker"), /no Pi equivalent.*Wait until the earlier worker has finished or stopped, so one writer at a time uses that worktree\. Then start a new child, as the `resume` row says/);
     assert.match(rowFor("| forking a worker"), /reuse it when it can reach it, or to stop it before starting another/);
+    assert.match(rowFor("| forking a worker"), /Stop only a process confirmed to have been started by the earlier worker for this task\. Never stop an unidentified process/);
     assert.doesNotMatch(rowFor("| forking a worker"), /worker that holds the state/);
   } finally {
     rmSync(root, { recursive: true, force: true });
