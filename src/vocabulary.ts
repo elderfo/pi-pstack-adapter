@@ -50,6 +50,7 @@ export const CURSOR_TERMS: readonly CursorTerm[] = [
   { key: "`AskUserQuestion`", pattern: /AskUserQuestion/ },
   { key: "`TodoWrite`", pattern: /TodoWrite|TaskCreate|TaskUpdate/ },
   { key: "`/visualize`", pattern: /\/visualize\b/ },
+  { key: "Cursor `/loop`", pattern: /(^|[\s(`])\/loop\b/ },
   { key: "a skill under `plugins/cache/`", pattern: /plugins\/cache\// },
   { key: "a Custom Mode", pattern: /Custom Mode/ },
 ];

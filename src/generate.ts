@@ -556,6 +556,10 @@ prerequisite, so a merge, deploy, or safety gate that needs the skipped output s
 skipped check has not passed, so report it as not run. A workflow whose purpose rests on those steps, such as one of tier
 \`unsupported\`, cannot run in Pi: say so instead of skipping through it.
 
+A row that gives a substitute and does not say **skip**, such as the Project store row, is not a
+skip. Do the substitute, mention it in your reply if the user would expect the Cursor feature, and
+write no \`Skipped in Pi\` line for it.
+
 | pstack / Cursor | Pi equivalent |
 | --- | --- |
 | \`Task\` tool, \`Agent\` tool, \`subagent_type\` | the delegation backend in [Delegation](#delegation). A pstack agent such as \`poteto-agent\` is \`${namespace}-poteto-agent\`. |
@@ -592,6 +596,7 @@ skipped check has not passed, so report it as not run. A workflow whose purpose 
 | Cursor Automations, routines, Slack triggers, webhooks, \`/add-plugin\` | not available: **skip** a step that needs them. A workflow built on them, such as \`make-bot-ui\`, is tier \`unsupported\`, and skipping its steps would leave nothing of its purpose, so say it cannot run in Pi. |
 | \`environment: "cloud"\`, \`cloud_base_branch\` | not available. Run the fan-out locally instead. |
 | the agent's store (path in the system prompt), the Project store, the Project tracker (\`notes.md\`) | no Pi equivalent; Pi's system prompt names no store. Keep those files in a folder Git ignores, such as \`.work/<project>/\` after adding \`.work/\` to the exclude file that \`git rev-parse --git-path info/exclude\` prints (in a linked worktree \`.git\` is a file, so never open \`.git/info/exclude\` directly), or outside the repository. Give its absolute path to each child that reads or writes them. |
+| Cursor \`/loop\`, \`/loop <interval>\` | not available in Pi, which has no timer that wakes an agent. When \`/loop\` drives an autonomous run to a predicate, keep working in this session: re-check the predicate after each iteration, and stop only when it passes or at a real dead end. When it arms a timed tick, such as \`/loop 1h\` for an audit, **skip** arming it, say that no tick is armed, and give the user the tick prompt to run again. Do not start a sleep or polling loop in its place. |
 | PR and CI event subscriptions | not available in Pi. Check the PR's live state with \`gh pr view\` and \`gh pr checks\` when you report on it, and do not start a polling loop in their place. |
 | forking a worker to reuse its built state, such as its checkout, uncommitted changes, or a running process | no Pi equivalent; no delegation backend copies a checkout or a running process into a new child. Wait until the earlier worker has finished or stopped, so one writer at a time uses that worktree. Then start a new child, as the \`resume\` row says, and give it the earlier worker's brief and result, the absolute path of the worktree, and every fact it needs. If the earlier worker left a process running, tell the child to reuse it when it can reach it, or to stop it before starting another, so two copies never compete for one port or file. Stop only a process confirmed to have been started by the earlier worker for this task. Never stop an unidentified process that holds the port or file; when ownership is unclear, the child reports it to the parent instead. |
 | Bugbot | not available in Pi. Bugbot comments on a PR are ordinary review threads, so triage them with the forge command the step gives, such as \`gh\`. When the PR has no Bugbot check or comment, **skip** a step that starts, waits for, or configures Bugbot. |

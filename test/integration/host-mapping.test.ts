@@ -23,6 +23,7 @@ test("the host mapping covers Orchestrate vocabulary new in pstack 0.15.36", () 
     const rowFor = (start: string) => mapping.split("\n").find((line) => line.startsWith(start)) ?? "";
 
     assert.match(rowFor("| the agent's store"), /the Project store, the Project tracker \(`notes\.md`\) \| no Pi equivalent.*a folder Git ignores, such as `\.work\/<project>\/` after adding `\.work\/` to the exclude file that `git rev-parse --git-path info\/exclude` prints .* or outside the repository\. Give its absolute path to each child/);
+    assert.match(rowFor("| Cursor `/loop`"), /not available in Pi.*re-check the predicate after each iteration.*\*\*skip\*\* arming it.*Do not start a sleep or polling loop/);
     assert.match(rowFor("| PR and CI event subscriptions"), /not available in Pi\. Check the PR's live state with `gh pr view` and `gh pr checks`.*do not start a polling loop/);
     assert.match(rowFor("| forking a worker"), /no Pi equivalent.*Wait until the earlier worker has finished or stopped, so one writer at a time uses that worktree\. Then start a new child, as the `resume` row says/);
     assert.match(rowFor("| forking a worker"), /reuse it when it can reach it, or to stop it before starting another/);

@@ -19,6 +19,7 @@ test("the host mapping defines one skip line for Cursor-only steps, and a skip n
   assert.match(mapping, /A placeholder satisfies no\nprerequisite, so a merge, deploy, or safety gate that needs the skipped output stays blocked\./);
   assert.match(mapping, /A\nskipped check has not passed, so report it as not run\./);
   assert.match(mapping, /such as one of tier\n`unsupported`, cannot run in Pi: say so instead of skipping through it\./);
+  assert.match(mapping, /A row that gives a substitute and does not say \*\*skip\*\*, such as the Project store row, is not a\nskip\. Do the substitute.*\nwrite no `Skipped in Pi` line for it\./s);
 
   assert.match(rowFor("| Cursor Automations"), /\*\*skip\*\* a step that needs them\. A workflow built on them, such as `make-bot-ui`, is tier `unsupported`/);
   assert.match(rowFor("| Cursor built-in skills such as `run`"), /Use the project's own scripts\. When it has none, \*\*skip\*\* and name the check that did not run\./);
@@ -58,19 +59,20 @@ test("the host mapping reads only this workspace's Pi sessions as transcripts", 
   assert.doesNotMatch(mapping, /Pi sessions live under `~\/\.pi\/agent\/sessions\/`, in a different format/);
 });
 
-test("transcript-reading skills keep their tiers and say their Pi transcript path is unverified", () => {
+test("transcript-reading skills state what their pstack 0.15.36 Pi runs read, and list the tiers that evidence supports", () => {
   const docs = readFileSync(join(import.meta.dirname, "..", "docs", "compatibility.md"), "utf8");
   const expected = {
     "automate-me": "experimental",
-    recall: "experimental",
+    recall: "dependency-gated",
     reflect: "experimental",
-    "show-me-your-work": "dependency-gated",
+    "show-me-your-work": "adapted",
   } as const;
   for (const [name, tier] of Object.entries(expected)) {
     const entry = entryFor(name);
     assert.equal(entry.tier, tier, name);
     assert.match(entry.note ?? "", /Pi session file/, name);
-    assert.match(entry.note ?? "", /no Pi run has|has not run end to end in Pi/, name);
+    assert.match(entry.note ?? "", /Verified end to end in Pi on Linux at pstack 0\.15\.36/, name);
+    assert.doesNotMatch(entry.note ?? "", /no Pi run has (mined|reviewed)/, name);
     const row = docs.split("\n").find((line) => line.startsWith(`| \`${name}\` |`)) ?? "";
     assert.ok(row.endsWith(` | ${entry.note} |`), `${name}: docs row matches the registry note`);
     const section = docs.split(/^### /m).find((part) => part.startsWith(`${tier} `)) ?? "";

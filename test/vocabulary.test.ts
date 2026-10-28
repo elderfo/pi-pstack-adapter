@@ -51,6 +51,7 @@ test("every Cursor term matches the upstream wording it was ported for", () => {
     "`AskUserQuestion`": ["AskUserQuestion"],
     "`TodoWrite`": ["TodoWrite", "TaskCreate"],
     "`/visualize`": ["run `/visualize`"],
+    "Cursor `/loop`": ["using Cursor's `/loop` command", "arm `/loop 1h` to audit", "/loop until done."],
     "a skill under `plugins/cache/`": ["a skill under plugins/cache/"],
     "a Custom Mode": ["a Custom Mode"],
   };
@@ -62,6 +63,8 @@ test("every Cursor term matches the upstream wording it was ported for", () => {
   assert.doesNotMatch("`~/.cursor/rules/pstack-models.mdc`", rules?.pattern ?? /$^/, "the model rule has its own row");
   const grep = CURSOR_TERMS.find((term) => term.key === "`Grep`, `Glob`");
   assert.doesNotMatch("grep the topic first", grep?.pattern ?? /$^/, "a lowercase shell grep is not the Cursor tool");
+  const loop = CURSOR_TERMS.find((term) => term.key === "Cursor `/loop`");
+  assert.doesNotMatch("a for-loop in scripts/foo/loop.ts", loop?.pattern ?? /$^/, "a path ending in /loop is not the Cursor command");
 });
 
 test("the vocabulary scan names an unmapped term, every skill that uses it, and the next step", () => {

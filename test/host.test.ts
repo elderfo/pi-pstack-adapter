@@ -395,7 +395,7 @@ test("a shell problem stops every workflow at the prerequisite check, even with 
 test("the status report names both versions, the resolved commit, the tiers, and the capabilities", () => {
   const root = makeTempDir("status");
   const pluginDir = writePluginFixture(root, {
-    skills: [{ name: "unslop", body: "b\n" }, { name: "arena", body: "b\n" }],
+    skills: [{ name: "unslop", body: "b\n" }, { name: "how", body: "b\n" }],
     version: "0.15.2",
   });
   const commit = "d".repeat(40);
@@ -437,14 +437,14 @@ test("the status report names both versions, the resolved commit, the tiers, and
   const row = (field: string) => new RegExp(`\\| ${field} \\| (.+) \\|`).exec(report)?.[1];
   assert.equal(row("plugin directory"), source.pluginDir);
   assert.equal(row("generated skills"), generation.skillsDir);
-  assert.equal(existsSync(join(row("generated skills") ?? "", "pistack-arena", "SKILL.md")), true);
+  assert.equal(existsSync(join(row("generated skills") ?? "", "pistack-how", "SKILL.md")), true);
   assert.match(report, /outside the tested trust boundary/);
   assert.match(report, /\| delegation \| missing \|/);
   assert.match(report, /\| delegation order \| t3, then pi-subagents \|/);
   assert.match(report, /\| delegation \| none available \|/);
   assert.equal(row("agent prompts"), generation.agentPromptsDir);
   assert.match(report, /\| structured-question \| available \|/);
-  assert.match(report, /\| dependency-gated \| 1 \| pistack-arena \|/);
+  assert.match(report, /\| dependency-gated \| 1 \| pistack-how \|/);
   assert.match(report, /\| native \| 2 \| pistack-status, pistack-unslop \|/);
 });
 

@@ -72,6 +72,7 @@ Keep scratch work in `.work/`; ensure `.work/` is in `.git/info/exclude`. Leave 
      cd <fixture> && PI_CODING_AGENT_DIR=$R/pi PISTACK_CACHE_DIR=$R/cache pi -p '/skill:pistack-<name> <task>'
      ```
      Record what the workflow produced, not that it started. Pass only real `pi` flags; an unknown flag kills the run at once. Delegating skills cannot complete here, because the sandbox has no subagent provider.
+   - **End-to-end run per changed delegating skill.** Build a second kept sandbox the same way, but install the provider extension and `pi-subagents` into it as packages, `PI_CODING_AGENT_DIR=$R/pi pi install <path>`, rather than passing `-e`: child agents read the sandbox settings, so a provider passed only with `-e` never reaches them. Add `pi-ask-user` the same way for a skill gated on `structured-question`; in `pi -p` it cannot show a question, so tell the skill to pick its recommended option. Copy `pi-pstack-adapter.json` into `$R/pi` so the `judgment` and `general` roles sit on different model families. The tool probe must now list `subagent`. A child can still read real files outside the sandbox, such as the user's skills, so tell any run that writes a skill to use `$R/pi/skills/`. To exercise a linked-worktree path, run the fixture as a `git worktree add` checkout. Use `-c` or `--session <file>` to continue a run, for example to apply a `reflect` edit. A dependency-gated skill rises to `adapted` only on a completed delegation step, as `docs/compatibility.md` says.
    - Confirm a new gate in the installed package: `/pistack-check pistack-<name>` names the missing executable.
    - Windows is certified. When a new skill needs an executable, state in `docs/compatibility.md` whether Git for Windows bundles it.
 
@@ -81,9 +82,11 @@ Keep scratch work in `.work/`; ensure `.work/` is in `.git/info/exclude`. Leave 
 
 Re-check these on each bump and say whether they changed:
 
-- Delegating skills have no end-to-end run, because the isolated install has no subagent provider. Report that no tier for them changed, or run them in a session with a provider.
-- Transcript reading is mapped but unverified. The host mapping points `show-me-your-work`'s audit, `recall`, `reflect`, `automate-me`, and poteto-mode's eval and session-pickup playbooks at this workspace's Pi session files (`$PI_SESSION_FILE` and its folder), and no Pi run has read them that way. Say whether a run has since, and whether Pi's session layout or format changed.
-- The host mapping has no row for Cursor `/loop` or `/goal`.
+- Delegating skills: at pstack 0.15.36, `interrogate`, `arena`, `show-me-your-work`, `reflect`, `recall`, `automate-me`, and `poteto-mode`'s Orchestrate playbook ran with pi-subagents. The other delegating skills (`architect`, `figure-it-out`, `how`, `maintain-verification-skill`, `no-comments`, `teach`, `why`, `swarm`) have not. Run each changed one with the delegation sandbox above.
+- Transcript reading: at 0.15.36, `show-me-your-work`'s reviewer, `recall`, `reflect`, and `automate-me` read this workspace's Pi session files and nothing else. poteto-mode's eval and session-pickup playbooks have not. Say whether Pi's session layout or format changed.
+- Create-skill: `reflect`'s route for a new skill and `automate-me`'s draft step use Cursor's built-in create-skill, which has no Pi equivalent and has not run.
+- `ketchup-video` embeds its video as an HTML `video` tag, and no Pi client has been shown to play it inline.
+- Upstream names no `/goal` command at 0.15.36. If a body starts using one, add a mapping row and a `CURSOR_TERMS` entry, as `/loop` has.
 
 ## Report
 
