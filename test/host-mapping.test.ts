@@ -49,6 +49,8 @@ test("the host mapping reads only this workspace's Pi sessions as transcripts", 
   assert.match(row, /`~\/\.pi\/agent\/sessions\/--<path>--\/`, where/);
   assert.match(row, /each `\/`, `\\`, and `:` replaced by `-`, so `\/home\/you\/proj` is `--home-you-proj--`/);
   assert.match(row, /The folder name does not prove whose session a file is: `\/a\/b-c` and `\/a\/b\/c` share one folder, and a custom session directory can hold every project\./);
+  assert.match(row, /list candidates with `find <folder> -type f -name '\*\.jsonl'`, which lists regular files and does not follow symbolic links, and never open a symbolic link or any other path, because a link can point at a credential file\. Then read only the first line/);
+  assert.ok(row.indexOf("never open a symbolic link") < row.indexOf("read only the first line"), "links are rejected before any read");
   assert.match(row, /read only the first line of each candidate, a `session` header, and read the rest of the file only when its `cwd` is the current working directory\. Skip a file whose header is missing, unreadable, or names another directory/);
   assert.match(row, /never open another folder under `sessions\/`/);
   assert.match(row, /`toolCall` blocks with Pi tool names such as `read` and `bash`/);

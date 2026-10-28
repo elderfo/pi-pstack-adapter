@@ -27,8 +27,9 @@ test("the vocabulary scan reads every Markdown file in a skill, nested ones incl
         },
       ],
     });
-    const files = skillMarkdown("how", join(pluginDir, "skills", "how"));
-    assert.deepEqual(files.map((f) => f.path), ["references/a/deep.md", "references/z.md", "SKILL.md"]);
+    const dir = join(pluginDir, "skills", "how");
+    const files = skillMarkdown("how", dir, join(dir, "SKILL.md"));
+    assert.deepEqual(files.map((f) => f.path), ["SKILL.md", "references/a/deep.md", "references/z.md"]);
     assert.ok(files.every((f) => f.skill === "how"));
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -45,7 +46,25 @@ test("the vocabulary scan does not follow a symbolic link out of the skill", { s
     writeFileSync(join(root, "outside", "secret.md"), "Bugbot\n");
     symlinkSync(join(root, "outside", "secret.md"), join(pluginDir, "skills", "how", "linked.md"));
     symlinkSync(join(root, "outside"), join(pluginDir, "skills", "how", "linked-dir"));
-    assert.deepEqual(skillMarkdown("how", join(pluginDir, "skills", "how")).map((f) => f.path), ["SKILL.md"]);
+    const dir = join(pluginDir, "skills", "how");
+    assert.deepEqual(skillMarkdown("how", dir, join(dir, "SKILL.md")).map((f) => f.path), ["SKILL.md"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the certification probe scans a symbolic-link SKILL.md, because generation reads its target", { skip: symlinkSkip }, () => {
+  const root = scratchRoot("vocabulary-entry-link");
+  try {
+    const pluginDir = writePluginFixture(root, { skills: registrySkills() });
+    writeFileSync(join(root, "outside.md"), "---\nname: how\ndescription: Linked entry.\n---\n\n# how\n\nUse FakeCursorTool.\n");
+    const entry = join(pluginDir, "skills", "how", "SKILL.md");
+    rmSync(entry);
+    symlinkSync(join(root, "outside.md"), entry);
+    const terms = [...CURSOR_TERMS, { key: "`FakeCursorTool`", pattern: /FakeCursorTool/ }];
+    const report = probe(pluginDir, COMMIT, join(root, "cache"), terms);
+    assert.equal(report.ok, false);
+    assert.deepEqual(report.diagnostics.filter((d) => d.resource.startsWith("host-mapping:")).map((d) => d.message.match(/skills? (`[^`]+`)/)?.[1]), ["`how`"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

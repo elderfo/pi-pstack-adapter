@@ -59,7 +59,7 @@ export function probe(
       replaced.push(resource.name);
       continue;
     }
-    markdown.push(...skillMarkdown(resource.name, resource.dir));
+    markdown.push(...skillMarkdown(resource.name, resource.dir, resource.entryPath));
     const parsed = parseResource(resource);
     const wrapperPath = wrapperPaths.get(resource.name);
     if (isDiagnostic(parsed) || !wrapperPath) {

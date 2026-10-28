@@ -62,16 +62,18 @@ export interface SkillMarkdown {
 }
 
 /**
- * Every Markdown file under a skill directory, in sorted path order. Symbolic links below `dir`
- * are not followed, as generation skips them when it copies support files. `dir` itself comes
- * from discovery, which lists only real directories, not symbolic links, under the manifest's
- * skills directory.
+ * The entry file generation reads, then every other Markdown file under the skill directory in
+ * sorted path order. The entry is read through `entryPath` even when it is a symbolic link,
+ * because generation follows it too. Other symbolic links below `dir` are not followed, as
+ * generation skips them when it copies support files. `dir` itself comes from discovery, which
+ * lists only real directories, not symbolic links, under the manifest's skills directory.
  */
-export function skillMarkdown(skill: string, dir: string): SkillMarkdown[] {
-  const files: SkillMarkdown[] = [];
+export function skillMarkdown(skill: string, dir: string, entryPath: string): SkillMarkdown[] {
+  const files: SkillMarkdown[] = [{ skill, path: "SKILL.md", text: readFileSync(entryPath, "utf8") }];
   const visit = (current: string) => {
     for (const entry of readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const path = join(current, entry.name);
+      if (current === dir && entry.name === "SKILL.md") continue;
       if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) visit(path);
       else if (entry.isFile() && entry.name.endsWith(".md")) {
