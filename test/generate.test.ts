@@ -383,6 +383,18 @@ test("both delegation backends pass the nested delegation rule down to every chi
   }
 });
 
+test("the host mapping covers Orchestrate vocabulary new in pstack 0.15.36", () => {
+  const root = makeTempDir("host-mapping-01536");
+  const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });
+  const result = run({ pluginDir, cacheRoot: join(root, "cache") });
+  const mapping = readFileSync(join(result.outDir, "adapter", "host-mapping.md"), "utf8");
+  const rowFor = (start: string) => mapping.split("\n").find((line) => line.startsWith(start)) ?? "";
+
+  assert.match(rowFor("| the agent's store"), /the Project store, the Project tracker \(`notes\.md`\) \| no Pi equivalent.*`\.work\/<project>\/`.*absolute path to each child/);
+  assert.match(rowFor("| PR and CI event subscriptions"), /not available in Pi\. Check the PR's live state with `gh pr view` and `gh pr checks`.*do not start a polling loop/);
+  assert.match(rowFor("| forking a worker"), /no Pi equivalent.*Send the follow-up to the worker that holds the state, or give a fresh worker the absolute path of that worktree/);
+});
+
 test("the host mapping covers Cursor vocabulary new in pstack 0.15.23", () => {
   const root = makeTempDir("host-mapping-01523");
   const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });

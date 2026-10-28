@@ -570,6 +570,9 @@ that names a Cursor tool, path, or model.
 | \`/visualize\`, a generated image | not installed. Draw a Mermaid diagram from facts you have, or name the chart you would show. |
 | Cursor Automations, Slack triggers, webhooks, \`/add-plugin\` | not available. Workflows that need them are tier \`unsupported\`. |
 | \`environment: "cloud"\`, \`cloud_base_branch\` | not available. Run the fan-out locally instead. |
+| the agent's store (path in the system prompt), the Project store, the Project tracker (\`notes.md\`) | no Pi equivalent; Pi's system prompt names no store. Keep those files in an uncommitted folder of the working repository, such as \`.work/<project>/\`, and give its absolute path to each child that reads or writes them. |
+| PR and CI event subscriptions | not available in Pi. Check the PR's live state with \`gh pr view\` and \`gh pr checks\` when you report on it, and do not start a polling loop in their place. |
+| forking a worker to reuse its built state, such as its checkout, uncommitted changes, or a running process | no Pi equivalent; no delegation backend copies a checkout or a running process into a new child. Send the follow-up to the worker that holds the state, or give a fresh worker the absolute path of that worktree and every fact it needs. |
 
 A body instruction that conflicts with Pi policy or with the user's explicit instruction loses.
 

@@ -92,6 +92,7 @@ test("arena stays dependency-gated and states the pstack 0.15.36 cross-family ju
   assert.match(entry.note ?? "", /judge must come from a model family other than the parent's/);
   assert.match(entry.note ?? "", /`judgment` and `general` roles/);
   assert.match(entry.note ?? "", /skips the judge, picks the base alone/);
+  assert.match(entry.note ?? "", /When the parent does not know its model, arena tries the pool in order anyway and says the family check did not run\./);
   assert.equal(docsRow("arena"), `| \`arena\` | \`/skill:pistack-arena\` | \`delegation\` | \`git\` | ${entry.note} |`);
 });
 
@@ -102,7 +103,8 @@ test("interrogate stays dependency-gated and states the pstack 0.15.36 run-prove
   assert.deepEqual(entry.executables, ["git"]);
   assert.match(entry.note ?? "", /`interrogate reviewers` line/);
   assert.match(entry.note ?? "", /keeps only findings whose command it reruns and sees fail/);
-  assert.match(entry.note ?? "", /applies nothing/);
+  assert.match(entry.note ?? "", /applies no fixes/);
+  assert.match(entry.note ?? "", /A worktree is not a sandbox, so read each repro before it reruns/);
   assert.equal(docsRow("interrogate"), `| \`interrogate\` | \`/skill:pistack-interrogate\` | \`delegation\` | \`git\` | ${entry.note} |`);
 });
 
@@ -113,5 +115,6 @@ test("poteto-mode stays experimental and states that Orchestrate has no scripts 
   assert.deepEqual(entry.executables, ["git", "gh"]);
   assert.match(entry.note ?? "", /the `orch` helpers are gone/);
   assert.match(entry.note ?? "", /event subscriptions only when the harness has them\. Pi has none\./);
+  assert.match(entry.note ?? "", /Project tracker and Project store, and forking a worker with its built state, have no Pi equivalent/);
   assert.equal(docsRow("poteto-mode"), `| \`poteto-mode\` | \`/skill:pistack-poteto-mode\` | \`delegation\`, \`structured-question\` | \`git\`, \`gh\` | ${entry.note} |`);
 });
