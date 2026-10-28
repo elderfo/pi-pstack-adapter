@@ -344,7 +344,7 @@ test("the host mapping sends an auto or inherit-parent role to general before th
     mapping,
     /\| a role line valued `auto` or `inherit-parent` \| an unconfigured role\. Use the `general` role, or omit `target` or `model` only when `general` is unconfigured too\. \|/,
   );
-  assert.match(mapping, /`grok-4\.7-xhigh-fast`, other Cursor model slugs/);
+  assert.match(mapping, /`grok-4\.7-xhigh-fast`, `gpt-\*`, other Cursor model slugs/);
   assert.match(mapping, /`hardest tasks` \| adapter roles .*`strongest-judgment`/);
 });
 
@@ -389,7 +389,7 @@ test("the host mapping covers Cursor vocabulary new in pstack 0.15.23", () => {
   const result = run({ pluginDir, cacheRoot: join(root, "cache") });
   const mapping = readFileSync(join(result.outDir, "adapter", "host-mapping.md"), "utf8");
 
-  assert.match(mapping, /\| `claude-opus-5-5-xhigh`, `grok-4\.7-xhigh-fast`, other Cursor model slugs \|/);
+  assert.match(mapping, /\| `claude-opus-5-5-xhigh`, `grok-4\.7-xhigh-fast`, `gpt-\*`, other Cursor model slugs \|/);
   assert.doesNotMatch(mapping, /gpt-5\.6-sol-max/);
   assert.match(mapping, /\| a Custom Mode, .* \| `\/pistack-mode on`/);
   assert.match(mapping, /\| searching `~\/\.cursor\/plugins\/` .* `pistack-poteto-mode\/SKILL\.md` to any `pistack-poteto-agent`/);

@@ -5,16 +5,20 @@
 //   pluginDir  the exported `pstack/` directory
 //   commit     the full upstream commit the tree was exported from
 //   cacheRoot  a scratch directory; use a fresh one for each adapter state you compare
-// Exits 0 only when no body mismatches and generation reports no warning or error.
+// It also scans every upstream skill's Markdown for Cursor terms that the host mapping has no row
+// for, the way upstream's harness generator checks its Claude Code adapter.
+// Exits 0 only when no body mismatches, and neither generation nor the scan reports a warning or error.
 // test/certify-probe.test.ts covers this script.
 import { readFileSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CERTIFIED } from "../../../../src/certified.ts";
-import { extractUpstreamBody, generate } from "../../../../src/generate.ts";
+import { DEFAULT_DELEGATION } from "../../../../src/delegation.ts";
+import { extractUpstreamBody, generate, hostMappingDocument } from "../../../../src/generate.ts";
 import { discover, isDiagnostic, parseResource, readManifest } from "../../../../src/manifest.ts";
 import { entryFor } from "../../../../src/registry.ts";
 import type { Diagnostic, ResolvedSource } from "../../../../src/types.ts";
+import { CURSOR_TERMS, type CursorTerm, type SkillMarkdown, skillMarkdown, vocabularyDiagnostics } from "../../../../src/vocabulary.ts";
 
 export interface ProbeReport {
   readonly ok: boolean;
@@ -27,7 +31,13 @@ export interface ProbeReport {
   readonly mismatched: readonly string[];
 }
 
-export function probe(pluginDir: string, commit: string, cacheRoot: string): ProbeReport {
+export function probe(
+  pluginDir: string,
+  commit: string,
+  cacheRoot: string,
+  /** Cursor terms to scan for. Tests pass a term with no row to prove the scan can fail. */
+  terms: readonly CursorTerm[] = CURSOR_TERMS,
+): ProbeReport {
   const source: ResolvedSource = {
     selection: { kind: "git", repo: CERTIFIED.repo, ref: commit },
     trust: "untested-ref",
@@ -41,12 +51,15 @@ export function probe(pluginDir: string, commit: string, cacheRoot: string): Pro
   let byteIdentical = 0;
   const replaced: string[] = [];
   const mismatched: string[] = [];
+  const markdown: SkillMarkdown[] = [];
   const resources = discover(pluginDir, readManifest(pluginDir)).resources.filter((r) => r.kind === "skill");
   for (const resource of [...resources].sort((a, b) => a.name.localeCompare(b.name))) {
     if (entryFor(resource.name).replacement) {
+      // Pi never sees a replaced skill's upstream text, so its Cursor terms need no row.
       replaced.push(resource.name);
       continue;
     }
+    markdown.push(...skillMarkdown(resource.name, resource.dir, resource.entryPath));
     const parsed = parseResource(resource);
     const wrapperPath = wrapperPaths.get(resource.name);
     if (isDiagnostic(parsed) || !wrapperPath) {
@@ -58,13 +71,17 @@ export function probe(pluginDir: string, commit: string, cacheRoot: string): Pro
     else mismatched.push(resource.name);
   }
 
-  const blocking = result.diagnostics.some((d) => d.level !== "info");
+  const diagnostics = [
+    ...result.diagnostics,
+    ...vocabularyDiagnostics(markdown, hostMappingDocument("pistack", DEFAULT_DELEGATION), terms),
+  ];
+  const blocking = diagnostics.some((d) => d.level !== "info");
   return {
     ok: mismatched.length === 0 && !blocking,
     outDir: result.outDir,
     skills: result.skills.length,
     agents: result.agents.length,
-    diagnostics: result.diagnostics,
+    diagnostics,
     byteIdentical,
     replaced,
     mismatched,
