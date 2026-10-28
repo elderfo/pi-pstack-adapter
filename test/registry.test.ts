@@ -148,8 +148,8 @@ test("recall is dependency-gated after a pstack 0.15.36 run read Pi session file
   const entry = entryFor("recall");
   assert.equal(entry.tier, "dependency-gated");
   assert.deepEqual(entry.capabilities, ["delegation"]);
-  assert.match(entry.note ?? "", /from the folder that holds `\$PI_SESSION_FILE`/);
-  assert.match(entry.note ?? "", /it did not fan out to subagents, so that step has not run in Pi\./);
+  assert.match(entry.note ?? "", /in a fresh session it found the two earlier chats in the folder that holds `\$PI_SESSION_FILE`, read their user messages/);
+  assert.match(entry.note ?? "", /it did not fan out to subagents, and that step has not run in Pi\./);
   assert.ok(docsSection("dependency-gated")?.includes(docsRow("recall") ?? "\0"));
 });
 

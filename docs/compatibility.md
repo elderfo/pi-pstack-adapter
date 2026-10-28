@@ -45,7 +45,9 @@ small Git repository holding a token-bucket rate limiter with two marked bugs.
 - The transcript mapping held. `recall`, `reflect`, `automate-me`, and the `show-me-your-work`
   reviewer read this workspace's Pi session files and nothing else in the session folder.
   `recall` rises to `dependency-gated`, because the transcript was its only Cursor-specific
-  step. Its fan-out did not run, since only one chat existed. `reflect` copied the upstream skill
+  step. In a fresh session it read the two earlier chats itself, so its fan-out did not run. An
+  earlier fresh run looked in the default session folder, which the sandbox had moved, so the
+  host mapping now says to find the folder from `$PI_SESSION_FILE` first. `reflect` copied the upstream skill
   to a Pi skill location before editing it, but its create-skill route did not run, and
   `automate-me` found nothing to draft, so both stay `experimental`.
 - `poteto-mode`'s Orchestrate playbook ran a two-unit program in a linked worktree. Each unit had
@@ -360,7 +362,7 @@ Lowering a tier needs one reproduction of the failure and a note saying what bro
 | `maintain-formal-verification-skill` | `/skill:pistack-maintain-formal-verification-skill` | - | `git` | Verified end to end on a Windows Node finite-state fixture at pstack 0.15.28. Manual invocation only; no delegation. It diffs the covered code with git from the verify skill's sync commit, edits only the verification and the verify skill, and temporarily breaks product code to prove an updated check can still fail. In Pi, look for the verify skill under `.pi/skills/`; the verification tool needs its own prerequisites. |
 | `maintain-verification-skill` | `/skill:pistack-maintain-verification-skill` | `delegation` | - | Source wave launches one read-only subagent per feature file. |
 | `no-comments` | `/skill:pistack-no-comments` | `delegation` | `git` | Step 1 must spawn the comment-sicko agent; the skill only triages its report. |
-| `recall` | `/skill:pistack-recall` | `delegation` | `git`, `gh` | Its core corpus is Cursor's on-disk transcript JSONL. The host mapping points it at this workspace's Pi session files instead. Verified end to end in Pi on Linux at pstack 0.15.36: it listed this workspace's sessions from the folder that holds `$PI_SESSION_FILE`, told the parent chat from its subagents' files, and rebuilt the threads, problems, and next move from them and from git. With only one chat to read, it did not fan out to subagents, so that step has not run in Pi. |
+| `recall` | `/skill:pistack-recall` | `delegation` | `git`, `gh` | Its core corpus is Cursor's on-disk transcript JSONL. The host mapping points it at this workspace's Pi session files instead. Verified end to end in Pi on Linux at pstack 0.15.36: in a fresh session it found the two earlier chats in the folder that holds `$PI_SESSION_FILE`, read their user messages, checked their claims against git and the code, and rebuilt the threads, problems, and next move. With two chats to read, it read them itself, so it did not fan out to subagents, and that step has not run in Pi. A run before the host mapping said to start from `$PI_SESSION_FILE` looked in the default folder instead, which a custom `PI_CODING_AGENT_DIR` had moved, and found nothing. |
 | `teach` | `/skill:pistack-teach` | `delegation` | - | It runs the how and why skills, both of which need subagents. |
 | `why` | `/skill:pistack-why` | `delegation` | `git`, `gh` | Default posture spawns one investigator subagent per evidence category plus a synthesizer. |
 
