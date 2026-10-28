@@ -22,7 +22,7 @@ test("the host mapping covers Orchestrate vocabulary new in pstack 0.15.36", () 
     const mapping = readFileSync(join(result.outDir, "adapter", "host-mapping.md"), "utf8");
     const rowFor = (start: string) => mapping.split("\n").find((line) => line.startsWith(start)) ?? "";
 
-    assert.match(rowFor("| the agent's store"), /the Project store, the Project tracker \(`notes\.md`\) \| no Pi equivalent.*`\.work\/<project>\/`.*absolute path to each child/);
+    assert.match(rowFor("| the agent's store"), /the Project store, the Project tracker \(`notes\.md`\) \| no Pi equivalent.*a folder Git ignores, such as `\.work\/<project>\/` after adding `\.work\/` to the working repository's `\.git\/info\/exclude`, or outside the repository\. Give its absolute path to each child/);
     assert.match(rowFor("| PR and CI event subscriptions"), /not available in Pi\. Check the PR's live state with `gh pr view` and `gh pr checks`.*do not start a polling loop/);
     assert.match(rowFor("| forking a worker"), /no Pi equivalent.*Send the follow-up to the worker that holds the state, or give a fresh worker the absolute path of that worktree/);
   } finally {
