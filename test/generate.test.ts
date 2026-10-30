@@ -218,8 +218,8 @@ test("skills added in pstack 0.15.25 publish their reviewed tiers", () => {
   const result = run({ pluginDir, cacheRoot: join(root, "cache") });
   const wrapper = readFileSync(join(result.skillsDir, "pistack-sharpen", "SKILL.md"), "utf8");
 
-  assert.equal(/pistack-support-tier: (\S+)/.exec(wrapper)?.[1], "experimental");
-  assert.match(wrapper, /not yet run end to end in Pi/);
+  assert.equal(/pistack-support-tier: (\S+)/.exec(wrapper)?.[1], "native");
+  assert.match(wrapper, /Verified end to end in Pi on Linux at pstack 0\.15\.36/);
   assert.equal(result.diagnostics.some((d) => d.message.includes("new to this upstream revision")), false);
 });
 
@@ -248,7 +248,7 @@ test("the pstack 0.15.29 sharpen wrapper keeps the prompt-rewrite body and manua
     body,
   });
 
-  assert.match(output, /^  pistack-support-tier: experimental$/m);
+  assert.match(output, /^  pistack-support-tier: native$/m);
   assert.match(output, /^disable-model-invocation: true$/m);
   assert.match(output, /then rewrite the prompt/);
   assert.match(output, /hands back a rewritten prompt and does not do the task/);

@@ -19,6 +19,7 @@ test("the host mapping defines one skip line for Cursor-only steps, and a skip n
   assert.match(mapping, /A placeholder satisfies no\nprerequisite, so a merge, deploy, or safety gate that needs the skipped output stays blocked\./);
   assert.match(mapping, /A\nskipped check has not passed, so report it as not run\./);
   assert.match(mapping, /such as one of tier\n`unsupported`, cannot run in Pi: say so instead of skipping through it\./);
+  assert.match(mapping, /A row that gives a substitute and does not say \*\*skip\*\*, such as the Project store row, is not a\nskip\. Do the substitute.*\nwrite no `Skipped in Pi` line for it\./s);
 
   assert.match(rowFor("| Cursor Automations"), /\*\*skip\*\* a step that needs them\. A workflow built on them, such as `make-bot-ui`, is tier `unsupported`/);
   assert.match(rowFor("| Cursor built-in skills such as `run`"), /Use the project's own scripts\. When it has none, \*\*skip\*\* and name the check that did not run\./);
@@ -46,7 +47,7 @@ test("the host mapping reads only this workspace's Pi sessions as transcripts", 
   const row = rowFor("| `~/.cursor/projects/<slug>/agent-transcripts/`");
   assert.match(row, /`\$PI_SESSION_FILE` is the current session's file\. When it is unset, the current transcript is unavailable.*\*\*skip\*\* a step that needs the current transcript\./);
   assert.match(row, /A child that audits its parent's or another agent's transcript reads the exact path its brief gives, never its own `\$PI_SESSION_FILE`\./);
-  assert.match(row, /`~\/\.pi\/agent\/sessions\/--<path>--\/`, where/);
+  assert.match(row, /Find it with `dirname "\$PI_SESSION_FILE"` first, because `PI_CODING_AGENT_DIR` or a custom session directory moves it\. Only when `\$PI_SESSION_FILE` is unset, use the default `~\/\.pi\/agent\/sessions\/--<path>--\/`, where/);
   assert.match(row, /each `\/`, `\\`, and `:` replaced by `-`, so `\/home\/you\/proj` is `--home-you-proj--`/);
   assert.match(row, /The folder name does not prove whose session a file is: `\/a\/b-c` and `\/a\/b\/c` share one folder, and a custom session directory can hold every project\./);
   assert.match(row, /list candidates with `find <folder> -type f -name '\*\.jsonl'`, which lists regular files and does not follow symbolic links, and never open a symbolic link or any other path, because a link can point at a credential file\. Then read only the first line/);
@@ -58,19 +59,20 @@ test("the host mapping reads only this workspace's Pi sessions as transcripts", 
   assert.doesNotMatch(mapping, /Pi sessions live under `~\/\.pi\/agent\/sessions\/`, in a different format/);
 });
 
-test("transcript-reading skills keep their tiers and say their Pi transcript path is unverified", () => {
+test("transcript-reading skills state what their pstack 0.15.36 Pi runs read, and list the tiers that evidence supports", () => {
   const docs = readFileSync(join(import.meta.dirname, "..", "docs", "compatibility.md"), "utf8");
   const expected = {
     "automate-me": "experimental",
-    recall: "experimental",
+    recall: "dependency-gated",
     reflect: "experimental",
-    "show-me-your-work": "dependency-gated",
+    "show-me-your-work": "adapted",
   } as const;
   for (const [name, tier] of Object.entries(expected)) {
     const entry = entryFor(name);
     assert.equal(entry.tier, tier, name);
     assert.match(entry.note ?? "", /Pi session file/, name);
-    assert.match(entry.note ?? "", /no Pi run has|has not run end to end in Pi/, name);
+    assert.match(entry.note ?? "", /Verified end to end in Pi on Linux at pstack 0\.15\.36/, name);
+    assert.doesNotMatch(entry.note ?? "", /no Pi run has (mined|reviewed)/, name);
     const row = docs.split("\n").find((line) => line.startsWith(`| \`${name}\` |`)) ?? "";
     assert.ok(row.endsWith(` | ${entry.note} |`), `${name}: docs row matches the registry note`);
     const section = docs.split(/^### /m).find((part) => part.startsWith(`${tier} `)) ?? "";
