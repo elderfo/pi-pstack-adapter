@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. release-please writes new entries from Conventional Commit PR titles.
 
+## [0.8.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.7.0...v0.8.0) (2026-10-30)
+
+
+### Features
+
+* **host-mapping:** scan for unmapped Cursor terms and port upstream's Claude Code harness lessons ([#27](https://github.com/elderfo/pi-pstack-adapter/issues/27)) ([5a787f0](https://github.com/elderfo/pi-pstack-adapter/commit/5a787f064b61d8cdf3dd100b10bb97c6b1435805))
+* **pstack:** certify pstack 0.15.29 ([#21](https://github.com/elderfo/pi-pstack-adapter/issues/21)) ([5cb1ba9](https://github.com/elderfo/pi-pstack-adapter/commit/5cb1ba96e89c5926b451984ddb53d84dfc3f7ab1))
+* **pstack:** certify pstack 0.15.30 with statechart ([#23](https://github.com/elderfo/pi-pstack-adapter/issues/23)) ([8fc2e93](https://github.com/elderfo/pi-pstack-adapter/commit/8fc2e9370dab422870e3661dd18f8bf4d4a400f5))
+* **pstack:** certify pstack 0.15.32 with ketchup-video ([#24](https://github.com/elderfo/pi-pstack-adapter/issues/24)) ([4272d99](https://github.com/elderfo/pi-pstack-adapter/commit/4272d9998ed7c904b8c5ba57f578dbbb739f07e1))
+* **pstack:** certify pstack 0.15.34, with statechart experimental after a Windows crash ([#25](https://github.com/elderfo/pi-pstack-adapter/issues/25)) ([5c569fe](https://github.com/elderfo/pi-pstack-adapter/commit/5c569fe9330a99fb4a46388e96664a2522b043b3))
+* **pstack:** certify pstack 0.15.36 ([#26](https://github.com/elderfo/pi-pstack-adapter/issues/26)) ([8491d49](https://github.com/elderfo/pi-pstack-adapter/commit/8491d49e9e7f7797a3203515b6c68ea1dec7de4c))
+
 ## [0.7.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.6.0...v0.7.0) (2026-10-19)
 
 
