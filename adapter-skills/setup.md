@@ -26,12 +26,25 @@ Roles used by pstack workflows.
 | `strongest-judgment` | the hardest cross-cutting changes |
 | `general` | every other delegate: explorers, investigators, swarm and verification workers, ad-hoc helpers, and any unconfigured role |
 
-Panels that want several model families, such as `arena`'s runners and cross-judge and
-`interrogate`'s adversaries, use `judgment` and then `general`, one model each. `arena` picks its
-one judge from that pool only when the model is from a family other than the session's model, so
-when both roles share the session's family, it skips the judge and picks alone. When the session
-does not know its own model, it tries the pool in order and says the family check did not run.
-Put `judgment` and `general` on different families to keep those panels cross-model.
+Upstream also has panel lines, which hold a list of models with one seat per entry. The adapter
+keeps them as panel roles.
+
+| panel role | used by |
+| --- | --- |
+| `arena-runners` | `arena`'s candidates |
+| `arena-cross-judge-pool` | `arena`'s one judge, which `architect` uses too |
+| `architect-runners` | `architect`'s design candidates |
+| `interrogate-reviewers` | `interrogate`'s adversaries |
+
+Upstream defaults each panel to two model families, one Claude model and one Grok model. A panel
+left unset uses `judgment`, then `general`, so it spans two families only when those roles do.
+`arena` takes its judge from the pool only when the model is from a family other than the
+session's model, so a pool on the session's family skips the judge. The status report warns when
+a panel's seats all land on one model.
+
+A panel value lists entries in order. An entry is a model id, optionally with a thinking level,
+or `inherit` for the model and thinking of the agent that starts the panel, which is the
+session unless a delegate runs the workflow. An `inherit` entry never judges.
 
 The status report lists the same roles, so read it back rather than trusting this table if the
 adapter has been upgraded.
@@ -80,12 +93,21 @@ Steps.
    `provider/model` id, and `thinking` when step 3 picked a level. Pass `scope: "project"` when
    the user wants the choice to apply only to this repository. Calling `set_model` for a role
    again without `thinking` clears a level set earlier, so always pass it again.
-5. Read back `action: "status"` and show the user what was written, including the thinking
-   column.
+5. Set the panels. Read the `panel roles` table of `action: "status"` and show the user each
+   panel's seats. When a panel's seats share one model, or one family, say so and suggest two
+   families from step 1, as upstream's defaults do. Never say a family is missing unless the
+   step 1 list shows it. Ask whether to keep each panel or set it. For each panel the user sets,
+   call `set_model` with the panel role and its entries in `model`, separated by commas, for
+   example `model: "provider/model-a, provider/model-b"`. Pass `thinking` for the level of the
+   `judgment` column in step 3, unless the user picked another. An entry with its own `:level`
+   keeps it. Pass `model: "inherit"` to unset a panel.
+6. Read back `action: "status"` and show the user what was written, including the thinking
+   column and the panel roles.
 
 For a scripted environment, set `PISTACK_MODELS` instead, for example
 `PISTACK_MODELS=feature=anthropic/claude-sonnet-4-5:medium,bug-fix=openai/gpt-5:high`. The
-optional `:level` suffix sets the thinking level. The environment wins
+optional `:level` suffix sets the thinking level. A panel's entries are separated by spaces, as
+in `PISTACK_MODELS='arena-runners=anthropic/claude-sonnet-4-5:high openai/gpt-5:high'`. The environment wins
 over both config files, so CI never needs this dialog.
 
 ## Upstream source

@@ -359,7 +359,8 @@ test("every upstream role line maps to an adapter role, so no delegate falls bac
   assert.doesNotMatch(mapping, /so the child runs on the parent model/);
   assert.match(rowFor("| role lines `how explainer`"), /\| adapter role `judgment`\. \|$/);
   assert.match(rowFor("| role lines `how explorer`"), /`swarm workers`, and verification \| adapter role `general`\. \|$/);
-  assert.match(rowFor("| panel role lines `arena runners`"), /`interrogate reviewers` \| the list `judgment`, `general`/);
+  assert.match(rowFor("| panel role lines `arena runners`"), /`interrogate reviewers` \| adapter panel roles `arena-runners`, `arena-cross-judge-pool`, `architect-runners`, and `interrogate-reviewers`\./);
+  assert.match(rowFor("| panel role lines `arena runners`"), /An unset panel uses `judgment`, then `general`/);
   assert.match(rowFor("| a delegate no role line names"), /\| adapter role `general`\. \|$/);
   assert.match(rowFor("| `claude-opus-5-5-xhigh`"), /An unconfigured role uses the `general` role\. When `general` is unconfigured too, omit/);
 });
@@ -377,7 +378,8 @@ test("both delegation backends pass the nested delegation rule down to every chi
       const heading = section.split("\n")[0] ?? "";
       assert.match(section, /every agent that delegates, a child included, gives each new child an\s+explicit role/, heading);
       assert.match(section, /never lets it inherit the delegating\s+agent's model or thinking/, heading);
-      assert.match(section, /Never let one inherit your\s+model or thinking, and never raise a role above its configured level\."/, heading);
+      assert.match(section, /Never let one inherit your\s+model or thinking, except a panel seat from an `inherit` entry in that report's `panel roles` table, and never raise a role above its configured level\."/, heading);
+      assert.match(section, /The one exception is a panel seat from an `inherit` entry in the\s+`panel roles` table/, heading);
       assert.match(section, /An unconfigured role uses the `general` role/, heading);
     }
   }

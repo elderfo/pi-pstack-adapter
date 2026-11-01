@@ -95,3 +95,19 @@ test("a wrapper still states host precedence on both sides of the body after the
   assert.ok(output.lastIndexOf(CLOSING_PRECEDENCE) > body);
   assert.match(output, /Read \[host mapping\]\(\.\.\/\.\.\/adapter\/host-mapping\.md\)/);
 });
+
+test("a single-model panel is reported as configuration, and no family is called unavailable from a filtered search", () => {
+  const row = rowFor("| a panel whose seats all run on one model");
+  assert.match(row, /runs on one model because of the adapter configuration/);
+  assert.match(row, /name `\/skill:pistack-setup` as the fix/);
+  assert.match(row, /Never claim a model or family is unavailable\. A model listing is not proof of absence/);
+  assert.match(row, /`mcp__t3-code__orchestrator_capabilities` filters by `search` and omits models beyond its limit/);
+  assert.match(row, /shows only the session's scoped models when the user scoped some/);
+  assert.match(row, /Say which models the configuration uses instead\./);
+});
+
+test("an inherit panel seat runs on the session's own model even when general is configured", () => {
+  const row = rowFor("| panel role lines `arena runners`");
+  assert.match(row, /comes from an `inherit` entry: start it with no `target` or `model`, so it runs on your own model and thinking even when `general` is configured/);
+  assert.match(row, /The `auto` and `inherit-parent` row does not apply to it\./);
+});

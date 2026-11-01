@@ -4,6 +4,7 @@ import { CERTIFIED } from "./certified.ts";
 import { safeEcho } from "./echo.ts";
 import { DEFAULT_NAMESPACE, validateNamespace } from "./namespace.ts";
 import { expandHome } from "./paths.ts";
+import { MAX_PANEL_ENTRIES, isPanelRole } from "./registry.ts";
 import { DEFAULT_DELEGATION, DELEGATION_PROVIDERS, isDelegationProvider } from "./delegation.ts";
 import type { DelegationProvider, SourceSelection, Trust } from "./types.ts";
 
@@ -189,6 +190,89 @@ export function planModelAssignment(
   return { kind: "assign", spec: assigned };
 }
 
+const MAX_MODEL_SPEC_LENGTH = 128;
+
+/** A panel entry that runs on the parent session's model, like upstream's `inherit-parent`. */
+export const INHERIT_ENTRY = "inherit";
+
+export type PanelEntry = { readonly kind: "inherit" } | { readonly kind: "model"; readonly spec: ModelSpec };
+
+/** Splits a panel value. Entries are separated by ASCII spaces, because a model id has none. */
+export function splitPanelValue(value: string): string[] {
+  return value.split(/ +/).filter((entry) => entry !== "");
+}
+
+/** The longest value `set_model` can write: every entry at its limit, one space apart. */
+const MAX_PANEL_VALUE_LENGTH = MAX_PANEL_ENTRIES * (MAX_MODEL_SPEC_LENGTH + 1) - 1;
+
+export function panelEntries(value: string): PanelEntry[] {
+  return splitPanelValue(value).map((entry) =>
+    entry === INHERIT_ENTRY ? { kind: "inherit" } : { kind: "model", spec: splitModelSpec(entry) },
+  );
+}
+
+export function isValidPanelValue(value: string): boolean {
+  if (value.length > MAX_PANEL_VALUE_LENGTH) return false;
+  const entries = splitPanelValue(value);
+  return (
+    entries.length > 0 &&
+    entries.length <= MAX_PANEL_ENTRIES &&
+    entries.every((entry) => entry === INHERIT_ENTRY || isValidModelSpec(entry))
+  );
+}
+
+function invalidPanelMessage(value: unknown): string {
+  return `Invalid panel value ${typeof value === "string" ? `(${value.length} characters)` : safeEcho(value)}. Use 1 to ${MAX_PANEL_ENTRIES} entries separated by spaces, each \`provider/model\`, \`provider/model:thinking\`, or \`${INHERIT_ENTRY}\`.`;
+}
+
+export type PanelAssignment =
+  | { readonly kind: "inherit" }
+  | { readonly kind: "assign"; readonly value: string }
+  | { readonly kind: "rejected"; readonly message: string };
+
+/**
+ * Validates a `set_model` request for a panel role. The value lists entries separated by commas or
+ * spaces. `thinking` applies to each model entry that has no `:level` suffix of its own. A value of
+ * just `inherit` clears the panel, so it falls back to its default roles.
+ */
+export function planPanelAssignment(
+  value: string,
+  thinking: string | undefined,
+  available: readonly AvailableModel[],
+): PanelAssignment {
+  const requested = thinking?.trim().toLowerCase() || undefined;
+  if (requested !== undefined && !isThinkingLevel(requested)) {
+    return {
+      kind: "rejected",
+      message: `Unknown thinking level \`${safeEcho(thinking).replaceAll('"', "")}\`. Use one of ${THINKING_LEVELS.map((level) => `\`${level}\``).join(", ")}.`,
+    };
+  }
+  const entries = value.split(/[\s,]+/).filter((entry) => entry !== "");
+  const onlyInherit = entries.every((entry) => entry.toLowerCase() === INHERIT_ENTRY);
+  if (entries.length > 0 && onlyInherit && thinking?.trim()) {
+    return {
+      kind: "rejected",
+      message: "An `inherit` entry runs at the parent session's thinking, so `thinking` has nothing to apply to. Drop `thinking`, or add a `provider/model` entry.",
+    };
+  }
+  if (entries.length === 1 && entries[0]?.toLowerCase() === INHERIT_ENTRY) return { kind: "inherit" };
+  if (entries.length === 0 || entries.length > MAX_PANEL_ENTRIES) {
+    return { kind: "rejected", message: `A panel takes 1 to ${MAX_PANEL_ENTRIES} entries, one seat each, separated by commas or spaces.` };
+  }
+  const written: string[] = [];
+  for (const entry of entries) {
+    if (entry.toLowerCase() === INHERIT_ENTRY) {
+      written.push(INHERIT_ENTRY);
+      continue;
+    }
+    const own = available.some((candidate) => candidate.id === entry) ? undefined : splitModelSpec(entry).thinking;
+    const plan = planModelAssignment(entry, own === undefined ? thinking : undefined, available);
+    if (plan.kind === "rejected") return { kind: "rejected", message: `Entry \`${safeEcho(entry).replaceAll('"', "")}\`: ${plan.message}` };
+    if (plan.kind === "assign") written.push(joinModelSpec(plan.spec));
+  }
+  return { kind: "assign", value: written.join(" ") };
+}
+
 /** Role names reach generated markdown and status tables, so they stay plain kebab-case. */
 const ROLE_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 /**
@@ -200,7 +284,6 @@ const ROLE_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 const PRINTABLE_ASCII = /^[\x21-\x7e]+$/;
 const MARKUP_CHARACTERS = /[`|<>[\]()\\*]/;
 
-const MAX_MODEL_SPEC_LENGTH = 128;
 
 export function isValidModelSpec(model: string): boolean {
   const plain = (value: string) => PRINTABLE_ASCII.test(value) && !MARKUP_CHARACTERS.test(value) && !value.endsWith(":");
@@ -236,7 +319,11 @@ export function parseModelRoles(value: string): Record<string, string> {
     if (!isValidRole(role)) throw new Error(invalidRoleMessage(role));
     // An empty value is an unset variable that expanded to nothing, not a model.
     if (model === "") continue;
-    if (!isValidModelSpec(model)) throw new Error(invalidModelMessage(model));
+    if (isPanelRole(role)) {
+      if (!isValidPanelValue(model)) throw new Error(`Role ${safeEcho(role)}. ${invalidPanelMessage(model)}`);
+    } else if (!isValidModelSpec(model)) {
+      throw new Error(invalidModelMessage(model));
+    }
     roles[role] = model;
   }
   return roles;
@@ -319,7 +406,11 @@ function validatedModels(value: unknown, label: string): Record<string, string> 
       throw new Error(`${label}: ${invalidRoleMessage(role)} Edit that key in \`models\` in the named file, then restart Pi.`);
     }
     if (model === "") continue;
-    if (typeof model !== "string" || !isValidModelSpec(model)) {
+    if (isPanelRole(role)) {
+      if (typeof model !== "string" || !isValidPanelValue(model)) {
+        throw new Error(`${label}: role ${safeEcho(role)}. ${invalidPanelMessage(model)}`);
+      }
+    } else if (typeof model !== "string" || !isValidModelSpec(model)) {
       throw new Error(`${label}: role ${safeEcho(role)}. ${invalidModelMessage(model)}`);
     }
     Object.defineProperty(models, role, { value: model, enumerable: true, writable: true, configurable: true });

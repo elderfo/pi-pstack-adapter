@@ -21,6 +21,7 @@ import {
   joinModelSpec,
   mergeConfig,
   planModelAssignment,
+  planPanelAssignment,
   readConfigFile,
   trustWarning,
   updateConfigFile,
@@ -30,8 +31,8 @@ import { safeEcho } from "./src/echo.ts";
 import { MODE_ENTRY_TYPE, modeFromEntries, modeInstruction } from "./src/mode.ts";
 import { CONFIG_FILE_NAME, agentDir, cacheRoot } from "./src/paths.ts";
 import { bashToolContext, probeExecutables } from "./src/executables.ts";
-import { entryFor } from "./src/registry.ts";
-import { platformSupport, renderCheck, renderStatus, shellDiagnostics, type ShellState } from "./src/status.ts";
+import { SKILL_PANELS, entryFor, isPanelRole } from "./src/registry.ts";
+import { platformSupport, renderCheck, renderPanels, renderStatus, shellDiagnostics, type ShellState } from "./src/status.ts";
 import { BootstrapRequiredError, resolveRefToCommit, resolveSource } from "./src/upstream.ts";
 import { normalizeRepo } from "./src/config.ts";
 import type { CapabilityStatus, Diagnostic, GeneratedAgent, GenerationResult, ResolvedSource } from "./src/types.ts";
@@ -140,7 +141,12 @@ export default function (pi: ExtensionAPI) {
       ),
       skill: Type.Optional(Type.String({ description: "Skill name for `check`, with or without the namespace prefix" })),
       role: Type.Optional(Type.String({ description: "pstack model role for `set_model`" })),
-      model: Type.Optional(Type.String({ description: "`provider/model` id, or `inherit` to clear the role" })),
+      model: Type.Optional(
+        Type.String({
+          description:
+            "`provider/model` id, or `inherit` to clear the role. For a panel role such as `arena-runners`, a list of entries separated by commas, one seat each.",
+        }),
+      ),
       thinking: Type.Optional(
         Type.String({
           description: `Thinking level for \`set_model\`: ${THINKING_LEVELS.join(", ")}. Omit to pass no level, which also clears a level set earlier.`,
@@ -275,11 +281,13 @@ export default function (pi: ExtensionAPI) {
     const shell: ShellState = { ...resolved, runError: executables.shellFailure };
     const shellProblems = shellDiagnostics(shell).map((diagnostic) => `${diagnostic.message} ${diagnostic.action ?? ""}`.trim());
     const current = capabilities();
+    const panels = Object.hasOwn(SKILL_PANELS, skill.upstreamName) ? SKILL_PANELS[skill.upstreamName] : undefined;
     return renderCheck(
       skill,
       entryFor(skill.upstreamName, skill.generatedName.slice(prefix.length)),
       checkPrerequisites(skill.capabilities, current, skill.executables, executables.has, shellProblems),
       current.find((capability) => capability.id === "delegation"),
+      panels ? renderPanels(state.config, panels) : undefined,
     );
   }
 
@@ -304,6 +312,7 @@ export default function (pi: ExtensionAPI) {
     const available = ctx.modelRegistry
       .getAvailable()
       .map((candidate) => ({ id: `${candidate.provider}/${candidate.id}`, reasoning: candidate.reasoning }));
+    if (isPanelRole(role)) return setPanel(role, model, thinking, available, scope, ctx);
     const plan = planModelAssignment(model, thinking, available);
     if (plan.kind === "rejected") return plan.message;
     const path = configPath(scope, ctx);
@@ -312,10 +321,50 @@ export default function (pi: ExtensionAPI) {
     if (plan.kind === "inherit") delete models[role];
     else models[role] = joinModelSpec(plan.spec);
     updateConfigFile(path, { models });
-    if (plan.kind === "inherit") return `Role \`${role}\` now inherits the parent session model and thinking. Written to ${path}.`;
+    const note = refreshModels(scope, ctx);
+    if (plan.kind === "inherit") return `Role \`${role}\` now inherits the parent session model and thinking. Written to ${path}.${note}`;
     return plan.spec.thinking === undefined
-      ? `Role \`${role}\` now uses \`${plan.spec.model}\` at the model's default thinking. Written to ${path}.`
-      : `Role \`${role}\` now uses \`${plan.spec.model}\` with thinking \`${plan.spec.thinking}\`. Written to ${path}.`;
+      ? `Role \`${role}\` now uses \`${plan.spec.model}\` at the model's default thinking. Written to ${path}.${note}`
+      : `Role \`${role}\` now uses \`${plan.spec.model}\` with thinking \`${plan.spec.thinking}\`. Written to ${path}.${note}`;
+  }
+
+  /**
+   * Status and `check` read roles from `state`, so a written role takes effect now. Only `models`
+   * moves: the source and generation stay as they were until the next start. Returns a note for
+   * the reply when the session view does not match what was written.
+   */
+  function refreshModels(scope: "user" | "project", ctx: ExtensionContext): string {
+    const untrusted =
+      scope === "project" && !ctx.isProjectTrusted()
+        ? " This project is not trusted, so Pi ignores the file until you trust it, and the status report still shows the earlier value."
+        : "";
+    try {
+      if (state) state = { ...state, config: { ...state.config, models: loadConfig(ctx).models } };
+    } catch (error) {
+      return `${untrusted} The write succeeded, but the session view was not refreshed: ${(error as Error).message}`;
+    }
+    return untrusted;
+  }
+
+  function setPanel(
+    role: string,
+    model: string,
+    thinking: string | undefined,
+    available: readonly { id: string; reasoning?: boolean }[],
+    scope: "user" | "project",
+    ctx: ExtensionContext,
+  ): string {
+    const plan = planPanelAssignment(model, thinking, available);
+    if (plan.kind === "rejected") return plan.message;
+    const path = configPath(scope, ctx);
+    const stored = readConfigFile(path)?.values.models;
+    const models = typeof stored === "object" && stored !== null && !Array.isArray(stored) ? { ...stored } : {};
+    if (plan.kind === "inherit") delete models[role];
+    else models[role] = plan.value;
+    updateConfigFile(path, { models });
+    const note = refreshModels(scope, ctx);
+    if (plan.kind === "inherit") return `Panel \`${role}\` is unset again, so it uses \`judgment\`, then \`general\`. Written to ${path}.${note}`;
+    return `Panel \`${role}\` now runs one seat each on ${plan.value.split(" ").map((entry) => `\`${entry}\``).join(", ")}. Written to ${path}.${note}`;
   }
 
   async function setSource(

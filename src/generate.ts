@@ -465,10 +465,12 @@ ${agentSystemPrompt(notes, upstreamPrompt)}
  */
 const NESTED_DELEGATION_RULE = `Nested delegation: every agent that delegates, a child included, gives each new child an
   explicit role, using \`general\` when no other role fits, and never lets it inherit the delegating
-  agent's model or thinking. Put this line in each brief, verbatim, just before any read-only or
+  agent's model or thinking. The one exception is a panel seat from an \`inherit\` entry in the
+  \`panel roles\` table, which runs on the delegating agent's model and thinking because the user
+  configured it so. Put this line in each brief, verbatim, just before any read-only or
   no-commit rule: "If you start agents, give each the model and thinking of its own pstack role from the
   \`pstack_adapter\` status report, using \`general\` when no role fits. Never let one inherit your
-  model or thinking, and never raise a role above its configured level."`;
+  model or thinking, except a panel seat from an \`inherit\` entry in that report's \`panel roles\` table, and never raise a role above its configured level."`;
 
 function delegationSection(namespace: string, preferred: DelegationProvider): string {
   const sections = delegationOrder(preferred).map((backend) => (backend.id === "t3" ? t3Section(namespace) : subagentSection(namespace)));
@@ -582,7 +584,8 @@ write no \`Skipped in Pi\` line for it.
 | role lines \`feature, refactoring\`, \`bug-fix\`, \`perf-issue\`, \`hillclimb\`, \`judgment and prose\`, \`hardest tasks\` | adapter roles \`feature\` or \`refactoring\`, \`bug-fix\`, \`perf-issue\`, \`hillclimb\`, \`judgment\`, and \`strongest-judgment\`. |
 | role lines \`how explainer\`, \`why synthesizer\`, \`reflect judgment, divergent, synthesizer\` | adapter role \`judgment\`. |
 | role lines \`how explorer\`, \`why investigators\`, \`reflect tooling\`, \`swarm workers\`, and verification | adapter role \`general\`. |
-| panel role lines \`arena runners\`, \`arena cross-judge pool\`, \`architect runners\`, \`interrogate reviewers\` | the list \`judgment\`, \`general\`, one entry each, so the panel keeps two models when those roles differ. |
+| panel role lines \`arena runners\`, \`arena cross-judge pool\`, \`architect runners\`, \`interrogate reviewers\` | adapter panel roles \`arena-runners\`, \`arena-cross-judge-pool\`, \`architect-runners\`, and \`interrogate-reviewers\`. The \`panel roles\` table of the \`pstack_adapter\` status report lists each panel's seats in order, one per entry, and a seat's thinking is its ceiling, passed by the backend rules in [Delegation](#delegation). A \`model of the agent that starts the panel\` seat comes from an \`inherit\` entry: start it with no \`target\` or \`model\`, so it runs on your own model and thinking even when \`general\` is configured. The \`auto\` and \`inherit-parent\` row does not apply to it. An unset panel uses \`judgment\`, then \`general\`, and those are also the defaults where the body names its own default list or default pool. Families go by the model id after the provider prefix, such as \`claude-*\`, \`gpt-*\`, \`grok-*\`, or \`gemini-*\`, not by the provider, because one provider can serve several families. |
+| a panel whose seats all run on one model, or a claim that a model or model family is unavailable | A panel the status report warns about runs on one model because of the adapter configuration. Say that in your reply, name the panel, and name \`/skill:${namespace}-setup\` as the fix. Do not attribute it to which models exist. A \`model of the agent that starts the panel\` seat is your own model, so a panel whose other seats are all on your model is one-model too. Never claim a model or family is unavailable. A model listing is not proof of absence: \`${T3_CAPABILITIES_TOOL}\` filters by \`search\` and omits models beyond its limit, and the \`pstack_adapter\` tool's \`action: "models"\` shows only the session's scoped models when the user scoped some. Say which models the configuration uses instead. |
 | a delegate no role line names, such as an ad-hoc helper | adapter role \`general\`. |
 | a Custom Mode, "Use as Mode", or Option+Enter / Alt+Enter on \`/poteto-mode\` | \`/${namespace}-mode on\`, which keeps Poteto Mode active for the Pi session until \`/${namespace}-mode off\`. |
 | searching \`~/.cursor/plugins/\` for an installed pstack skill, or comparing \`.cursor-plugin/plugin.json\` versions | the generated skill directory. A pstack skill is \`../<pi-name>/SKILL.md\` beside the current wrapper, where \`<pi-name>\` is its Pi name in [skill names](skill-names.md). Most names only gain the \`${namespace}-\` prefix, but some are renamed. The \`generated skills\` row of the \`pstack_adapter\` tool's \`action: "status"\` report gives that directory's absolute path. A parent passes the absolute path to \`${namespace}-poteto-mode/SKILL.md\` to any \`${namespace}-poteto-agent\` it spawns. |

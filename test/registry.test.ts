@@ -103,6 +103,7 @@ test("arena is adapted after a pstack 0.15.36 run with a cross-family judge, and
   assert.deepEqual(entry.executables, ["git"]);
   assert.match(entry.note ?? "", /judge must come from a model family other than the parent's/);
   assert.match(entry.note ?? "", /`judgment` and `general` roles/);
+  assert.match(entry.note ?? "", /cross-judge pool to the `arena-cross-judge-pool` panel role, which uses `judgment`, then `general` while unset/);
   assert.match(entry.note ?? "", /skips the judge, picks the base alone/);
   assert.match(entry.note ?? "", /When the parent does not know its model, arena tries the pool in order anyway and says the family check did not run\./);
   assert.equal(docsRow("arena"), `| \`arena\` | \`/skill:pistack-arena\` | \`delegation\` | \`git\` | ${entry.note} |`);

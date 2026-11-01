@@ -159,6 +159,20 @@ Add a thinking level to a role with a `:level` suffix. The levels are `off`, `mi
 PISTACK_MODELS='feature=provider/model:medium,judgment=provider/other-model:high' pi
 ```
 
+Panels such as `arena`'s runners and judge, `architect`'s runners, and `interrogate`'s adversaries
+use the panel roles `arena-runners`, `arena-cross-judge-pool`, `architect-runners`, and
+`interrogate-reviewers`. A panel holds a list of models, one seat each, separated by spaces.
+An `inherit` entry uses the model and thinking of the agent that starts the panel, which is
+your session unless a delegate runs the workflow:
+
+```bash
+PISTACK_MODELS='arena-runners=provider/model:high other-provider/other-model:high' pi
+```
+
+Upstream pstack defaults each panel to two model families. A panel you leave unset uses
+`judgment`, then `general`, so it covers two families only when those roles do. The status
+report warns when a panel's seats all run on one model.
+
 Role names are lowercase letters, digits, and hyphens. A model value is printable ASCII with no spaces or markup characters, at most 128 characters. A config entry that breaks these rules stops the adapter at startup with an error that names the file, so fix the key there and restart Pi.
 
 A role without a level passes none, so the delegation backend applies its own default. A role's
@@ -206,7 +220,7 @@ settings to `.pi/pi-pstack-adapter.json`. Environment variables override both fi
 | `PISTACK_UPSTREAM_PLUGIN_PATH` | Selects the plugin directory inside the checkout. |
 | `PISTACK_ALLOW_BOOTSTRAP` | Allows a noninteractive first download. |
 | `PISTACK_CACHE_DIR` | Changes the cache directory. |
-| `PISTACK_MODELS` | Assigns models as comma-separated `role=provider/model[:thinking]` pairs. |
+| `PISTACK_MODELS` | Assigns models as comma-separated `role=provider/model[:thinking]` pairs. A panel role takes its entries separated by spaces. |
 | `PISTACK_DELEGATION` | Sets the delegation provider to try first: `t3` (default) or `pi-subagents`. The config file key is `delegation`. |
 
 ## Security and trust
