@@ -204,24 +204,30 @@ async function routeT3(args: Record<string, unknown>, context: RouteContext): Pr
     };
   }
   const task = typeof args.task === "string" ? args.task : "";
-  const route = await routeReference(request, where, lowest(request.thinking, optionLevel), task, context);
+  const requested = lowest(request.thinking, optionLevel);
+  const route = await routeReference(request, where, requested, task, context);
   if (route.kind === "block") return route;
   const next = structuredClone(args);
   const nextTarget = next.target as Record<string, unknown>;
   if (route.kind === "inherit") {
-    // Omitted options inherit the parent's, and other target fields stay for the filter gate to check.
+    // The provider selector goes too, because it would pick that instance's model instead of the
+    // parent's. Other fields stay for the filter gate to check. Omitted options inherit the parent's.
     delete nextTarget.model;
-    const options = writeThinkingOption(nextTarget.options, undefined);
+    delete nextTarget.providerInstanceId;
+    delete nextTarget.driverKind;
+    const lowered = requested !== undefined && context.parentThinking !== undefined ? lowest(requested, context.parentThinking) : undefined;
+    const options = writeThinkingOption(nextTarget.options, lowered);
     if (options === undefined) delete nextTarget.options;
     else nextTarget.options = options;
-    const rest = Object.keys(nextTarget).filter((key) => !(key === "providerInstanceId" && nextTarget[key] === "pi"));
-    if (rest.length === 0) delete next.target;
+    if (Object.keys(nextTarget).length === 0) delete next.target;
     return { kind: "rewrite", input: next };
   }
   nextTarget.model = route.spec.model;
   if (nextTarget.providerInstanceId === undefined) nextTarget.providerInstanceId = "pi";
-  // T3 reads empty options as clearing the inherited ones, so a backend-default entry sends them empty.
-  nextTarget.options = writeThinkingOption(nextTarget.options, route.spec.thinking) ?? (Array.isArray(nextTarget.options) ? [] : {});
+  // T3 merges given options over the inherited ones and reads empty options as clearing them, so a
+  // backend-default entry sends them empty rather than let the parent's thinking through.
+  nextTarget.options =
+    route.spec.thinking === undefined ? (Array.isArray(nextTarget.options) ? [] : {}) : writeThinkingOption(nextTarget.options, route.spec.thinking);
   return { kind: "rewrite", input: next };
 }
 
@@ -297,7 +303,10 @@ async function routeSubagent(args: Record<string, unknown>, context: RouteContex
     const route = await routeReference(request, slot.where, request.thinking, slot.task, context);
     if (route.kind === "block") return route;
     if (route.kind === "model") slot.holder.model = joinModelSpec(route.spec);
-    else if (context.parentModel !== undefined) slot.holder.model = joinModelSpec({ model: context.parentModel, ...(context.parentThinking !== undefined ? { thinking: context.parentThinking } : {}) });
+    else if (context.parentModel !== undefined) {
+      const thinking = context.parentThinking === undefined ? undefined : lowest(request.thinking, context.parentThinking);
+      slot.holder.model = joinModelSpec({ model: context.parentModel, ...(thinking !== undefined ? { thinking } : {}) });
+    }
     else delete slot.holder.model;
     changed = true;
   }

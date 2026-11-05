@@ -169,7 +169,8 @@ export default function (pi: ExtensionAPI) {
     const route = await routeDelegation(event.toolName, event.input, { ...context, config: state?.config, parentThinking: ctx.thinkingLevel });
     if (route.kind === "block") return { block: true, reason: route.reason };
     if (route.kind === "rewrite") applyRewrite(event.input as Record<string, unknown>, route.input);
-    const decision = gateDelegation(event.toolName, event.input, context);
+    // Read the filter again: a pick that waits on a service could span a `set_filter`.
+    const decision = gateDelegation(event.toolName, event.input, { ...context, filter: filterOf(activeFilter(sessionFilter, savedFilter)) });
     if (decision.kind === "block") return { block: true, reason: decision.reason };
   });
 

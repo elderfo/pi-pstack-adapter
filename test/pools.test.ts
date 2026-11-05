@@ -177,3 +177,12 @@ test("an unset panel warns when both default seats' ranked picks land on one mod
   const panel = resolvePanel(config, "architect-runners", { parentModel: "cliproxyapi/claude-opus-5-5" });
   assert.match(panelWarning(panel, config) ?? "", /Every seat of `architect-runners` runs on `cliproxyapi\/kimi-k3`/);
 });
+
+test("a judge pool warning keeps every fallback choice open, since the ranking can be overridden", () => {
+  const config = mergeConfig([layer({ models: { "arena-cross-judge-pool": "cliproxyapi/claude-opus-5-5", general: ["cliproxyapi/claude-opus-5-5", "cliproxyapi/gpt-6.1-sol"] } })]);
+  const warning = panelWarning(resolvePanel(config, "arena-cross-judge-pool"), config) ?? "";
+  assert.match(warning, /tries its default pool/);
+  assert.doesNotMatch(warning, /arena skips the judge/);
+  const unset = mergeConfig([layer({ models: { general: ["cliproxyapi/kimi-k3", "cliproxyapi/gpt-6.1-sol"] } })]);
+  assert.match(panelWarning(resolvePanel(unset, "architect-runners"), unset) ?? "", /with the ranked picks, unless the delegating agent overrides the ranking, because/);
+});

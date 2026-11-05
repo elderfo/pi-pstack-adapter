@@ -112,7 +112,8 @@ test("a requested level only lowers thinking, and an entry without a level keeps
     { providerInstanceId: "pi", model: "cliproxyapi/claude-opus-5-5", options: [{ id: "fast", value: true }, { id: "thinking", value: "medium" }] },
   );
   assert.deepEqual(await target("pstack:judgment:low", { options: { thinking: "low" } }), { providerInstanceId: "pi", model: "cliproxyapi/kimi-k3", options: {} }, "backend default clears the level");
-  assert.deepEqual(await target("pstack:judgment", { options: { thinking: "low", other: 1 } }), { providerInstanceId: "pi", model: "cliproxyapi/kimi-k3", options: { other: 1 } });
+  assert.deepEqual(await target("pstack:judgment", { options: { thinking: "low", fast: true } }), { providerInstanceId: "pi", model: "cliproxyapi/kimi-k3", options: {} }, "other options would let the parent's thinking merge through");
+  assert.deepEqual(await target("pstack:judgment", { options: [{ id: "fast", value: true }] }), { providerInstanceId: "pi", model: "cliproxyapi/kimi-k3", options: [] });
   assert.match(await blocked(routeDelegation(T3, t3("pstack:feature", { options: { thinking: "huge" } }), context())), /`target\.options\.thinking` is not one of/);
 
   const child = await rewritten(routeDelegation("subagent", { agent: "delegate", task: "x", model: "pstack:feature@cliproxyapi/gpt-6.1-sol:medium" }, context()));
@@ -185,13 +186,21 @@ test("an invalid reference is echoed in a safe, short form", async () => {
 test("review regressions: inherited targets keep other fields, inherited children keep thinking, and lookups are own keys only", async () => {
   const empty = mergeConfig([]);
   const remote = await rewritten(routeDelegation(T3, t3("pstack:judgment", { environmentId: "remote", options: { thinking: "low" } }), context({ config: empty })));
-  assert.deepEqual(remote.target, { providerInstanceId: "pi", environmentId: "remote" }, "the filter gate still sees the named environment");
+  assert.deepEqual(remote.target, { environmentId: "remote" }, "the filter gate still sees the named environment, and no provider selector picks another instance's model");
+  const lowered = await rewritten(routeDelegation(T3, t3("pstack:judgment:low", { projectId: "p" }), context({ config: empty, parentThinking: "high" })));
+  assert.deepEqual(lowered.target, { projectId: "p", options: { thinking: "low" } }, "a requested level lowers the inherited one");
+  const notRaised = await rewritten(routeDelegation(T3, t3("pstack:judgment:max"), context({ config: empty, parentThinking: "medium" })));
+  assert.deepEqual(notRaised.target, { options: { thinking: "medium" } });
+  const unknownLevel = await rewritten(routeDelegation(T3, t3("pstack:judgment:low"), context({ config: empty })));
+  assert.equal("target" in unknownLevel, false, "without the parent's level, the child inherits it unchanged");
 
   const listForm = await rewritten(routeDelegation(T3, t3("pstack:judgment", { options: [{ id: "thinking", value: "low" }] }), context()));
   assert.deepEqual((listForm.target as Record<string, unknown>).options, [], "an empty list clears inherited options too");
 
   const child = await rewritten(routeDelegation("subagent", { agent: "delegate", task: "x", model: "pstack:judgment" }, context({ config: empty, parentThinking: "xhigh" })));
   assert.equal(child.model, "cliproxyapi/claude-opus-5-5:xhigh");
+  const lowChild = await rewritten(routeDelegation("subagent", { agent: "delegate", task: "x", model: "pstack:judgment:low" }, context({ config: empty, parentThinking: "xhigh" })));
+  assert.equal(lowChild.model, "cliproxyapi/claude-opus-5-5:low");
 
   for (const role of ["constructor", "tostring", "hasownproperty"]) {
     assert.match(await blocked(routeDelegation(T3, t3(`pstack:${role}`), context())), new RegExp(`\`${role}\` is not a pstack role`));
