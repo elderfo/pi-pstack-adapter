@@ -18,6 +18,7 @@ import {
   sessionFilterFromEntries,
 } from "./src/filter.ts";
 import { gateDelegation } from "./src/gate.ts";
+import { applyRewrite, routeDelegation } from "./src/route.ts";
 import { checkPrerequisites, detectCapabilities, type ToolDescriptor } from "./src/capabilities.ts";
 import {
   type AdapterConfig,
@@ -149,8 +150,9 @@ export default function (pi: ExtensionAPI) {
     sessionFilter = sessionFilterFromEntries(ctx.sessionManager.getBranch() as never[]);
   });
 
-  // The model filter applies to every delegation in this session, pstack or not, because a
-  // delegation tool call names no pstack role. A blocked call fails; nothing retries it.
+  // A `pstack:<role>` model is rewritten to the model the adapter picks for that role. The model
+  // filter then applies to every delegation in this session, pstack or not, because a call that
+  // names a concrete model names no role. A blocked call fails; nothing retries it.
   pi.on("tool_call", async (event, ctx) => {
     if (event.toolName !== T3_DELEGATE_TOOL && event.toolName !== SUBAGENT_TOOL) return;
     if (sessionFilter === undefined && configError !== undefined) {
@@ -159,11 +161,15 @@ export default function (pi: ExtensionAPI) {
         reason: `Blocked by the pstack adapter: its config could not be read, so it cannot tell whether a saved model filter applies. ${configError} Fix the config and reload, or ask the user whether to set an explicit session filter with \`set_filter\`.`,
       };
     }
-    const decision = gateDelegation(event.toolName, event.input, {
+    const context = {
       filter: filterOf(activeFilter(sessionFilter, savedFilter)),
       parentModel: parentModelOf(ctx),
-      resolveModel: (model) => resolveRegistryModel(ctx, model),
-    });
+      resolveModel: (model: string) => resolveRegistryModel(ctx, model),
+    };
+    const route = routeDelegation(event.toolName, event.input, { ...context, config: state?.config });
+    if (route.kind === "block") return { block: true, reason: route.reason };
+    if (route.kind === "rewrite") applyRewrite(event.input as Record<string, unknown>, route.input);
+    const decision = gateDelegation(event.toolName, event.input, context);
     if (decision.kind === "block") return { block: true, reason: decision.reason };
   });
 
