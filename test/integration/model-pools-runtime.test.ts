@@ -101,7 +101,7 @@ test("a pool and a session filter work end to end, and saved filters persist wit
   assert.match(await session.call({ action: "set_filter", exclude: ["claude-*"] }), /This session's model filter is set/);
   const status = await session.call({ action: "status" });
   assert.match(status, /\| model filter \| include none; exclude `claude-\*` \(this session\) \|/);
-  assert.match(status, /\| feature \| pool, pick one of cliproxyapi\/gpt-6\.1-sol at max, cliproxyapi\/kimi-k3 at high; excluded by the model filter: cliproxyapi\/claude-opus-5-5 at high \| per choice \|/);
+  assert.match(status, /\| feature \| pool, ranked cliproxyapi\/gpt-6\.1-sol at max, then cliproxyapi\/kimi-k3 at high; excluded by the model filter: cliproxyapi\/claude-opus-5-5 at high \| per choice \|/);
   // The session runs on Claude, so a role that would inherit it is blocked instead of running there.
   assert.match(status, /\| judgment \| BLOCKED, it inherits, and the parent session's model `cliproxyapi\/claude-opus-5-5` is excluded by the model filter\. Do not delegate this role \| - \|/);
 

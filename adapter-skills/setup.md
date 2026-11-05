@@ -66,7 +66,8 @@ Steps.
 2. Ask the user which model each role should use. Offer the listed ids, and offer
    `inherit` for any role they do not care about. Use the structured question tool when it is
    available; otherwise ask in plain text. Only ids from step 1 are accepted. A user who wants
-   alternatives for a role gets a pool: a list of models, of which each delegation picks one.
+   alternatives for a role gets a pool: a ranked list of models. Each delegation uses the first
+   one unless the delegating agent overrides the ranking for that task, so ask for the order.
    A pool is a set of choices, not a retry list and not a panel, so say that when you offer it.
 3. Ask for a thinking level. Do not assume the user wants none. Skip this step only when every
    role is on `inherit`. It applies to every role that got a model in step 2. A role on

@@ -124,8 +124,9 @@ test("a single-model panel is reported as configuration, and no family is called
 test("both delegation backends distinguish pools from panels and keep the active session filter", () => {
   for (const backend of ["t3", "pi-subagents"] as const) {
     const document = hostMappingDocument("pistack", backend);
-    assert.match(document, /pick ONE model from it by fit/);
-    assert.match(document, /when a\n  delegation fails, report the failure instead of trying another model/);
+    assert.match(document, /use the first model in that ranking/);
+    assert.match(document, /you may override the ranking and pick another\n  model from the pool when the task clearly fits it better; say which model you picked and why/);
+    assert.match(document, /when a delegation\n  fails, report the failure instead of trying another model/);
     assert.match(document, /Keep the active filter unchanged unless the user\n  requests a change/);
     assert.match(document, /Wait for `set_filter` to finish before issuing delegation calls/);
     assert.match(document, /Children do not inherit a session filter/);

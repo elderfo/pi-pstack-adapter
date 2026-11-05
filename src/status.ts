@@ -176,7 +176,7 @@ function describeSeat(seat: PanelSeat): string {
     case "model":
       return `${describeSpec(seat.spec)}${origin}`;
     case "choice":
-      return `one of ${seat.choices.map(describeSpec).join(" or ")}, picked once for this seat${origin}`;
+      return `ranked ${seat.choices.map(describeSpec).join(", then ")}; runs once on the first unless the delegating agent picks another${origin}`;
     case "blocked":
       return `BLOCKED, ${seat.reason}${origin}`;
   }
@@ -273,7 +273,7 @@ function describeRole(resolution: RoleResolution, role: string): readonly [strin
       const eligible = resolution.choices.filter((choice) => choice.eligible).map((choice) => describeSpec(choice.spec));
       const excluded = resolution.choices.filter((choice) => !choice.eligible).map((choice) => describeSpec(choice.spec));
       const tail = excluded.length > 0 ? `; excluded by the model filter: ${excluded.join(", ")}` : "";
-      return [`pool, pick one of ${eligible.join(", ")}${tail}${via}`, `per choice${via}`];
+      return [`pool, ranked ${eligible.join(", then ")}${tail}${via}`, `per choice${via}`];
     }
   }
 }
@@ -297,7 +297,7 @@ export function renderModelPolicy(config: AdapterConfig, origin: FilterOrigin, p
   }
   if (pools.length > 0) {
     lines.push(
-      `Pools: ${pools.map(([role, resolution]) => `\`${role}\` picks one of ${describeRole(resolution, role)[0].replace(/^pool, pick one of /, "")}`).join("; ")}. For each delegation, pick ONE eligible model from the role's pool by fit. A pool is not a retry list and not a panel: do not start the same task on several of its models, and when a delegation fails, report the failure instead of trying another model.`,
+      `Pools: ${pools.map(([role, resolution]) => `\`${role}\` is ranked ${describeRole(resolution, role)[0].replace(/^pool, ranked /, "")}`).join("; ")}. For each delegation, use the first eligible model in the role's ranking. As the delegating agent, you may override the ranking and pick another eligible model from the pool when the task clearly fits it better; say which model you picked and why. A pool is not a retry list and not a panel: do not start the same task on several of its models, and when a delegation fails, report the failure instead of trying another model.`,
     );
   }
   if (blocked.length > 0) {

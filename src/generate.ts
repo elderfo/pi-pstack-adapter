@@ -474,15 +474,18 @@ const NESTED_DELEGATION_RULE = `Nested delegation: every agent that delegates, a
 
 const MODEL_POLICY_SECTION = `Model pools and the model filter work the same on both backends.
 
-- A role whose \`model roles\` row reads "pool, pick one of" lists alternatives. For each
-  delegation, pick ONE model from it by fit, and pass that model and its thinking by the backend
-  rules below. A pool is not a retry list and not a panel: start one child per task, and when a
-  delegation fails, report the failure instead of trying another model from the pool.
+- A role whose \`model roles\` row reads "pool, ranked" lists alternatives in rank order. For
+  each delegation, use the first model in that ranking, and pass that model and its thinking by
+  the backend rules below. As the delegating agent, you may override the ranking and pick another
+  model from the pool when the task clearly fits it better; say which model you picked and why.
+  A pool is not a retry list and not a panel: start one child per task, and when a delegation
+  fails, report the failure instead of trying another model from the pool.
 - A role whose row reads "BLOCKED" has no model the model filter allows. Do not delegate its work,
   and do not move the work to \`general\` or to your own model. Tell the user which role is blocked
   and why.
 - A panel seat that reads "BLOCKED" does not run. Run the other seats, and say in your reply which
-  seat did not run and why. A seat that reads "one of" runs once, on one model you pick from it.
+  seat did not run and why. A seat that reads "ranked" runs once,
+  on its first model unless you override the ranking as for a pool.
 - When the \`model filter\` row of the status report names a filter, the adapter blocks any
   \`delegate_task\` or \`subagent\` call in this session whose model the filter excludes, or whose
   model it cannot tell. That covers a call with no model while your own model is excluded, a model
