@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. release-please writes new entries from Conventional Commit PR titles.
 
+## [0.9.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.8.0...v0.9.0) (2026-11-05)
+
+
+### Features
+
+* add role model pools and session delegation filters ([#30](https://github.com/elderfo/pi-pstack-adapter/issues/30)) ([b2bf25a](https://github.com/elderfo/pi-pstack-adapter/commit/b2bf25a577d9ae90b548894cf7f79bb128c30902))
+
 ## [0.8.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.7.0...v0.8.0) (2026-11-01)
 
 
