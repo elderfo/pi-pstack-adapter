@@ -1,7 +1,7 @@
 # Intent: Certify Windows support
 
 Author: Christopher Getsfred
-Status: approved
+Status: implemented (#5)
 
 ## Problem
 
