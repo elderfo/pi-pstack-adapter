@@ -106,6 +106,18 @@ test("a single-model panel is reported as configuration, and no family is called
   assert.match(row, /Say which models the configuration uses instead\./);
 });
 
+test("both delegation backends distinguish pools from panels and keep the active session filter", () => {
+  for (const backend of ["t3", "pi-subagents"] as const) {
+    const document = hostMappingDocument("pistack", backend);
+    assert.match(document, /pick ONE model from it by fit/);
+    assert.match(document, /when a\n  delegation fails, report the failure instead of trying another model/);
+    assert.match(document, /Keep the active filter unchanged unless the user\n  requests a change/);
+    assert.match(document, /Wait for `set_filter` to finish before issuing delegation calls/);
+    assert.match(document, /Children do not inherit a session filter/);
+    assert.match(document, /A saved filter applies in a child where the adapter loads the same config files/);
+  }
+});
+
 test("an inherit panel seat runs on the session's own model even when general is configured", () => {
   const row = rowFor("| panel role lines `arena runners`");
   assert.match(row, /comes from an `inherit` entry: start it with no `target` or `model`, so it runs on your own model and thinking even when `general` is configured/);

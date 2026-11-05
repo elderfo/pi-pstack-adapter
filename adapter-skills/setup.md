@@ -4,7 +4,8 @@ Upstream pstack ships a `setup-pstack` skill that writes `~/.cursor/rules/pstack
 a Cursor-only always-applied rule full of Cursor model slugs. Pi has neither that file nor
 those models, so this adapter replaces the body with the Pi equivalent.
 
-Three things are configurable. Model roles, the upstream source, and the delegation order.
+Four things are configurable. Model roles, the model filter, the upstream source, and the
+delegation order.
 
 ## Model roles
 
@@ -64,7 +65,9 @@ Steps.
    installation can actually reach. Do not invent ids.
 2. Ask the user which model each role should use. Offer the listed ids, and offer
    `inherit` for any role they do not care about. Use the structured question tool when it is
-   available; otherwise ask in plain text. Only ids from step 1 are accepted.
+   available; otherwise ask in plain text. Only ids from step 1 are accepted. A user who wants
+   alternatives for a role gets a pool: a list of models, of which each delegation picks one.
+   A pool is a set of choices, not a retry list and not a panel, so say that when you offer it.
 3. Ask for a thinking level. Do not assume the user wants none. Skip this step only when every
    role is on `inherit`. It applies to every role that got a model in step 2. A role on
    `inherit` cannot have a level, so tell the user that and say that those roles follow the
@@ -90,9 +93,12 @@ Steps.
    instead of asking again. The tool rejects any level other than `off` on a model that has no reasoning support.
    When it does, set that role with no level and tell the user which role has none.
 4. For each role, call the adapter tool with `action: "set_model"`, the role, the chosen
-   `provider/model` id, and `thinking` when step 3 picked a level. Pass `scope: "project"` when
-   the user wants the choice to apply only to this repository. Calling `set_model` for a role
-   again without `thinking` clears a level set earlier, so always pass it again.
+   `provider/model` id, and `thinking` when step 3 picked a level. For a pool, pass `model` as a
+   list of ids, for example `model: ["provider/model-a", "provider/model-b"]`. `thinking`
+   applies to each entry without its own `:level`, and one unknown entry rejects the whole pool.
+   Pass `scope: "project"` when the user wants the choice to apply only to this repository.
+   Calling `set_model` for a role again without `thinking` clears a level set earlier, so always
+   pass it again.
 5. Set the panels. Read the `panel roles` table of `action: "status"` and show the user each
    panel's seats. When a panel's seats share one model, or one family, say so and suggest two
    families from step 1, as upstream's defaults do. Never say a family is missing unless the
@@ -106,9 +112,34 @@ Steps.
 
 For a scripted environment, set `PISTACK_MODELS` instead, for example
 `PISTACK_MODELS=feature=anthropic/claude-sonnet-4-5:medium,bug-fix=openai/gpt-5:high`. The
-optional `:level` suffix sets the thinking level. A panel's entries are separated by spaces, as
+optional `:level` suffix sets the thinking level. A pool's entries are separated by `|`, as in
+`feature=anthropic/claude-sonnet-4-5:high|openai/gpt-5:high`. A panel's entries are separated by spaces, as
 in `PISTACK_MODELS='arena-runners=anthropic/claude-sonnet-4-5:high openai/gpt-5:high'`. The environment wins
 over both config files, so CI never needs this dialog.
+
+## Model filter
+
+A model filter restricts delegation to some models, such as one family for an experiment,
+without rewriting the roles. Call the adapter tool with `action: "set_filter"` and:
+
+- `include`, a list of patterns a model must match, such as `["gpt-*"]` for GPT only.
+- `exclude`, a list of patterns no model may match, such as `["*claude*"]` for no Claude, including Bedrock-style ids.
+- `clear: true` to remove the filter at that scope.
+
+A pattern with `/` matches `provider/model`; one without matches the model id. `*` is the only
+wildcard. The filter applies to this session only, unless the user asks to save it: then pass
+`scope: "user"` or `scope: "project"`. A session filter wins over a saved one until it is cleared.
+A trusted project's filter replaces the user filter as a whole. Empty lists set an unrestricted
+override; clearing the session filter restores the saved filter. Wait for `set_filter` to finish
+before issuing delegation calls. Keep the active filter unchanged unless the user requests a change.
+
+Read back `action: "status"`. Report the `model filter` row, and any role or panel seat the
+`model roles` or `panel roles` table marks BLOCKED, because a blocked role does not delegate.
+Tell the user the limits: the adapter blocks `delegate_task` and `subagent` calls in this session
+that the filter does not allow. A child does not inherit a session filter and follows it only as
+an instruction in its brief. A saved filter applies in a child where the adapter loads the same
+config files. Other tools that start agents are not checked. This is a model-selection guard,
+not an access-control boundary.
 
 ## Upstream source
 
@@ -138,5 +169,6 @@ the next Pi start.
 
 ## Finish
 
-End by reporting, in your own words, which roles were set, which still inherit, the resolved
-upstream commit, and the trust level from the status output.
+End by reporting, in your own words, which roles were set, which still inherit, which have
+pools, the model filter in force, the resolved upstream commit, and the trust level from the
+status output.

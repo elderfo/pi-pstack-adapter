@@ -173,6 +173,71 @@ Upstream pstack defaults each panel to two model families. A panel you leave uns
 `judgment`, then `general`, so it covers two families only when those roles do. The status
 report warns when a panel's seats all run on one model.
 
+### Give a role a pool of models
+
+An ordinary role can list several models instead of one. Each delegation for that role picks one
+model from the list. A pool is not a panel: a panel runs one seat per entry, but a pool starts one
+child per task. A pool is not a retry list either: when a delegation fails, the agent reports the
+failure and does not try the next model. In a config file a pool is a JSON list:
+
+```json
+{ "models": { "feature": ["provider/model-a:high", "provider/model-b:high", "provider/model-c"] } }
+```
+
+The `set_model` action takes the same list in `model`, and its `thinking` applies to each entry
+without its own `:level`. Every entry must be a model in your Pi installation, or nothing is
+written. In `PISTACK_MODELS`, separate a pool's entries with `|`:
+
+```bash
+PISTACK_MODELS='feature=provider/model-a:high|provider/model-b' pi
+```
+
+A panel keeps its string of seats. An unset panel's two default seats each pick one model from the
+`judgment` and `general` pools.
+
+### Restrict which models delegation uses
+
+A model filter limits delegation to some models without changing the role assignments, for
+example to run an experiment on one model family only. Ask the agent, or call the
+`pstack_adapter` tool's `set_filter` action:
+
+- `include: ["gpt-*"]` allows only models whose id starts with `gpt-`.
+- `exclude: ["*claude*"]` excludes model ids containing `claude`, including Bedrock-style ids.
+- `clear: true` removes the filter at that scope.
+
+A pattern with a `/` matches `provider/model`, and one without matches the model id after the
+provider. `*` is the only wildcard, and matching ignores case. A model must match an `include`
+pattern when there are any, and must match no `exclude` pattern.
+
+A filter applies to the current session by default and is not saved. Pass `scope: "user"` or
+`scope: "project"` to save it as `modelFilter` in that config file. A saved filter takes effect
+at once, and a filter set for the session wins over a saved one until you clear it. The
+`model filter` row of `/pistack-status` shows the filter in force and where it came from.
+A trusted project's filter replaces the user filter as a whole, including an empty filter.
+Empty lists set an unrestricted override; clearing the session filter restores the saved filter.
+Wait for `set_filter` to finish before starting delegations, rather than issuing them together.
+
+Under a filter, the status report and `/pistack-check` mark each pool entry as allowed or
+excluded. A role with no allowed entry is blocked: its work is not moved to `general` or to the
+session's model. A role that inherits is blocked when the filter excludes the session's model.
+A panel seat on an excluded model is blocked, and the other seats still run.
+
+The adapter also checks every `delegate_task` and `subagent` call in the session, including
+calls that no pstack workflow made, and blocks one whose model the filter excludes or that it
+cannot check. That includes a call with no model while the session's model is excluded, a model
+Pi does not know, a T3 provider other than Pi, a `subagent` child without a model, a `subagent`
+workflow script, and a `subagent` action that restarts, refines, steers, or schedules a child,
+opens a project session, or configures a watchdog. A T3 target with a named environment is also
+blocked because its registry may differ. A blocked call is not retried. These limits apply:
+
+- A child does not inherit a session filter, so the agent puts it into each brief as an
+  instruction. A saved filter applies in a child where the adapter loads the same config files.
+- Other tools that start agents or processes, such as T3 Code's thread tools or a shell command,
+  are not checked. The filter does not block a provider or a model inside Pi.
+- Changing models with `/model` is not affected.
+- The filter is a model-selection guard, not an access-control boundary. The agent can change it
+  through `set_filter`, but is instructed to keep it unchanged unless the user requests a change.
+
 Role names are lowercase letters, digits, and hyphens. A model value is printable ASCII with no spaces or markup characters, at most 128 characters. A config entry that breaks these rules stops the adapter at startup with an error that names the file, so fix the key there and restart Pi.
 
 A role without a level passes none, so the delegation backend applies its own default. A role's
@@ -220,7 +285,7 @@ settings to `.pi/pi-pstack-adapter.json`. Environment variables override both fi
 | `PISTACK_UPSTREAM_PLUGIN_PATH` | Selects the plugin directory inside the checkout. |
 | `PISTACK_ALLOW_BOOTSTRAP` | Allows a noninteractive first download. |
 | `PISTACK_CACHE_DIR` | Changes the cache directory. |
-| `PISTACK_MODELS` | Assigns models as comma-separated `role=provider/model[:thinking]` pairs. A panel role takes its entries separated by spaces. |
+| `PISTACK_MODELS` | Assigns models as comma-separated `role=provider/model[:thinking]` pairs. A pool separates its entries with `\|`. A panel role takes its entries separated by spaces. |
 | `PISTACK_DELEGATION` | Sets the delegation provider to try first: `t3` (default) or `pi-subagents`. The config file key is `delegation`. |
 
 ## Security and trust

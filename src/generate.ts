@@ -472,6 +472,29 @@ const NESTED_DELEGATION_RULE = `Nested delegation: every agent that delegates, a
   \`pstack_adapter\` status report, using \`general\` when no role fits. Never let one inherit your
   model or thinking, except a panel seat from an \`inherit\` entry in that report's \`panel roles\` table, and never raise a role above its configured level."`;
 
+const MODEL_POLICY_SECTION = `Model pools and the model filter work the same on both backends.
+
+- A role whose \`model roles\` row reads "pool, pick one of" lists alternatives. For each
+  delegation, pick ONE model from it by fit, and pass that model and its thinking by the backend
+  rules below. A pool is not a retry list and not a panel: start one child per task, and when a
+  delegation fails, report the failure instead of trying another model from the pool.
+- A role whose row reads "BLOCKED" has no model the model filter allows. Do not delegate its work,
+  and do not move the work to \`general\` or to your own model. Tell the user which role is blocked
+  and why.
+- A panel seat that reads "BLOCKED" does not run. Run the other seats, and say in your reply which
+  seat did not run and why. A seat that reads "one of" runs once, on one model you pick from it.
+- When the \`model filter\` row of the status report names a filter, the adapter blocks any
+  \`delegate_task\` or \`subagent\` call in this session whose model the filter excludes, or whose
+  model it cannot tell. That covers a call with no model while your own model is excluded, a model
+  Pi does not know, a T3 provider other than \`pi\`, a \`subagent\` child without \`model\`, a
+  \`subagent\` workflow script, and a \`subagent\` action that starts, restarts, steers, or schedules
+  a child or configures a watchdog. A T3 target with a named environment is blocked too.
+  Report a blocked call instead of retrying it. Keep the active filter unchanged unless the user
+  requests a change. Wait for \`set_filter\` to finish before issuing delegation calls.
+- Children do not inherit a session filter. Put the brief line that the \`check\` report gives into
+  every brief, verbatim, so each child keeps to the same models when it starts agents of its own.
+  A saved filter applies in a child where the adapter loads the same config files.`;
+
 function delegationSection(namespace: string, preferred: DelegationProvider): string {
   const sections = delegationOrder(preferred).map((backend) => (backend.id === "t3" ? t3Section(namespace) : subagentSection(namespace)));
   const order = delegationOrder(preferred).map((backend) => `\`${backend.tool}\``).join(", then ");
@@ -482,6 +505,8 @@ for \`action: "check"\`, or the \`delegation\` row of its \`action: "status"\` r
 first usable tool in the configured order, ${order}. The adapter rejects a tool that another
 extension registered under T3's name, or one that lacks the parameters below, even when it is in
 your tools. Use one backend for a whole workflow.
+
+${MODEL_POLICY_SECTION}
 
 ${sections.join("\n\n")}`;
 }
@@ -535,7 +560,8 @@ function subagentSection(namespace: string): string {
   table in the \`pstack_adapter\` \`status\` report names a level for the role, append it as
   \`provider/model:<level>\`. A role whose thinking reads "backend default" gets no suffix, so
   pi-subagents applies its own default. An unconfigured role uses the \`general\` role, and omits
-  \`model\` only when \`general\` is unconfigured too.
+  \`model\` only when \`general\` is unconfigured too. Under a model filter, always pass \`model\`,
+  using your own model for a role that inherits.
 - ${NESTED_DELEGATION_RULE}
 - Background: \`async: true\`.`;
 }
@@ -648,7 +674,7 @@ function adapterDescription(file: string, namespace: string): string {
     case "status.md":
       return `[${namespace}/native] Report the pstack adapter version, upstream version, configured ref, resolved commit, cache state, support tiers, and capability checks. Use for "${namespace} status" or before trusting a pstack workflow.`;
     case "setup.md":
-      return `[${namespace}/native] Configure which Pi model each pstack role uses, and which upstream pstack revision the adapter reads. Use for "/skill:${namespace}-setup", "configure pstack models", or selecting another pstack revision.`;
+      return `[${namespace}/native] Configure which Pi model or pool of models each pstack role uses, which models delegation may use, and which upstream pstack revision the adapter reads. Use for "/skill:${namespace}-setup", "configure pstack models", restricting delegation to some models such as GPT only, or selecting another pstack revision.`;
     default:
       return `[${namespace}/native] Adapter-owned pstack workflow.`;
   }

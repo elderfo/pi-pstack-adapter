@@ -54,10 +54,13 @@ test("an unset panel follows judgment, then general, the way delegation resolves
   const panel = resolvePanel(config, "architect-runners");
   assert.equal(panel.configured, false);
   assert.deepEqual(panel.seats, [
-    { spec: { model: "openai/gpt", thinking: "medium" }, from: "general" },
-    { spec: { model: "openai/gpt", thinking: "medium" }, from: "general" },
+    { kind: "model", spec: { model: "openai/gpt", thinking: "medium" }, from: "general" },
+    { kind: "model", spec: { model: "openai/gpt", thinking: "medium" }, from: "general" },
   ]);
-  assert.deepEqual(resolvePanel(mergeConfig([]), "arena-runners").seats, [{ from: "judgment" }, { from: "general" }]);
+  assert.deepEqual(resolvePanel(mergeConfig([]), "arena-runners").seats, [
+    { kind: "parent", from: "judgment" },
+    { kind: "parent", from: "general" },
+  ]);
 });
 
 const warn = (config: AdapterConfig, role: string): string | undefined => panelWarning(resolvePanel(config, role), config);

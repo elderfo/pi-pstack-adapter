@@ -370,7 +370,9 @@ test("a role name or model string that could inject markup is refused everywhere
   assert.match(invalidRoleMessage("__proto__"), /Invalid role name "__proto__"/);
 
   assert.throws(() => parseModelRoles("__proto__=a/b"), /Invalid role name/);
-  assert.throws(() => parseModelRoles("feature=a/b|c"), /Invalid model/);
+  // `|` separates a pool's entries, so each entry is checked on its own.
+  assert.throws(() => parseModelRoles("feature=a/b|c`d"), /Role "feature"\. Invalid pool/);
+  assert.throws(() => parseModelRoles("feature=a/b|"), /Invalid pool/);
   assert.throws(() => parseModelRoles("feature=a/b:"), /Invalid model/);
 
   assert.throws(() => mergeConfig([layer("project", { models: { [hostileRole]: "a/b" } })]), /project: Invalid role name/);
