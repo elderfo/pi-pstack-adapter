@@ -216,7 +216,7 @@ export default function (pi: ExtensionAPI) {
       model: Type.Optional(
         Type.Union([Type.String(), Type.Array(Type.String())], {
           description:
-            "`provider/model` id, or `inherit` to clear the role. A list of ids gives an ordinary role a pool: each delegation picks one. For a panel role such as `arena-runners`, a string of entries separated by commas, one seat each.",
+            "`provider/model` id, or `inherit` to clear the role. A list of ids gives an ordinary role a pool, ranked in list order: a `pstack:<role>` delegation runs on the first one the model filter allows. For a panel role such as `arena-runners`, a string of entries separated by commas, one seat each.",
         }),
       ),
       thinking: Type.Optional(
@@ -473,7 +473,7 @@ export default function (pi: ExtensionAPI) {
     const listed = (typeof plan.value === "string" ? [plan.value] : plan.value).map((entry) => `\`${entry}\``).join(", ");
     return typeof plan.value === "string"
       ? `Role \`${role}\` now uses ${listed}. A pool of one is written as a plain model. Written to ${path}.${note}`
-      : `Role \`${role}\` now has a pool of ${plan.value.length} models: ${listed}. Each delegation picks one model the filter allows. Written to ${path}.${note}`;
+      : `Role \`${role}\` now has a pool of ${plan.value.length} models: ${listed}. A \`pstack:${role}\` delegation runs on the first one the model filter allows. Written to ${path}.${note}`;
   }
 
   function setFilter(

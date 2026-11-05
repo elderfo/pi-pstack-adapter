@@ -176,7 +176,7 @@ function describeSeat(seat: PanelSeat): string {
     case "model":
       return `${describeSpec(seat.spec)}${origin}`;
     case "choice":
-      return `ranked ${seat.choices.map(describeSpec).join(", then ")}; runs once on the first unless the delegating agent picks another${origin}`;
+      return `ranked ${seat.choices.map(describeSpec).join(", then ")}; as \`pstack:${seat.from}\` it runs once on the first, unless the delegating agent overrides the ranking${origin}`;
     case "blocked":
       return `BLOCKED, ${seat.reason}${origin}`;
   }
@@ -297,7 +297,7 @@ export function renderModelPolicy(config: AdapterConfig, origin: FilterOrigin, p
   }
   if (pools.length > 0) {
     lines.push(
-      `Pools: ${pools.map(([role, resolution]) => `\`${role}\` is ranked ${describeRole(resolution, role)[0].replace(/^pool, ranked /, "")}`).join("; ")}. For each delegation, use the first eligible model in the role's ranking. As the delegating agent, you may override the ranking and pick another eligible model from the pool when the task clearly fits it better; say which model you picked and why. A pool is not a retry list and not a panel: do not start the same task on several of its models, and when a delegation fails, report the failure instead of trying another model.`,
+      `Pools: ${pools.map(([role, resolution]) => `\`${role}\` is ranked ${describeRole(resolution, role)[0].replace(/^pool, ranked /, "")}`).join("; ")}. Delegate a role as \`pstack:<role>\`, and the adapter runs it on the first eligible model in the role's ranking. As the delegating agent, you may override the ranking with \`pstack:<role>@<provider/model>\`, naming another eligible model from the pool when the task clearly fits it better; say which model you picked and why. A pool is not a retry list and not a panel: do not start the same task on several of its models, and when a delegation fails, report the failure instead of trying another model.`,
     );
   }
   if (blocked.length > 0) {

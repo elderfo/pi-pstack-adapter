@@ -152,7 +152,7 @@ test("panel seats keep their meaning: an excluded seat is blocked, and a default
   assert.deepEqual(defaults.seats[1], { kind: "model", spec: { model: "cliproxyapi/kimi-k3" }, from: "general" });
   const text = renderPanels(config, ["arena-runners", "architect-runners"], context);
   assert.match(text, /BLOCKED, `cliproxyapi\/claude-opus-5-5` is excluded by the model filter/);
-  assert.match(text, /ranked cliproxyapi\/gpt-6\.1-sol at backend default, then cliproxyapi\/kimi-k3 at backend default; runs once on the first unless the delegating agent picks another \(judgment\)/);
+  assert.match(text, /ranked cliproxyapi\/gpt-6\.1-sol at backend default, then cliproxyapi\/kimi-k3 at backend default; as `pstack:judgment` it runs once on the first, unless the delegating agent overrides the ranking \(judgment\)/);
   // A seat that may pick another model does not make the panel one-model.
   assert.equal(panelWarning(defaults, config, context), undefined);
 });
@@ -166,7 +166,7 @@ test("the check report adds nothing without pools, a filter, or blocked roles, a
   assert.match(policy, /Model filter: include none; exclude `claude-\*` \(this session\)/);
   assert.match(policy, /Put this line in each brief, verbatim: "Model restriction for this task: use only models allowed by include none; exclude `claude-\*`/);
   assert.match(policy, /`feature` is ranked cliproxyapi\/gpt-6\.1-sol at backend default, then cliproxyapi\/kimi-k3 at backend default; excluded by the model filter: cliproxyapi\/claude-opus-5-5/);
-  assert.match(policy, /use the first eligible model in the role's ranking\. As the delegating agent, you may override the ranking/);
+  assert.match(policy, /Delegate a role as `pstack:<role>`, and the adapter runs it on the first eligible model in the role's ranking\. As the delegating agent, you may override the ranking with `pstack:<role>@<provider\/model>`/);
   assert.match(policy, /say which model you picked and why\. A pool is not a retry list and not a panel/);
   assert.match(policy, /Blocked roles: `judgment` \(every model it lists is excluded by the model filter\)/);
   assert.match(policy, /do not move it to `general` or your own model/);

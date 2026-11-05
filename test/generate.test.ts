@@ -331,7 +331,8 @@ test("the host mapping covers Cursor vocabulary new in pstack 0.15.25", () => {
   assert.match(row, /"backend default" keeps that setting/);
   assert.match(row, /An unconfigured role takes the `general` role's level as its ceiling/);
   assert.match(row, /Fast or standard speed has no Pi equivalent/);
-  assert.match(row, /use the role's configured level and say so/);
+  assert.match(row, /by ending the role reference with `:<level>`, as in `pstack:feature:low`/);
+  assert.match(row, /pass `pstack:<role>` with no suffix to use the role's configured level, and say so/);
 });
 
 test("the host mapping sends an auto or inherit-parent role to general before the parent model", () => {
@@ -342,7 +343,7 @@ test("the host mapping sends an auto or inherit-parent role to general before th
 
   assert.match(
     mapping,
-    /\| a role line valued `auto` or `inherit-parent` \| an unconfigured role\. Use the `general` role, or omit `target` or `model` only when `general` is unconfigured too\. \|/,
+    /\| a role line valued `auto` or `inherit-parent` \| an unconfigured role\. Pass `pstack:<role>` as for any role\. The adapter uses the `general` role, and lets the child inherit the parent model only when `general` is unconfigured too\. \|/,
   );
   assert.match(mapping, /`grok-4\.7-xhigh-fast`, `gpt-\*`, other Cursor model slugs/);
   assert.match(mapping, /`hardest tasks` \| adapter roles .*`strongest-judgment`/);
@@ -362,7 +363,7 @@ test("every upstream role line maps to an adapter role, so no delegate falls bac
   assert.match(rowFor("| panel role lines `arena runners`"), /`interrogate reviewers` \| adapter panel roles `arena-runners`, `arena-cross-judge-pool`, `architect-runners`, and `interrogate-reviewers`\./);
   assert.match(rowFor("| panel role lines `arena runners`"), /An unset panel uses `judgment`, then `general`/);
   assert.match(rowFor("| a delegate no role line names"), /\| adapter role `general`\. \|$/);
-  assert.match(rowFor("| `claude-opus-5-5-xhigh`"), /An unconfigured role uses the `general` role\. When `general` is unconfigured too, omit/);
+  assert.match(rowFor("| `claude-opus-5-5-xhigh`"), /Pass the role as the model, `pstack:<role>`.*An unconfigured role uses the `general` role\. When `general` is unconfigured too, the adapter lets the child inherit/);
 });
 
 test("both delegation backends pass the nested delegation rule down to every child", () => {
@@ -377,9 +378,10 @@ test("both delegation backends pass the nested delegation rule down to every chi
     for (const section of sections) {
       const heading = section.split("\n")[0] ?? "";
       assert.match(section, /every agent that delegates, a child included, gives each new child an\s+explicit role/, heading);
-      assert.match(section, /never lets it inherit the delegating\s+agent's model or thinking/, heading);
+      assert.match(section, /never\s+lets it inherit the delegating\s+agent's model or thinking/, heading);
       assert.match(section, /Never let one inherit your\s+model or thinking, except a panel seat from an `inherit` entry in that report's `panel roles` table, and never raise a role above its configured level\."/, heading);
-      assert.match(section, /The one exception is a panel seat from an `inherit` entry in the\s+`panel roles` table/, heading);
+      assert.match(section, /pass each one's model as `pstack:<role>` for its own pstack role, using `pstack:general` when no role fits/, heading);
+      assert.match(section, /The one exception is a panel seat\s+from an `inherit` entry in the\s+`panel roles` table/, heading);
       assert.match(section, /An unconfigured role uses the `general` role/, heading);
     }
   }
@@ -580,10 +582,10 @@ test("the host mapping tells a T3 parent how to run agents, models, background w
   const mapping = readFileSync(join(result.outDir, "adapter", "host-mapping.md"), "utf8");
 
   assert.match(mapping, /`agents\/pistack-poteto-agent\.md` beside this file/);
-  assert.match(mapping, /target: \{ providerInstanceId: "pi", model: "provider\/model" \}/);
-  assert.match(mapping, /options: \{ thinking: "<level>" \}/);
-  assert.match(mapping, /append it as\s+`provider\/model:<level>`/);
-  assert.match(mapping, /If the level is `off` and the model does not list `off`, omit/);
+  assert.match(mapping, /target: \{ providerInstanceId: "pi", model: "pstack:<role>" \}/);
+  assert.match(mapping, /its thinking into `target\.options\.thinking`/);
+  assert.match(mapping, /pass `model: "pstack:<role>"` for each child, including each entry of `tasks`/);
+  assert.match(mapping, /If T3 rejects the thinking level for the picked model, lower it with a `:<level>` suffix/);
   assert.match(mapping, /`mode: "async"`/);
   assert.match(mapping, /`isolation: "worktree"`/);
   assert.match(mapping, /Never use `t3_thread_launch` or `create_threads`/);
