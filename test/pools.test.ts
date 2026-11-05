@@ -152,7 +152,7 @@ test("panel seats keep their meaning: an excluded seat is blocked, and a default
   assert.deepEqual(defaults.seats[1], { kind: "model", spec: { model: "cliproxyapi/kimi-k3" }, from: "general" });
   const text = renderPanels(config, ["arena-runners", "architect-runners"], context);
   assert.match(text, /BLOCKED, `cliproxyapi\/claude-opus-5-5` is excluded by the model filter/);
-  assert.match(text, /one of cliproxyapi\/gpt-6\.1-sol at backend default or cliproxyapi\/kimi-k3 at backend default, picked once for this seat \(judgment\)/);
+  assert.match(text, /ranked cliproxyapi\/gpt-6\.1-sol at backend default, then cliproxyapi\/kimi-k3 at backend default; as `pstack:judgment` it runs once on the first, unless the delegating agent overrides the ranking \(judgment\)/);
   // A seat that may pick another model does not make the panel one-model.
   assert.equal(panelWarning(defaults, config, context), undefined);
 });
@@ -165,8 +165,24 @@ test("the check report adds nothing without pools, a filter, or blocked roles, a
   const policy = renderModelPolicy(config, { kind: "session", filter: NO_CLAUDE }, "cliproxyapi/gpt-6.1-sol") ?? "";
   assert.match(policy, /Model filter: include none; exclude `claude-\*` \(this session\)/);
   assert.match(policy, /Put this line in each brief, verbatim: "Model restriction for this task: use only models allowed by include none; exclude `claude-\*`/);
-  assert.match(policy, /`feature` picks one of cliproxyapi\/gpt-6\.1-sol at backend default, cliproxyapi\/kimi-k3 at backend default; excluded by the model filter: cliproxyapi\/claude-opus-5-5/);
-  assert.match(policy, /pick ONE eligible model from the role's pool by fit\. A pool is not a retry list and not a panel/);
+  assert.match(policy, /`feature` is ranked cliproxyapi\/gpt-6\.1-sol at backend default, then cliproxyapi\/kimi-k3 at backend default; excluded by the model filter: cliproxyapi\/claude-opus-5-5/);
+  assert.match(policy, /Delegate a role as `pstack:<role>`, and the adapter runs it on the first eligible model in the role's ranking\. As the delegating agent, you may override the ranking with `pstack:<role>@<provider\/model>`/);
+  assert.match(policy, /say which model you picked and why\. A pool is not a retry list and not a panel/);
   assert.match(policy, /Blocked roles: `judgment` \(every model it lists is excluded by the model filter\)/);
   assert.match(policy, /do not move it to `general` or your own model/);
+});
+
+test("an unset panel warns when both default seats' ranked picks land on one model", () => {
+  const config = mergeConfig([layer({ models: { general: ["cliproxyapi/kimi-k3:low", "cliproxyapi/gpt-6.1-sol:medium"] } })]);
+  const panel = resolvePanel(config, "architect-runners", { parentModel: "cliproxyapi/claude-opus-5-5" });
+  assert.match(panelWarning(panel, config) ?? "", /Every seat of `architect-runners` runs on `cliproxyapi\/kimi-k3`/);
+});
+
+test("a judge pool warning keeps every fallback choice open, since the ranking can be overridden", () => {
+  const config = mergeConfig([layer({ models: { "arena-cross-judge-pool": "cliproxyapi/claude-opus-5-5", general: ["cliproxyapi/claude-opus-5-5", "cliproxyapi/gpt-6.1-sol"] } })]);
+  const warning = panelWarning(resolvePanel(config, "arena-cross-judge-pool"), config) ?? "";
+  assert.match(warning, /tries its default pool/);
+  assert.doesNotMatch(warning, /arena skips the judge/);
+  const unset = mergeConfig([layer({ models: { general: ["cliproxyapi/kimi-k3", "cliproxyapi/gpt-6.1-sol"] } })]);
+  assert.match(panelWarning(resolvePanel(unset, "architect-runners"), unset) ?? "", /with the ranked picks, unless the delegating agent overrides the ranking, because/);
 });

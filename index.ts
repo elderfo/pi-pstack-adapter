@@ -18,6 +18,7 @@ import {
   sessionFilterFromEntries,
 } from "./src/filter.ts";
 import { gateDelegation } from "./src/gate.ts";
+import { applyRewrite, routeDelegation } from "./src/route.ts";
 import { checkPrerequisites, detectCapabilities, type ToolDescriptor } from "./src/capabilities.ts";
 import {
   type AdapterConfig,
@@ -149,23 +150,36 @@ export default function (pi: ExtensionAPI) {
     sessionFilter = sessionFilterFromEntries(ctx.sessionManager.getBranch() as never[]);
   });
 
-  // The model filter applies to every delegation in this session, pstack or not, because a
-  // delegation tool call names no pstack role. A blocked call fails; nothing retries it.
+  // A `pstack:<role>` model is rewritten to the model the adapter picks for that role. The model
+  // filter then applies to every delegation in this session, pstack or not, because a call that
+  // names a concrete model names no role. A blocked call fails; nothing retries it.
   pi.on("tool_call", async (event, ctx) => {
     if (event.toolName !== T3_DELEGATE_TOOL && event.toolName !== SUBAGENT_TOOL) return;
-    if (sessionFilter === undefined && configError !== undefined) {
-      return {
-        block: true,
-        reason: `Blocked by the pstack adapter: its config could not be read, so it cannot tell whether a saved model filter applies. ${configError} Fix the config and reload, or ask the user whether to set an explicit session filter with \`set_filter\`.`,
-      };
-    }
-    const decision = gateDelegation(event.toolName, event.input, {
+    const unreadable = configBlock();
+    if (unreadable) return unreadable;
+    const context = {
       filter: filterOf(activeFilter(sessionFilter, savedFilter)),
       parentModel: parentModelOf(ctx),
-      resolveModel: (model) => resolveRegistryModel(ctx, model),
-    });
+      resolveModel: (model: string) => resolveRegistryModel(ctx, model),
+    };
+    const route = await routeDelegation(event.toolName, event.input, { ...context, config: state?.config, parentThinking: ctx.thinkingLevel });
+    if (route.kind === "block") return { block: true, reason: route.reason };
+    if (route.kind === "rewrite") applyRewrite(event.input as Record<string, unknown>, route.input);
+    // Read the config state, filter, and parent model again: a pick that waits on a service could span
+    // a reload, a `set_filter`, or a model change.
+    const unreadableNow = configBlock();
+    if (unreadableNow) return unreadableNow;
+    const decision = gateDelegation(event.toolName, event.input, { ...context, filter: filterOf(activeFilter(sessionFilter, savedFilter)), parentModel: parentModelOf(ctx) });
     if (decision.kind === "block") return { block: true, reason: decision.reason };
   });
+
+  function configBlock(): { block: true; reason: string } | undefined {
+    if (sessionFilter !== undefined || configError === undefined) return undefined;
+    return {
+      block: true,
+      reason: `Blocked by the pstack adapter: its config could not be read, so it cannot tell whether a saved model filter applies. ${configError} Fix the config and reload, or ask the user whether to set an explicit session filter with \`set_filter\`.`,
+    };
+  }
 
   pi.on("resources_discover", async () => {
     if (!state) return {};
@@ -210,7 +224,7 @@ export default function (pi: ExtensionAPI) {
       model: Type.Optional(
         Type.Union([Type.String(), Type.Array(Type.String())], {
           description:
-            "`provider/model` id, or `inherit` to clear the role. A list of ids gives an ordinary role a pool: each delegation picks one. For a panel role such as `arena-runners`, a string of entries separated by commas, one seat each.",
+            "`provider/model` id, or `inherit` to clear the role. A list of ids gives an ordinary role a pool, ranked in list order: a `pstack:<role>` delegation runs on the first one the model filter allows. For a panel role such as `arena-runners`, a string of entries separated by commas, one seat each.",
         }),
       ),
       thinking: Type.Optional(
@@ -467,7 +481,7 @@ export default function (pi: ExtensionAPI) {
     const listed = (typeof plan.value === "string" ? [plan.value] : plan.value).map((entry) => `\`${entry}\``).join(", ");
     return typeof plan.value === "string"
       ? `Role \`${role}\` now uses ${listed}. A pool of one is written as a plain model. Written to ${path}.${note}`
-      : `Role \`${role}\` now has a pool of ${plan.value.length} models: ${listed}. Each delegation picks one model the filter allows. Written to ${path}.${note}`;
+      : `Role \`${role}\` now has a pool of ${plan.value.length} models: ${listed}. A \`pstack:${role}\` delegation runs on the first one the model filter allows. Written to ${path}.${note}`;
   }
 
   function setFilter(

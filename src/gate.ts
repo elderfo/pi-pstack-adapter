@@ -1,5 +1,6 @@
 import { splitModelSpec } from "./config.ts";
 import { SUBAGENT_TOOL, T3_DELEGATE_TOOL } from "./delegation.ts";
+import { safeEcho } from "./echo.ts";
 import { type ModelFilter, describeFilter, isRestricting, modelAllowed } from "./filter.ts";
 
 export type GateDecision = { readonly kind: "allow" } | { readonly kind: "block"; readonly reason: string };
@@ -50,7 +51,7 @@ function checkModel(requested: unknown, where: string, context: GateContext & { 
   }
   const resolved = context.resolveModel(splitModelSpec(requested.trim()).model);
   if (resolved === undefined) {
-    return block(`${where} asks for \`${requested.trim()}\`, which this Pi installation does not know, so the filter cannot allow it.`, context.filter);
+    return block(`${where} asks for ${safeEcho(requested.trim())}, which this Pi installation does not know, so the filter cannot allow it.`, context.filter);
   }
   if (!modelAllowed(context.filter, resolved)) return block(`${where} asks for \`${resolved}\`, which the filter excludes.`, context.filter);
   return ALLOW;
@@ -83,7 +84,7 @@ function gateT3(args: Record<string, unknown>, context: GateContext): GateDecisi
   }
   const provider = [providerInstanceId, driverKind].find((value) => value !== undefined && value !== "pi");
   if (provider !== undefined) {
-    return block(`\`delegate_task\` targets T3 provider \`${String(provider)}\`, whose models are not Pi registry ids, so the filter cannot check them. Use \`providerInstanceId: "pi"\`.`, filter);
+    return block(`\`delegate_task\` targets T3 provider ${safeEcho(provider)}, whose models are not Pi registry ids, so the filter cannot check them. Use \`providerInstanceId: "pi"\`.`, filter);
   }
   if (model === undefined) return checkParent("`delegate_task`", scoped);
   return checkModel(model, "`delegate_task`", scoped);

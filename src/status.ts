@@ -176,7 +176,7 @@ function describeSeat(seat: PanelSeat): string {
     case "model":
       return `${describeSpec(seat.spec)}${origin}`;
     case "choice":
-      return `one of ${seat.choices.map(describeSpec).join(" or ")}, picked once for this seat${origin}`;
+      return `ranked ${seat.choices.map(describeSpec).join(", then ")}; as \`pstack:${seat.from}\` it runs once on the first, unless the delegating agent overrides the ranking${origin}`;
     case "blocked":
       return `BLOCKED, ${seat.reason}${origin}`;
   }
@@ -184,14 +184,19 @@ function describeSeat(seat: PanelSeat): string {
 
 const PARENT_MODEL = "the model of the agent that starts the panel";
 
-/** The model a seat runs on, when it is already determined. */
-function seatModel(seat: PanelSeat): string | undefined {
+/**
+ * The model a seat runs on, when it is already determined. A default seat runs as `pstack:<role>`,
+ * so with `ranked` its first choice counts; without it, a seat with several choices is open,
+ * because the delegating agent may override the ranking.
+ */
+function seatModel(seat: PanelSeat, ranked: boolean): string | undefined {
   switch (seat.kind) {
     case "parent":
       return PARENT_MODEL;
     case "model":
       return seat.spec.model;
     case "choice": {
+      if (ranked) return seat.choices[0]?.model;
       const models = new Set(seat.choices.map((choice) => choice.model));
       return models.size === 1 ? [...models][0] : undefined;
     }
@@ -200,10 +205,10 @@ function seatModel(seat: PanelSeat): string | undefined {
   }
 }
 
-function seatModels(seats: readonly PanelSeat[]): Set<string> | undefined {
+function seatModels(seats: readonly PanelSeat[], ranked: boolean): Set<string> | undefined {
   const models = new Set<string>();
   for (const seat of seats) {
-    const model = seatModel(seat);
+    const model = seatModel(seat, ranked);
     if (model !== undefined) models.add(model);
     else if (seat.kind === "choice") return undefined;
   }
@@ -217,7 +222,7 @@ function seatModels(seats: readonly PanelSeat[]): Set<string> | undefined {
  */
 export function panelWarning(panel: ResolvedPanel, config: AdapterConfig, context: ResolutionContext = {}): string | undefined {
   const usable = panel.seats.filter((seat) => seat.kind !== "blocked");
-  const models = seatModels(usable);
+  const models = seatModels(usable, true);
   const pool = panel.role === "arena-cross-judge-pool";
   // Upstream lets a panel line hold one entry on purpose, so only the judge pool warns at one seat.
   if (models === undefined || models.size !== 1 || (usable.length < 2 && !pool)) return undefined;
@@ -226,7 +231,8 @@ export function panelWarning(panel: ResolvedPanel, config: AdapterConfig, contex
   const cause = panel.configured
     ? `its configured entries all name ${named}`
     : `it is unset, and ${PANEL_DEFAULT_ROLES.map((role) => `\`${role}\``).join(" and ")} both resolve to ${named}`;
-  return `Every seat of \`${panel.role}\` runs on ${named}, because ${cause}, ${pool ? poolEffect(panel, config, model, context) : "so the panel has one model and no second family"}. This comes from the adapter configuration, not from which models are available. Run \`/skill:${config.namespace}-setup\` to put this panel on two model families, as upstream's defaults do.`;
+  const ranked = usable.some((seat) => seat.kind === "choice") ? " with the ranked picks, unless the delegating agent overrides the ranking," : ",";
+  return `Every seat of \`${panel.role}\` runs on ${named}${ranked} because ${cause}, ${pool ? poolEffect(panel, config, model, context) : "so the panel has one model and no second family"}. This comes from the adapter configuration, not from which models are available. Run \`/skill:${config.namespace}-setup\` to put this panel on two model families, as upstream's defaults do.`;
 }
 
 /**
@@ -235,12 +241,12 @@ export function panelWarning(panel: ResolvedPanel, config: AdapterConfig, contex
  */
 function poolEffect(panel: ResolvedPanel, config: AdapterConfig, model: string | undefined, context: ResolutionContext): string {
   const fallback = defaultSeats(config, context);
-  const fallbackModels = seatModels(fallback);
+  const fallbackModels = seatModels(fallback, false);
   const lead =
     model === PARENT_MODEL
       ? "and an `inherit` entry never judges, so arena"
       : `so a session on the family of \`${model}\` gets no judge from the pool, and arena`;
-  const sameFallback = !panel.configured || (fallbackModels?.size === 1 && fallbackModels.has(model ?? PARENT_MODEL));
+  const sameFallback = fallbackModels?.size === 1 && fallbackModels.has(model ?? PARENT_MODEL);
   return sameFallback
     ? `${lead} skips the judge`
     : `${lead} tries its default pool, ${fallback.map(describeSeat).join("; ")}, before it skips the judge`;
@@ -273,7 +279,7 @@ function describeRole(resolution: RoleResolution, role: string): readonly [strin
       const eligible = resolution.choices.filter((choice) => choice.eligible).map((choice) => describeSpec(choice.spec));
       const excluded = resolution.choices.filter((choice) => !choice.eligible).map((choice) => describeSpec(choice.spec));
       const tail = excluded.length > 0 ? `; excluded by the model filter: ${excluded.join(", ")}` : "";
-      return [`pool, pick one of ${eligible.join(", ")}${tail}${via}`, `per choice${via}`];
+      return [`pool, ranked ${eligible.join(", then ")}${tail}${via}`, `per choice${via}`];
     }
   }
 }
@@ -297,7 +303,7 @@ export function renderModelPolicy(config: AdapterConfig, origin: FilterOrigin, p
   }
   if (pools.length > 0) {
     lines.push(
-      `Pools: ${pools.map(([role, resolution]) => `\`${role}\` picks one of ${describeRole(resolution, role)[0].replace(/^pool, pick one of /, "")}`).join("; ")}. For each delegation, pick ONE eligible model from the role's pool by fit. A pool is not a retry list and not a panel: do not start the same task on several of its models, and when a delegation fails, report the failure instead of trying another model.`,
+      `Pools: ${pools.map(([role, resolution]) => `\`${role}\` is ranked ${describeRole(resolution, role)[0].replace(/^pool, ranked /, "")}`).join("; ")}. Delegate a role as \`pstack:<role>\`, and the adapter runs it on the first eligible model in the role's ranking. As the delegating agent, you may override the ranking with \`pstack:<role>@<provider/model>\`, naming another eligible model from the pool when the task clearly fits it better; say which model you picked and why. A pool is not a retry list and not a panel: do not start the same task on several of its models, and when a delegation fails, report the failure instead of trying another model.`,
     );
   }
   if (blocked.length > 0) {

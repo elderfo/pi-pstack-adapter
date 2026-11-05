@@ -97,13 +97,28 @@ test("a pool and a session filter work end to end, and saved filters persist wit
   const before = await session.call({ action: "status" });
   assert.match(before, /\| model filter \| none, every model is allowed \|/);
   assert.match(before, /\| judgment \| inherit \(parent session model\) \| inherit \(parent session thinking\) \|/);
+  const ranked = { task: "x", target: { model: "pstack:feature:medium" } };
+  assert.equal(await session.delegate(T3, ranked), undefined);
+  assert.deepEqual(ranked.target, { model: "cliproxyapi/claude-opus-5-5", providerInstanceId: "pi", options: { thinking: "medium" } }, "routing runs without a filter");
 
   assert.match(await session.call({ action: "set_filter", exclude: ["claude-*"] }), /This session's model filter is set/);
   const status = await session.call({ action: "status" });
   assert.match(status, /\| model filter \| include none; exclude `claude-\*` \(this session\) \|/);
-  assert.match(status, /\| feature \| pool, pick one of cliproxyapi\/gpt-6\.1-sol at max, cliproxyapi\/kimi-k3 at high; excluded by the model filter: cliproxyapi\/claude-opus-5-5 at high \| per choice \|/);
+  assert.match(status, /\| feature \| pool, ranked cliproxyapi\/gpt-6\.1-sol at max, then cliproxyapi\/kimi-k3 at high; excluded by the model filter: cliproxyapi\/claude-opus-5-5 at high \| per choice \|/);
   // The session runs on Claude, so a role that would inherit it is blocked instead of running there.
   assert.match(status, /\| judgment \| BLOCKED, it inherits, and the parent session's model `cliproxyapi\/claude-opus-5-5` is excluded by the model filter\. Do not delegate this role \| - \|/);
+
+  // A role reference is rewritten in place to the first model the filter allows, at its thinking.
+  const routed = { task: "x", target: { providerInstanceId: "pi", model: "pstack:feature" } };
+  assert.equal(await session.delegate(T3, routed), undefined);
+  assert.deepEqual(routed.target, { providerInstanceId: "pi", model: "cliproxyapi/gpt-6.1-sol", options: { thinking: "max" } });
+  const outside = (await session.delegate(T3, { task: "x", target: { model: "pstack:feature@cliproxyapi/claude-opus-5-5" } })) as { block?: boolean; reason?: string };
+  assert.equal(outside.block, true);
+  assert.match(outside.reason ?? "", /`cliproxyapi\/claude-opus-5-5` is not an entry of role `feature`'s pool that the model filter allows\. Its allowed entries are `cliproxyapi\/gpt-6\.1-sol`, `cliproxyapi\/kimi-k3`/);
+  const subagent = { tasks: [{ agent: "delegate", task: "y", model: "pstack:feature@cliproxyapi/kimi-k3:low" }] };
+  assert.equal(await session.delegate("subagent", subagent), undefined);
+  assert.equal(subagent.tasks[0]?.model, "cliproxyapi/kimi-k3:low");
+  assert.equal(((await session.delegate(T3, { task: "x", target: { model: "pstack:judgment" } })) as { block?: boolean }).block, true, "an inheriting role on an excluded parent is blocked");
 
   const check = await session.call({ action: "check", skill: "pistack-arena" });
   assert.match(check, /Put this line in each brief, verbatim/);

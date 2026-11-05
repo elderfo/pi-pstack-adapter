@@ -464,31 +464,52 @@ ${agentSystemPrompt(notes, upstreamPrompt)}
  * strongest-judgment delegate's helpers would all run at its level. The rule travels in every brief.
  */
 const NESTED_DELEGATION_RULE = `Nested delegation: every agent that delegates, a child included, gives each new child an
-  explicit role, using \`general\` when no other role fits, and never lets it inherit the delegating
-  agent's model or thinking. The one exception is a panel seat from an \`inherit\` entry in the
-  \`panel roles\` table, which runs on the delegating agent's model and thinking because the user
-  configured it so. Put this line in each brief, verbatim, just before any read-only or
-  no-commit rule: "If you start agents, give each the model and thinking of its own pstack role from the
-  \`pstack_adapter\` status report, using \`general\` when no role fits. Never let one inherit your
-  model or thinking, except a panel seat from an \`inherit\` entry in that report's \`panel roles\` table, and never raise a role above its configured level."`;
+  explicit role as \`pstack:<role>\`, using \`pstack:general\` when no other role fits, and
+  never lets it inherit the delegating agent's model or thinking. The one exception is a panel seat
+  from an \`inherit\` entry in the \`panel roles\` table, which runs on the delegating agent's
+  model and thinking because the user configured it so. Put this line in each brief, verbatim,
+  just before any read-only or no-commit rule: "If you start agents, pass each one's model as \`pstack:<role>\` for its own pstack role, using \`pstack:general\` when no role fits, so the pstack adapter gives it the model and thinking that the \`pstack_adapter\` status report shows for that role. Never let one inherit your model or thinking, except a panel seat from an \`inherit\` entry in that report's \`panel roles\` table, and never raise a role above its configured level."`;
 
-const MODEL_POLICY_SECTION = `Model pools and the model filter work the same on both backends.
+const MODEL_POLICY_SECTION = `Model roles, pools, and the model filter work the same on both backends.
 
-- A role whose \`model roles\` row reads "pool, pick one of" lists alternatives. For each
-  delegation, pick ONE model from it by fit, and pass that model and its thinking by the backend
-  rules below. A pool is not a retry list and not a panel: start one child per task, and when a
-  delegation fails, report the failure instead of trying another model from the pool.
+- Name a role, not a model. For every pstack delegation, pass \`pstack:<role>\` as the model, such
+  as \`pstack:feature\`, using \`pstack:general\` when no other role fits. Before the call runs, the
+  adapter replaces it with the role's model and thinking, or, when the role inherits, with no
+  model, so the child inherits the parent model and thinking. The backend sections below say where the
+  reference goes.
+- A role whose \`model roles\` row reads "pool, ranked" lists alternatives in rank order. The
+  adapter picks the first one the model filter allows, with that entry's thinking. To override the
+  ranking for one task, pass \`pstack:<role>@<provider/model>\` with another allowed model from the
+  role's pool, and say in your reply which model you picked and why. The adapter blocks an
+  override that is not an allowed entry of the pool.
+  A pool is not a retry list and not a panel: start one child per task, and when a delegation
+  fails, report the failure instead of trying another model from the pool.
+- To lower a role's thinking, end the reference with \`:<level>\`, as in \`pstack:feature:low\` or
+  \`pstack:feature@<provider/model>:low\`. A level above the role's configured one runs at the
+  configured one, and a role whose thinking reads "backend default" keeps the backend's default.
+- The adapter blocks a reference to an unknown role, to a panel role, or to a blocked role, and
+  the block reason says what to do next. Report a blocked call instead of retrying it.
+- A concrete \`provider/model\` still runs, checked only by the model filter. Use it for a
+  configured panel seat, which names its own model, and not for a pstack role.
 - A role whose row reads "BLOCKED" has no model the model filter allows. Do not delegate its work,
   and do not move the work to \`general\` or to your own model. Tell the user which role is blocked
   and why.
 - A panel seat that reads "BLOCKED" does not run. Run the other seats, and say in your reply which
-  seat did not run and why. A seat that reads "one of" runs once, on one model you pick from it.
+  seat did not run and why. The seats of an unset panel are roles: delegate them as
+  \`pstack:judgment\` and \`pstack:general\`, so a seat that reads "ranked" runs once on the first
+  allowed model unless you override the ranking as for a pool. A configured seat names its model
+  and thinking, and the adapter does not rewrite a concrete model, so pass both yourself: on T3,
+  \`target: { providerInstanceId: "pi", model: "<provider/model>", options: { thinking: "<level>" } }\`;
+  on pi-subagents, \`model: "<provider/model>:<level>"\`. For a seat at "backend default", pass
+  \`options: {}\` on T3, which clears the inherited thinking, or no suffix on pi-subagents. An
+  \`inherit\` seat omits \`target\` on T3 and passes your own model on pi-subagents.
 - When the \`model filter\` row of the status report names a filter, the adapter blocks any
   \`delegate_task\` or \`subagent\` call in this session whose model the filter excludes, or whose
   model it cannot tell. That covers a call with no model while your own model is excluded, a model
   Pi does not know, a T3 provider other than \`pi\`, a \`subagent\` child without \`model\`, a
   \`subagent\` workflow script, and a \`subagent\` action that starts, restarts, steers, or schedules
-  a child or configures a watchdog. A T3 target with a named environment is blocked too.
+  a child or configures a watchdog. A T3 target with a named environment is blocked too. The
+  adapter replaces a \`pstack:<role>\` reference first, and checks the model it picked.
   Report a blocked call instead of retrying it. Keep the active filter unchanged unless the user
   requests a change. Wait for \`set_filter\` to finish before issuing delegation calls.
 - Children do not inherit a session filter. Put the brief line that the \`check\` report gives into
@@ -520,20 +541,19 @@ function t3Section(namespace: string): string {
   \`task\` with "Read <path> and follow it as your system prompt.", where <path> is the absolute
   path of \`agents/${namespace}-poteto-agent.md\` beside this file. The \`agent prompts\` row of
   the status report gives that directory.
-- Model: a role configured as \`provider/model\` becomes
-  \`target: { providerInstanceId: "pi", model: "provider/model" }\`. Read the thinking column of
-  the \`model roles\` table in the \`pstack_adapter\` \`status\` report. When it names a level, add it to
-  \`target.options\` under the option id that \`${T3_CAPABILITIES_TOOL}\` lists for that model's
-  thinking setting. For Pi models the id is \`thinking\`, as in \`options: { thinking: "<level>" }\`.
-  A role whose thinking reads "backend default" omits \`options\`, so the backend applies its own
-  default. An unconfigured role uses the \`general\` role. Only when \`general\` is unconfigured
-  too does the child omit \`target\` and inherit the parent model and thinking.
+- Model: pass \`target: { providerInstanceId: "pi", model: "pstack:<role>" }\`. The adapter
+  writes the picked model into \`target.model\` and its thinking into \`target.options.thinking\`.
+  When the role's thinking reads "backend default", it removes that option and sends
+  \`options\` empty, which clears the parent's settings.
+  An unconfigured role uses the \`general\` role. Only when \`general\` is unconfigured too does
+  the adapter remove the model and its thinking, so the child inherits the parent model and
+  thinking. A role
+  reference always runs on the \`pi\` provider, so the adapter blocks one with another
+  \`providerInstanceId\` or \`driverKind\`.
 - ${NESTED_DELEGATION_RULE}
-- If the model does not list the level, use the highest level it lists that is below the requested
-  one, and tell the user. If it lists none below the requested level, or lists no thinking option,
-  omit \`options\` and tell the user. If the level is \`off\` and the model does not list \`off\`, omit
-  \`options\` and tell the user, because the closest listed level would turn thinking on.
-  For a different model family, call \`${T3_CAPABILITIES_TOOL}\` and use a provider and model it lists.
+- If T3 rejects the thinking level for the picked model, lower it with a \`:<level>\` suffix to a
+  level that \`${T3_CAPABILITIES_TOOL}\` lists for that model, and tell the user. Do not switch to
+  another model.
 - Background: \`mode: "async"\`. A finished child wakes this thread, so end the turn instead of
   polling. Call \`${T3_STATUS_TOOL}\` only when you need a result mid-turn.
 - Call \`${T3_CAPABILITIES_TOOL}\` or \`${T3_STATUS_TOOL}\` only when the \`check\` report allows it.
@@ -556,12 +576,12 @@ function subagentSection(namespace: string): string {
 
 - Agent names are namespaced, for example \`${namespace}-poteto-agent\`. Call
   \`${SUBAGENT_TOOL}({ action: "list" })\` to see them.
-- Model: pass a role's \`provider/model\` as \`model\`. When the thinking column of the \`model roles\`
-  table in the \`pstack_adapter\` \`status\` report names a level for the role, append it as
-  \`provider/model:<level>\`. A role whose thinking reads "backend default" gets no suffix, so
-  pi-subagents applies its own default. An unconfigured role uses the \`general\` role, and omits
-  \`model\` only when \`general\` is unconfigured too. Under a model filter, always pass \`model\`,
-  using your own model for a role that inherits.
+- Model: pass \`model: "pstack:<role>"\` for each child, including each entry of \`tasks\`, each
+  \`chain\` step, and each \`parallel\` entry of a step. The adapter replaces it with
+  \`provider/model:<level>\`, or \`provider/model\` when the role's thinking reads "backend
+  default", so pi-subagents applies its own default.
+  An unconfigured role uses the \`general\` role. When \`general\` is unconfigured too, the adapter
+  passes your own model and thinking, or omits \`model\` when Pi does not report the model.
 - ${NESTED_DELEGATION_RULE}
 - Background: \`async: true\`.`;
 }
@@ -602,9 +622,9 @@ write no \`Skipped in Pi\` line for it.
 | \`Grep\`, \`Glob\` | \`rg\` through \`bash\`, or Pi's \`grep\` and \`find\` tools when the session has them. Without \`rg\`, use \`grep -rn\` and \`find\`. |
 | \`AskUserQuestion\`, \`AskQuestion\` | the \`ask_user\` tool. |
 | \`TodoWrite\`, \`TaskCreate\`, \`TaskUpdate\`, Open a todolist | no Pi equivalent. Keep an uncommitted \`todo.md\` checklist instead. |
-| \`claude-opus-5-5-xhigh\`, \`grok-4.7-xhigh-fast\`, \`gpt-*\`, other Cursor model slugs | the role models configured by \`/skill:${namespace}-setup\`. Call the \`pstack_adapter\` tool with \`action: "status"\` to read the current role table. An effort word in a slug, such as \`-xhigh\` or \`-max\`, is not a model id. The role table's thinking column carries that level, and \`-fast\` has no equivalent. An unconfigured role uses the \`general\` role. When \`general\` is unconfigured too, omit \`target\` or \`model\` so the child inherits the parent model and thinking. |
-| "pick each subagent's reasoning level and fast or standard speed", a role's starting level from the \`/setup-pstack\` budget | the thinking column of the \`model roles\` table is a role's ceiling. When it names a level, you may lower it along \`max\`, \`xhigh\`, \`high\`, \`medium\`, \`low\`, \`minimal\`, \`off\` as the body asks, then pass it by the backend rules in [Delegation](#delegation). Never raise a role above its configured level, even where the body says to raise it for the hardest work. Send that work to \`strongest-judgment\` at its own level instead. A role whose thinking reads "backend default" keeps that setting, because it has no level to move. An unconfigured role takes the \`general\` role's level as its ceiling, and keeps the parent's setting only when \`general\` is unconfigured too. Fast or standard speed has no Pi equivalent, so leave it out. If the backend rejects the moved level, use the role's configured level and say so. |
-| a role line valued \`auto\` or \`inherit-parent\` | an unconfigured role. Use the \`general\` role, or omit \`target\` or \`model\` only when \`general\` is unconfigured too. |
+| \`claude-opus-5-5-xhigh\`, \`grok-4.7-xhigh-fast\`, \`gpt-*\`, other Cursor model slugs | the role models configured by \`/skill:${namespace}-setup\`. Pass the role as the model, \`pstack:<role>\`, as [Delegation](#delegation) says, and the adapter picks the role's model and thinking. Call the \`pstack_adapter\` tool with \`action: "status"\` to read the current role table. An effort word in a slug, such as \`-xhigh\` or \`-max\`, is not a model id. The role table's thinking column carries that level, and \`-fast\` has no equivalent. An unconfigured role uses the \`general\` role. When \`general\` is unconfigured too, the adapter lets the child inherit the parent model and thinking. |
+| "pick each subagent's reasoning level and fast or standard speed", a role's starting level from the \`/setup-pstack\` budget | the thinking column of the \`model roles\` table is a role's ceiling. When it names a level, you may lower it along \`max\`, \`xhigh\`, \`high\`, \`medium\`, \`low\`, \`minimal\`, \`off\` as the body asks, by ending the role reference with \`:<level>\`, as in \`pstack:feature:low\`. Never raise a role above its configured level, even where the body says to raise it for the hardest work. Send that work to \`strongest-judgment\` at its own level instead. A role whose thinking reads "backend default" keeps that setting, because it has no level to move. An unconfigured role takes the \`general\` role's level as its ceiling, and keeps the parent's setting only when \`general\` is unconfigured too. Fast or standard speed has no Pi equivalent, so leave it out. If the backend rejects the moved level, pass \`pstack:<role>\` with no suffix to use the role's configured level, and say so. |
+| a role line valued \`auto\` or \`inherit-parent\` | an unconfigured role. Pass \`pstack:<role>\` as for any role. The adapter uses the \`general\` role, and lets the child inherit the parent model only when \`general\` is unconfigured too. |
 | \`~/.cursor/rules/pstack-models.mdc\` | adapter configuration written by \`/skill:${namespace}-setup\`. |
 | other \`.cursor/rules/*.mdc\` files, an always-applied rule | Pi reads no rule files. It loads \`AGENTS.md\` or \`CLAUDE.md\` from \`~/.pi/agent/\`, the working directory, and its parent directories into every session, so durable instructions go there. Model roles are the exception, as the row above says. |
 | role lines \`feature, refactoring\`, \`bug-fix\`, \`perf-issue\`, \`hillclimb\`, \`judgment and prose\`, \`hardest tasks\` | adapter roles \`feature\` or \`refactoring\`, \`bug-fix\`, \`perf-issue\`, \`hillclimb\`, \`judgment\`, and \`strongest-judgment\`. |

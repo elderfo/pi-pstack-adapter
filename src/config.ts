@@ -10,8 +10,9 @@ import type { DelegationProvider, SourceSelection, Trust } from "./types.ts";
 import { type ModelFilter, parseModelFilter } from "./filter.ts";
 
 /**
- * A role's model. A list is a pool of alternatives for an ordinary role: each delegation picks one
- * eligible entry. A panel role keeps its space-separated string, one seat per entry.
+ * A role's model. A list is a ranked pool of alternatives for an ordinary role: each delegation runs
+ * on the first eligible entry unless it overrides the ranking. A panel role keeps its
+ * space-separated string, one seat per entry.
  */
 export type ModelValue = string | readonly string[];
 

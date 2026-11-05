@@ -33,8 +33,8 @@ export function parentProblem(context: ResolutionContext): string | undefined {
 }
 
 export function resolveRole(config: AdapterConfig, role: string, context: ResolutionContext): RoleResolution {
-  const own = config.models[role];
-  const from = own !== undefined ? role : config.models[GENERAL_ROLE] !== undefined ? GENERAL_ROLE : undefined;
+  const own = Object.hasOwn(config.models, role) ? config.models[role] : undefined;
+  const from = own !== undefined ? role : Object.hasOwn(config.models, GENERAL_ROLE) ? GENERAL_ROLE : undefined;
   if (from === undefined) {
     const problem = parentProblem(context);
     return problem ? { kind: "blocked", from: role, reason: `it inherits, and ${problem}`, choices: [] } : { kind: "inherit", from: role };
