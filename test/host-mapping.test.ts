@@ -40,7 +40,22 @@ test("the host mapping maps upstream's subagent fields to what Pi's backends can
 test("the host mapping treats Bugbot comments as review threads and skips only Cursor's own machinery", () => {
   assert.match(rowFor("| Bugbot |"), /ordinary review threads, so triage them with the forge command the step gives.*When the PR has no Bugbot check or comment, \*\*skip\*\* a step that starts, waits for, or configures Bugbot\./);
   assert.match(rowFor("| Cursor cloud agents"), /runs locally.*\*\*Skip\*\* a step that needs the cloud agent itself/);
-  assert.match(rowFor("| a built-in PR tool |"), /Pi has none\. Use the forge command the step gives, such as `gh pr create`\. This is not a skip, so write no skip line\./);
+  assert.match(rowFor("| a built-in PR tool |"), /Pi standalone has none\. A host may expose PR tools; use them only when available and follow their instructions\. Otherwise use the forge command the step gives, such as `gh pr create`\. This is not a skip, so write no skip line\./);
+});
+
+test("PR event subscriptions depend on host tools, not the delegation backend", () => {
+  for (const backend of ["t3", "pi-subagents"] as const) {
+    const document = hostMappingDocument("pistack", backend);
+    const row = document.split("\n").find((line) => line.startsWith("| PR and CI event subscriptions |")) ?? "";
+    assert.match(row, /Pi standalone has no PR or CI event subscriptions/);
+    assert.match(row, /If the host exposes `mcp__t3-code__watch_pull_request`, use it/);
+    assert.match(row, /end the turn after subscribing and wait for host events instead of polling/);
+    assert.match(row, /Do not assume every host or delegation backend provides it/);
+    assert.match(row, /Without that tool, check the PR's live state with `gh pr view` and `gh pr checks`/);
+    assert.match(row, /do not start a polling loop/);
+    assert.match(row, /A wake is not a merge decision/);
+    assert.doesNotMatch(row, /\| not available in Pi\./);
+  }
 });
 
 test("the host mapping reads only this workspace's Pi sessions as transcripts", () => {

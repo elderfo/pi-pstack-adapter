@@ -129,7 +129,8 @@ test("poteto-mode stays experimental and states that Orchestrate has no scripts 
   assert.deepEqual(entry.capabilities, ["delegation", "structured-question"]);
   assert.deepEqual(entry.executables, ["git", "gh"]);
   assert.match(entry.note ?? "", /the `orch` helpers are gone/);
-  assert.match(entry.note ?? "", /event subscriptions only when the harness has them\. Pi has none\./);
+  assert.match(entry.note ?? "", /Pi standalone has none; a T3 Code host can provide them when it exposes `mcp__t3-code__watch_pull_request`/);
+  assert.match(entry.note ?? "", /a host capability, not a guarantee of either delegation backend/);
   assert.match(entry.note ?? "", /Project tracker and Project store, and forking a worker with its built state, have no Pi equivalent/);
   assert.match(entry.note ?? "", /Orchestrate ran a two-unit program in a linked worktree.*Its other playbooks and sticky mode were not rerun\./);
   assert.equal(docsRow("poteto-mode"), `| \`poteto-mode\` | \`/skill:pistack-poteto-mode\` | \`delegation\`, \`structured-question\` | \`git\`, \`gh\` | ${entry.note} |`);
