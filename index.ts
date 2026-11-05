@@ -437,7 +437,13 @@ export default function (pi: ExtensionAPI) {
       configError = undefined;
       if (state) state = { ...state, config: { ...state.config, models: fresh.models, modelFilter: fresh.modelFilter } };
     } catch (error) {
-      return `${untrusted} The write succeeded, but the session view was not refreshed: ${(error as Error).message}`;
+      try {
+        savedFilter = loadConfig(ctx, true).modelFilter;
+        configError = undefined;
+      } catch (filterError) {
+        configError = (filterError as Error).message;
+      }
+      return `${untrusted} The write succeeded, but the model role view was not refreshed: ${(error as Error).message}`;
     }
     return untrusted;
   }

@@ -156,6 +156,12 @@ test("invalid role assignments do not block unrelated delegation, but a saved fi
     await unrestricted.emit("session_start", { reason: "startup" });
     assert.equal(await unrestricted.delegate(T3, { task: "x" }), undefined);
     assert.match(await unrestricted.call({ action: "status" }), /did not start/);
+    const saved = await unrestricted.call({ action: "set_filter", scope: "user", include: ["gpt-*"] });
+    assert.match(saved, /Filter in force: include `gpt-\*`; exclude none/);
+    assert.equal(((await unrestricted.delegate(T3, { task: "x" })) as { block?: boolean }).block, true);
+    assert.equal(await unrestricted.delegate(T3, { task: "x", target: { model: "cliproxyapi/gpt-6.1-sol" } }), undefined);
+    await unrestricted.call({ action: "set_filter", scope: "user", clear: true });
+    assert.equal(await unrestricted.delegate(T3, { task: "x" }), undefined);
 
     writeFileSync(path, JSON.stringify({ models: { feature: "not valid" }, modelFilter: { include: ["gpt-*"] } }), "utf8");
     const restricted = await host();
