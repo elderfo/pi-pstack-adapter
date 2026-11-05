@@ -123,7 +123,7 @@ export async function routeDelegation(toolName: string, input: unknown, context:
 
 /** Makes `target` hold exactly the keys of `source`, because Pi runs the tool on the object it passed. */
 export function applyRewrite(target: Record<string, unknown>, source: Readonly<Record<string, unknown>>): void {
-  for (const key of Object.keys(target)) if (!(key in source)) delete target[key];
+  for (const key of Object.keys(target)) if (!Object.hasOwn(source, key)) delete target[key];
   Object.assign(target, source);
 }
 
