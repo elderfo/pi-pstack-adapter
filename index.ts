@@ -155,12 +155,8 @@ export default function (pi: ExtensionAPI) {
   // names a concrete model names no role. A blocked call fails; nothing retries it.
   pi.on("tool_call", async (event, ctx) => {
     if (event.toolName !== T3_DELEGATE_TOOL && event.toolName !== SUBAGENT_TOOL) return;
-    if (sessionFilter === undefined && configError !== undefined) {
-      return {
-        block: true,
-        reason: `Blocked by the pstack adapter: its config could not be read, so it cannot tell whether a saved model filter applies. ${configError} Fix the config and reload, or ask the user whether to set an explicit session filter with \`set_filter\`.`,
-      };
-    }
+    const unreadable = configBlock();
+    if (unreadable) return unreadable;
     const context = {
       filter: filterOf(activeFilter(sessionFilter, savedFilter)),
       parentModel: parentModelOf(ctx),
@@ -169,10 +165,20 @@ export default function (pi: ExtensionAPI) {
     const route = await routeDelegation(event.toolName, event.input, { ...context, config: state?.config, parentThinking: ctx.thinkingLevel });
     if (route.kind === "block") return { block: true, reason: route.reason };
     if (route.kind === "rewrite") applyRewrite(event.input as Record<string, unknown>, route.input);
-    // Read the filter again: a pick that waits on a service could span a `set_filter`.
+    // Read the config state and filter again: a pick that waits on a service could span a reload or a `set_filter`.
+    const unreadableNow = configBlock();
+    if (unreadableNow) return unreadableNow;
     const decision = gateDelegation(event.toolName, event.input, { ...context, filter: filterOf(activeFilter(sessionFilter, savedFilter)) });
     if (decision.kind === "block") return { block: true, reason: decision.reason };
   });
+
+  function configBlock(): { block: true; reason: string } | undefined {
+    if (sessionFilter !== undefined || configError === undefined) return undefined;
+    return {
+      block: true,
+      reason: `Blocked by the pstack adapter: its config could not be read, so it cannot tell whether a saved model filter applies. ${configError} Fix the config and reload, or ask the user whether to set an explicit session filter with \`set_filter\`.`,
+    };
+  }
 
   pi.on("resources_discover", async () => {
     if (!state) return {};
