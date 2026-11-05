@@ -171,3 +171,9 @@ test("the check report adds nothing without pools, a filter, or blocked roles, a
   assert.match(policy, /Blocked roles: `judgment` \(every model it lists is excluded by the model filter\)/);
   assert.match(policy, /do not move it to `general` or your own model/);
 });
+
+test("an unset panel warns when both default seats' ranked picks land on one model", () => {
+  const config = mergeConfig([layer({ models: { general: ["cliproxyapi/kimi-k3:low", "cliproxyapi/gpt-6.1-sol:medium"] } })]);
+  const panel = resolvePanel(config, "architect-runners", { parentModel: "cliproxyapi/claude-opus-5-5" });
+  assert.match(panelWarning(panel, config) ?? "", /Every seat of `architect-runners` runs on `cliproxyapi\/kimi-k3`/);
+});

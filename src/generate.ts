@@ -497,8 +497,12 @@ const MODEL_POLICY_SECTION = `Model roles, pools, and the model filter work the 
 - A panel seat that reads "BLOCKED" does not run. Run the other seats, and say in your reply which
   seat did not run and why. The seats of an unset panel are roles: delegate them as
   \`pstack:judgment\` and \`pstack:general\`, so a seat that reads "ranked" runs once on the first
-  allowed model unless you override the ranking as for a pool. A configured seat names its model,
-  so pass that model, or omit it for an \`inherit\` seat.
+  allowed model unless you override the ranking as for a pool. A configured seat names its model
+  and thinking, and the adapter does not rewrite a concrete model, so pass both yourself: on T3,
+  \`target: { providerInstanceId: "pi", model: "<provider/model>", options: { thinking: "<level>" } }\`;
+  on pi-subagents, \`model: "<provider/model>:<level>"\`. For a seat at "backend default", pass
+  \`options: {}\` on T3, which clears the inherited thinking, or no suffix on pi-subagents. An
+  \`inherit\` seat omits \`target\` on T3 and passes your own model on pi-subagents.
 - When the \`model filter\` row of the status report names a filter, the adapter blocks any
   \`delegate_task\` or \`subagent\` call in this session whose model the filter excludes, or whose
   model it cannot tell. That covers a call with no model while your own model is excluded, a model
@@ -538,10 +542,12 @@ function t3Section(namespace: string): string {
   path of \`agents/${namespace}-poteto-agent.md\` beside this file. The \`agent prompts\` row of
   the status report gives that directory.
 - Model: pass \`target: { providerInstanceId: "pi", model: "pstack:<role>" }\`. The adapter
-  writes the picked model into \`target.model\` and its thinking into \`target.options.thinking\`,
-  removing that option when the role's thinking reads "backend default".
+  writes the picked model into \`target.model\` and its thinking into \`target.options.thinking\`.
+  When the role's thinking reads "backend default", it removes that option and sends
+  \`options\` empty, which clears the parent's settings.
   An unconfigured role uses the \`general\` role. Only when \`general\` is unconfigured too does
-  the adapter remove \`target\`, so the child inherits the parent model and thinking. A role
+  the adapter remove the model and its thinking, so the child inherits the parent model and
+  thinking. A role
   reference always runs on the \`pi\` provider, so the adapter blocks one with another
   \`providerInstanceId\` or \`driverKind\`.
 - ${NESTED_DELEGATION_RULE}
@@ -575,7 +581,7 @@ function subagentSection(namespace: string): string {
   \`provider/model:<level>\`, or \`provider/model\` when the role's thinking reads "backend
   default", so pi-subagents applies its own default.
   An unconfigured role uses the \`general\` role. When \`general\` is unconfigured too, the adapter
-  passes your own model, or omits \`model\` when Pi does not report it.
+  passes your own model and thinking, or omits \`model\` when Pi does not report the model.
 - ${NESTED_DELEGATION_RULE}
 - Background: \`async: true\`.`;
 }

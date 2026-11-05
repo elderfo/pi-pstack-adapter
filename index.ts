@@ -166,7 +166,7 @@ export default function (pi: ExtensionAPI) {
       parentModel: parentModelOf(ctx),
       resolveModel: (model: string) => resolveRegistryModel(ctx, model),
     };
-    const route = routeDelegation(event.toolName, event.input, { ...context, config: state?.config });
+    const route = await routeDelegation(event.toolName, event.input, { ...context, config: state?.config, parentThinking: ctx.thinkingLevel });
     if (route.kind === "block") return { block: true, reason: route.reason };
     if (route.kind === "rewrite") applyRewrite(event.input as Record<string, unknown>, route.input);
     const decision = gateDelegation(event.toolName, event.input, context);

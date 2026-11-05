@@ -191,10 +191,9 @@ function seatModel(seat: PanelSeat): string | undefined {
       return PARENT_MODEL;
     case "model":
       return seat.spec.model;
-    case "choice": {
-      const models = new Set(seat.choices.map((choice) => choice.model));
-      return models.size === 1 ? [...models][0] : undefined;
-    }
+    case "choice":
+      // A default seat runs as `pstack:<role>`, so the ranked pick puts it on the first choice.
+      return seat.choices[0]?.model;
     case "blocked":
       return undefined;
   }

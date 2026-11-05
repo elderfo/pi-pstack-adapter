@@ -57,8 +57,11 @@ export interface PickRequest {
   readonly task: string;
 }
 
-/** The seam for choosing a pool model. It returns an index into `request.choices`; ranked takes the first. */
-export function pickModel(_request: PickRequest): number {
+/**
+ * The seam for choosing a pool model. It returns an index into `request.choices`; ranked takes the
+ * first. It may return a promise, so a strategy that asks a service can replace it.
+ */
+export function pickModel(_request: PickRequest): number | Promise<number> {
   return 0;
 }
 
@@ -89,6 +92,8 @@ export interface RouteContext {
   readonly filter?: ModelFilter;
   /** `provider/id` of the session's model. */
   readonly parentModel?: string;
+  /** The session's thinking level, which an inheriting `subagent` child keeps. */
+  readonly parentThinking?: ThinkingLevel;
   /** Maps a model to its registry `provider/id`, or undefined when Pi does not know it. */
   readonly resolveModel: (model: string) => string | undefined;
 }
@@ -109,7 +114,7 @@ const UNCHANGED: RouteDecision = { kind: "unchanged" };
  * Replaces each role reference in a `delegate_task` or `subagent` call with the model and thinking
  * the adapter picks. The result is a rewritten copy; concrete models and other tools are unchanged.
  */
-export function routeDelegation(toolName: string, input: unknown, context: RouteContext): RouteDecision {
+export async function routeDelegation(toolName: string, input: unknown, context: RouteContext): Promise<RouteDecision> {
   if (!isRecord(input)) return UNCHANGED;
   if (toolName === T3_DELEGATE_TOOL) return routeT3(input, context);
   if (toolName === SUBAGENT_TOOL) return routeSubagent(input, context);
@@ -131,7 +136,7 @@ function quoted(request: Exclude<ModelRequest, { kind: "concrete" }>): string {
   return request.kind === "role" ? `\`${request.text}\`` : safeEcho(request.text);
 }
 
-function routeReference(reference: RoleReference, where: string, requested: ThinkingLevel | undefined, task: string, context: RouteContext): ChildRoute {
+async function routeReference(reference: RoleReference, where: string, requested: ThinkingLevel | undefined, task: string, context: RouteContext): Promise<ChildRoute> {
   const { role } = reference;
   const block = (problem: string): ChildRoute => ({ kind: "block", reason: blockReason(where, quoted(reference), problem) });
   if (context.config === undefined) {
@@ -142,7 +147,7 @@ function routeReference(reference: RoleReference, where: string, requested: Thin
       `\`${role}\` is a panel role, which holds one seat per entry rather than one model. Start one child per seat as the \`panel roles\` table shows: an unset panel's seats are ${PANEL_DEFAULT_ROLES.map((seat) => `\`pstack:${seat}\``).join(" and ")}, and a configured seat names its own model.`,
     );
   }
-  if (!MODEL_ROLES.includes(role) && context.config.models[role] === undefined) {
+  if (!MODEL_ROLES.includes(role) && !Object.hasOwn(context.config.models, role)) {
     return block(`\`${role}\` is not a pstack role. Use a role from the \`model roles\` table of the \`pstack_adapter\` status report, or \`pstack:general\` when no other role fits.`);
   }
   const resolution = resolveRole(context.config, role, { filter: context.filter, parentModel: context.parentModel });
@@ -164,7 +169,7 @@ function routeReference(reference: RoleReference, where: string, requested: Thin
         chosen = choices.find((choice) => (context.resolveModel(choice.model) ?? choice.model) === wanted);
         if (chosen === undefined) return block(`\`${wanted}\` is not an entry of role \`${role}\`'s pool that the model filter allows. ${allowed}`);
       } else {
-        const index = pickModel({ role, choices, task });
+        const index = await pickModel({ role, choices, task });
         chosen = validatePick(index, choices);
         if (chosen === undefined) {
           return block(`the adapter's model pick for role \`${role}\` returned index ${index}, which is not one of its ${choices.length} allowed models. This is an adapter bug; report it to the user.`);
@@ -177,7 +182,7 @@ function routeReference(reference: RoleReference, where: string, requested: Thin
 }
 
 /** A T3 target names a Pi model, so a role reference only works with the `pi` provider. */
-function routeT3(args: Record<string, unknown>, context: RouteContext): RouteDecision {
+async function routeT3(args: Record<string, unknown>, context: RouteContext): Promise<RouteDecision> {
   const target = args.target;
   if (!isRecord(target)) return UNCHANGED;
   const request = parseModelRequest(target.model);
@@ -188,7 +193,7 @@ function routeT3(args: Record<string, unknown>, context: RouteContext): RouteDec
   if (provider !== undefined) {
     return {
       kind: "block",
-      reason: blockReason(where, quoted(request), `the target names T3 provider \`${String(provider)}\`, and a role reference names a Pi model. Use \`providerInstanceId: "pi"\`, or omit it.`),
+      reason: blockReason(where, quoted(request), `the target names T3 provider ${safeEcho(provider)}, and a role reference names a Pi model. Use \`providerInstanceId: "pi"\`, or omit it.`),
     };
   }
   const optionLevel = readThinkingOption(target.options);
@@ -199,19 +204,24 @@ function routeT3(args: Record<string, unknown>, context: RouteContext): RouteDec
     };
   }
   const task = typeof args.task === "string" ? args.task : "";
-  const route = routeReference(request, where, lowest(request.thinking, optionLevel), task, context);
+  const route = await routeReference(request, where, lowest(request.thinking, optionLevel), task, context);
   if (route.kind === "block") return route;
   const next = structuredClone(args);
+  const nextTarget = next.target as Record<string, unknown>;
   if (route.kind === "inherit") {
-    delete next.target;
+    // Omitted options inherit the parent's, and other target fields stay for the filter gate to check.
+    delete nextTarget.model;
+    const options = writeThinkingOption(nextTarget.options, undefined);
+    if (options === undefined) delete nextTarget.options;
+    else nextTarget.options = options;
+    const rest = Object.keys(nextTarget).filter((key) => !(key === "providerInstanceId" && nextTarget[key] === "pi"));
+    if (rest.length === 0) delete next.target;
     return { kind: "rewrite", input: next };
   }
-  const nextTarget = next.target as Record<string, unknown>;
   nextTarget.model = route.spec.model;
   if (nextTarget.providerInstanceId === undefined) nextTarget.providerInstanceId = "pi";
-  const options = writeThinkingOption(nextTarget.options, route.spec.thinking);
-  if (options === undefined) delete nextTarget.options;
-  else nextTarget.options = options;
+  // T3 reads empty options as clearing the inherited ones, so a backend-default entry sends them empty.
+  nextTarget.options = writeThinkingOption(nextTarget.options, route.spec.thinking) ?? (Array.isArray(nextTarget.options) ? [] : {});
   return { kind: "rewrite", input: next };
 }
 
@@ -252,7 +262,7 @@ function subagentSlots(args: Record<string, unknown>): ModelSlot[] {
   const taskOf = (holder: Record<string, unknown>, fallback: string) => (typeof holder.task === "string" ? holder.task : fallback);
   const slots: ModelSlot[] = [];
   if (args.agent !== undefined) {
-    if (args.model !== undefined) slots.push({ where: "`subagent` `model`", holder: args, task: topTask });
+    if (args.model !== undefined && args.model !== null) slots.push({ where: "`subagent` `model`", holder: args, task: topTask });
     else if (isRecord(args.options) && args.options.model !== undefined) slots.push({ where: "`subagent` `options.model`", holder: args.options, task: topTask });
   }
   if (Array.isArray(args.tasks)) {
@@ -276,7 +286,7 @@ function subagentSlots(args: Record<string, unknown>): ModelSlot[] {
 }
 
 /** pi-subagents takes `provider/model:level` in each child's `model`. Other actions launch nothing named here. */
-function routeSubagent(args: Record<string, unknown>, context: RouteContext): RouteDecision {
+async function routeSubagent(args: Record<string, unknown>, context: RouteContext): Promise<RouteDecision> {
   if (typeof args.action === "string" && args.action.trim() !== "") return UNCHANGED;
   const next = structuredClone(args);
   let changed = false;
@@ -284,10 +294,10 @@ function routeSubagent(args: Record<string, unknown>, context: RouteContext): Ro
     const request = parseModelRequest(slot.holder.model);
     if (request.kind === "concrete") continue;
     if (request.kind === "invalid") return { kind: "block", reason: blockReason(slot.where, quoted(request), request.problem) };
-    const route = routeReference(request, slot.where, request.thinking, slot.task, context);
+    const route = await routeReference(request, slot.where, request.thinking, slot.task, context);
     if (route.kind === "block") return route;
     if (route.kind === "model") slot.holder.model = joinModelSpec(route.spec);
-    else if (context.parentModel !== undefined) slot.holder.model = context.parentModel;
+    else if (context.parentModel !== undefined) slot.holder.model = joinModelSpec({ model: context.parentModel, ...(context.parentThinking !== undefined ? { thinking: context.parentThinking } : {}) });
     else delete slot.holder.model;
     changed = true;
   }
