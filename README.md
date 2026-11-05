@@ -175,10 +175,14 @@ report warns when a panel's seats all run on one model.
 
 ### Give a role a pool of models
 
-An ordinary role can list several models instead of one. The list is a ranking: each delegation
-for that role uses the first model the filter allows. The agent that delegates may override the
-ranking and pick another model from the pool when the task clearly fits it better, and it says
-which model it picked and why. A pool is not a panel: a panel runs one seat per entry, but a pool starts one
+An ordinary role can list several models instead of one. The list is a ranking. The agent
+delegates by role, passing `pstack:<role>` as the model, and the adapter rewrites the call to the
+first model in the ranking that the filter allows, at that entry's thinking level. The agent that
+delegates may override the ranking with `pstack:<role>@<provider/model>` when the task clearly
+fits another model from the pool better, and it says which model it picked and why. The adapter
+blocks an override that is not an allowed entry of the pool. A `:<level>` suffix, as in
+`pstack:feature:low`, lowers the thinking level and never raises it above the configured one.
+A pool is not a panel: a panel runs one seat per entry, but a pool starts one
 child per task. A pool is not a retry list either: when a delegation fails, the agent reports the
 failure and does not try the next model. In a config file a pool is a JSON list:
 
@@ -194,9 +198,9 @@ written. In `PISTACK_MODELS`, separate a pool's entries with `|`:
 PISTACK_MODELS='feature=provider/model-a:high|provider/model-b' pi
 ```
 
-A panel keeps its string of seats. An unset panel's two default seats each run once on the first
-allowed model of the `judgment` and `general` pools, unless the delegating agent overrides the
-ranking.
+A panel keeps its string of seats. An unset panel's two default seats are delegated as
+`pstack:judgment` and `pstack:general`, so each runs once on the first allowed model of its pool,
+unless the delegating agent overrides the ranking.
 
 ### Restrict which models delegation uses
 

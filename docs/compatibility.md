@@ -418,6 +418,13 @@ marker text is reported as a warning, with its bytes unchanged. An agent whose P
 skill name rules is skipped with an error, before its name reaches a file name or any generated
 text.
 
+The generated instructions tell the model to name a role, not a model, by passing
+`pstack:<role>` as the delegation's model. Before either tool runs, the adapter rewrites that
+reference to the role's model and thinking, taking the first model of a pool that the model
+filter allows, and then applies the filter as for any other call. Unit and integration tests drive
+this through the real `tool_call` handler. No workflow has yet run end to end with role
+references, so no tier claim rests on them.
+
 Unit tests cover detection, activation order, and the generated instructions for both providers.
 No tier changed when T3 support arrived, because no delegating workflow has yet run end to end
 through `delegate_task`. That run is the evidence the tier rules above require.
