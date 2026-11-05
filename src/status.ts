@@ -1,7 +1,12 @@
 import { CERTIFIED } from "./certified.ts";
-import { CAPABILITY_LABELS, GENERAL_ROLE, MODEL_ROLES, PANEL_DEFAULT_ROLES, PANEL_ROLES, TIER_ORDER } from "./registry.ts";
+import { CAPABILITY_LABELS, MODEL_ROLES, PANEL_DEFAULT_ROLES, PANEL_ROLES, TIER_ORDER } from "./registry.ts";
 import type { AdapterConfig, ModelSpec } from "./config.ts";
-import { panelEntries, splitModelSpec, trustWarning } from "./config.ts";
+import { trustWarning } from "./config.ts";
+import { type FilterOrigin, briefLine, describeOrigin, filterOf, isRestricting } from "./filter.ts";
+import { type PanelSeat, type ResolutionContext, type ResolvedPanel, type RoleResolution, defaultSeats, resolvePanel, resolveRole } from "./pools.ts";
+
+export { resolvePanel } from "./pools.ts";
+export type { PanelSeat, ResolvedPanel } from "./pools.ts";
 import { DELEGATION_BACKENDS, delegationOrder } from "./delegation.ts";
 import type { PrerequisiteReport } from "./capabilities.ts";
 import type {
@@ -30,10 +35,16 @@ export interface StatusInput {
   readonly bootstrapped: boolean;
   /** Runtime findings that generation could not know, such as agent registration results. */
   readonly runtimeDiagnostics?: readonly Diagnostic[];
+  /** The model filter in force and where it came from. None when omitted. */
+  readonly filter?: FilterOrigin;
+  /** `provider/id` of the session's model, which an inheriting role runs on. */
+  readonly parentModel?: string;
 }
 
 export function renderStatus(input: StatusInput): string {
   const { config, source } = input;
+  const origin = input.filter ?? { kind: "none" };
+  const context: ResolutionContext = { filter: filterOf(origin), parentModel: input.parentModel };
   const lines: string[] = [];
 
   lines.push(`# ${config.namespace} adapter status`);
@@ -60,6 +71,7 @@ export function renderStatus(input: StatusInput): string {
   lines.push(`| Poteto Mode | ${input.modeActive ? "active" : "off"} |`);
   lines.push(`| delegation order | ${delegationOrder(config.delegation).map((backend) => backend.id).join(", then ")} |`);
   lines.push(`| delegation | ${describeDelegation(input.capabilities)} |`);
+  lines.push(`| model filter | ${describeOrigin(origin)} |`);
   lines.push("");
 
   const warning = trustWarning(source.trust, config);
@@ -90,25 +102,16 @@ export function renderStatus(input: StatusInput): string {
   lines.push("");
   lines.push(`| role | model | thinking |`);
   lines.push(`| --- | --- | --- |`);
-  const extra = Object.keys(config.models)
-    .filter((role) => !MODEL_ROLES.includes(role) && !PANEL_ROLES.includes(role))
-    .sort();
-  const general = config.models[GENERAL_ROLE];
-  for (const role of [...MODEL_ROLES, ...extra]) {
-    const configured = config.models[role];
-    if (configured === undefined && general !== undefined) {
-      const spec = splitModelSpec(general);
-      lines.push(`| ${role} | ${spec.model} (from ${GENERAL_ROLE}) | ${spec.thinking ?? "backend default"} (from ${GENERAL_ROLE}) |`);
-      continue;
-    }
-    if (configured === undefined) {
-      lines.push(`| ${role} | inherit (parent session model) | inherit (parent session thinking) |`);
-      continue;
-    }
-    const spec = splitModelSpec(configured);
-    lines.push(`| ${role} | ${spec.model} | ${spec.thinking ?? "backend default"} |`);
+  for (const role of [...MODEL_ROLES, ...extraRoles(config)]) {
+    const [model, thinking] = describeRole(resolveRole(config, role, context), role);
+    lines.push(`| ${role} | ${model} | ${thinking} |`);
   }
   lines.push("");
+  const policy = renderModelPolicy(config, origin, input.parentModel);
+  if (policy) {
+    lines.push(policy);
+    lines.push("");
+  }
 
   lines.push(`## Panel roles`);
   lines.push("");
@@ -116,13 +119,13 @@ export function renderStatus(input: StatusInput): string {
   lines.push("");
   lines.push(`| panel | seats | source |`);
   lines.push(`| --- | --- | --- |`);
-  const panels = PANEL_ROLES.map((panel) => resolvePanel(config, panel));
+  const panels = PANEL_ROLES.map((panel) => resolvePanel(config, panel, context));
   for (const panel of panels) {
     lines.push(`| ${panel.role} | ${panel.seats.map(describeSeat).join("; ")} | ${panel.configured ? "configured" : `unset, so ${PANEL_DEFAULT_ROLES.join(", ")}`} |`);
   }
   lines.push("");
   for (const panel of panels) {
-    const warning = panelWarning(panel, config);
+    const warning = panelWarning(panel, config, context);
     if (warning) {
       lines.push(`> Warning. ${warning}`);
       lines.push("");
@@ -161,97 +164,154 @@ export function renderStatus(input: StatusInput): string {
   return lines.join("\n");
 }
 
-/** One seat of a panel. `spec` is undefined when the seat runs on the model of the agent that starts the panel. */
-export interface PanelSeat {
-  readonly spec?: ModelSpec;
-  /** The role a default seat came from, such as `general` for an unset `judgment`. */
-  readonly from?: string;
-}
-
-export interface ResolvedPanel {
-  readonly role: string;
-  readonly configured: boolean;
-  readonly seats: readonly PanelSeat[];
-}
-
-/** A single role's model as delegation resolves it: the role, then `general`, then the parent. */
-function resolveRoleSeat(config: AdapterConfig, role: string): PanelSeat {
-  const configured = config.models[role];
-  if (configured !== undefined) return { spec: splitModelSpec(configured), from: role };
-  const general = config.models[GENERAL_ROLE];
-  if (general !== undefined) return { spec: splitModelSpec(general), from: GENERAL_ROLE };
-  return { from: role };
-}
-
-export function resolvePanel(config: AdapterConfig, role: string): ResolvedPanel {
-  const configured = config.models[role];
-  if (configured !== undefined) {
-    return {
-      role,
-      configured: true,
-      seats: panelEntries(configured).map((entry) => (entry.kind === "inherit" ? {} : { spec: entry.spec })),
-    };
-  }
-  return { role, configured: false, seats: defaultSeats(config) };
-}
-
-/** The seats an unset panel gets, which are also the default pool arena falls back to. */
-function defaultSeats(config: AdapterConfig): PanelSeat[] {
-  return PANEL_DEFAULT_ROLES.map((name) => resolveRoleSeat(config, name));
+function describeSpec(spec: ModelSpec): string {
+  return `${spec.model} at ${spec.thinking ?? "backend default"}`;
 }
 
 function describeSeat(seat: PanelSeat): string {
   const origin = seat.from ? ` (${seat.from})` : "";
-  if (!seat.spec) return `model of the agent that starts the panel${origin}`;
-  return `${seat.spec.model} at ${seat.spec.thinking ?? "backend default"}${origin}`;
+  switch (seat.kind) {
+    case "parent":
+      return `model of the agent that starts the panel${origin}`;
+    case "model":
+      return `${describeSpec(seat.spec)}${origin}`;
+    case "choice":
+      return `one of ${seat.choices.map(describeSpec).join(" or ")}, picked once for this seat${origin}`;
+    case "blocked":
+      return `BLOCKED, ${seat.reason}${origin}`;
+  }
 }
 
 const PARENT_MODEL = "the model of the agent that starts the panel";
+
+/** The model a seat runs on, when it is already determined. */
+function seatModel(seat: PanelSeat): string | undefined {
+  switch (seat.kind) {
+    case "parent":
+      return PARENT_MODEL;
+    case "model":
+      return seat.spec.model;
+    case "choice": {
+      const models = new Set(seat.choices.map((choice) => choice.model));
+      return models.size === 1 ? [...models][0] : undefined;
+    }
+    case "blocked":
+      return undefined;
+  }
+}
+
+function seatModels(seats: readonly PanelSeat[]): Set<string> | undefined {
+  const models = new Set<string>();
+  for (const seat of seats) {
+    const model = seatModel(seat);
+    if (model !== undefined) models.add(model);
+    else if (seat.kind === "choice") return undefined;
+  }
+  return models;
+}
 
 /**
  * Upstream's default panels span two model families. A panel whose seats all land on one model
  * lost that because of configuration, not because no other model exists, so say so where the
  * agent reads it. Families are left to the agent, which knows them better than a prefix list.
  */
-export function panelWarning(panel: ResolvedPanel, config: AdapterConfig): string | undefined {
-  const models = new Set(panel.seats.map((seat) => seat.spec?.model ?? PARENT_MODEL));
+export function panelWarning(panel: ResolvedPanel, config: AdapterConfig, context: ResolutionContext = {}): string | undefined {
+  const usable = panel.seats.filter((seat) => seat.kind !== "blocked");
+  const models = seatModels(usable);
   const pool = panel.role === "arena-cross-judge-pool";
   // Upstream lets a panel line hold one entry on purpose, so only the judge pool warns at one seat.
-  if (models.size !== 1 || (panel.seats.length < 2 && !pool)) return undefined;
+  if (models === undefined || models.size !== 1 || (usable.length < 2 && !pool)) return undefined;
   const [model] = [...models];
   const named = model === PARENT_MODEL ? PARENT_MODEL : `\`${model}\``;
   const cause = panel.configured
     ? `its configured entries all name ${named}`
     : `it is unset, and ${PANEL_DEFAULT_ROLES.map((role) => `\`${role}\``).join(" and ")} both resolve to ${named}`;
-  return `Every seat of \`${panel.role}\` runs on ${named}, because ${cause}, ${pool ? poolEffect(panel, config, model) : "so the panel has one model and no second family"}. This comes from the adapter configuration, not from which models are available. Run \`/skill:${config.namespace}-setup\` to put this panel on two model families, as upstream's defaults do.`;
+  return `Every seat of \`${panel.role}\` runs on ${named}, because ${cause}, ${pool ? poolEffect(panel, config, model, context) : "so the panel has one model and no second family"}. This comes from the adapter configuration, not from which models are available. Run \`/skill:${config.namespace}-setup\` to put this panel on two model families, as upstream's defaults do.`;
 }
 
 /**
  * Arena's judge is never from the session's family. When no pool entry qualifies, upstream tries
  * its default pool, which here is `judgment`, then `general`, before it skips the judge.
  */
-function poolEffect(panel: ResolvedPanel, config: AdapterConfig, model: string | undefined): string {
-  const fallback = defaultSeats(config);
-  const fallbackModels = new Set(fallback.map((seat) => seat.spec?.model ?? PARENT_MODEL));
+function poolEffect(panel: ResolvedPanel, config: AdapterConfig, model: string | undefined, context: ResolutionContext): string {
+  const fallback = defaultSeats(config, context);
+  const fallbackModels = seatModels(fallback);
   const lead =
     model === PARENT_MODEL
       ? "and an `inherit` entry never judges, so arena"
       : `so a session on the family of \`${model}\` gets no judge from the pool, and arena`;
-  const sameFallback = !panel.configured || (fallbackModels.size === 1 && fallbackModels.has(model ?? PARENT_MODEL));
+  const sameFallback = !panel.configured || (fallbackModels?.size === 1 && fallbackModels.has(model ?? PARENT_MODEL));
   return sameFallback
     ? `${lead} skips the judge`
     : `${lead} tries its default pool, ${fallback.map(describeSeat).join("; ")}, before it skips the judge`;
 }
 
 /** The panels a workflow reads, for its `check` report. */
-export function renderPanels(config: AdapterConfig, roles: readonly string[]): string {
+export function renderPanels(config: AdapterConfig, roles: readonly string[], context: ResolutionContext = {}): string {
   const lines = roles.map((role) => {
-    const panel = resolvePanel(config, role);
+    const panel = resolvePanel(config, role, context);
     const source = panel.configured ? "configured" : `unset, so ${PANEL_DEFAULT_ROLES.join(", ")}`;
-    const warning = panelWarning(panel, config);
+    const warning = panelWarning(panel, config, context);
     return `- \`${role}\` (${source}): ${panel.seats.map(describeSeat).join("; ")}.${warning ? ` Warning. ${warning}` : ""}`;
   });
   return `Panels this workflow uses, one seat per entry:\n${lines.join("\n")}`;
+}
+
+/** One `model roles` row: the model column and the thinking column. */
+function describeRole(resolution: RoleResolution, role: string): readonly [string, string] {
+  const via = resolution.from === role ? "" : ` (from ${resolution.from})`;
+  switch (resolution.kind) {
+    case "inherit":
+      return ["inherit (parent session model)", "inherit (parent session thinking)"];
+    case "blocked": {
+      const excluded = resolution.choices.map((choice) => choice.spec.model);
+      return [`BLOCKED, ${resolution.reason}${excluded.length > 0 ? `: ${excluded.join(", ")}` : ""}. Do not delegate this role${via}`, "-"];
+    }
+    case "pool": {
+      const [only] = resolution.choices;
+      if (resolution.choices.length === 1 && only) return [`${only.spec.model}${via}`, `${only.spec.thinking ?? "backend default"}${via}`];
+      const eligible = resolution.choices.filter((choice) => choice.eligible).map((choice) => describeSpec(choice.spec));
+      const excluded = resolution.choices.filter((choice) => !choice.eligible).map((choice) => describeSpec(choice.spec));
+      const tail = excluded.length > 0 ? `; excluded by the model filter: ${excluded.join(", ")}` : "";
+      return [`pool, pick one of ${eligible.join(", ")}${tail}${via}`, `per choice${via}`];
+    }
+  }
+}
+
+/**
+ * The delegation rules a workflow's `check` report adds when pools, a model filter, or blocked roles
+ * are in play. Nothing when none of them is, so the report stays as it was.
+ */
+export function renderModelPolicy(config: AdapterConfig, origin: FilterOrigin, parentModel: string | undefined): string | undefined {
+  const filter = filterOf(origin);
+  const context: ResolutionContext = { filter, parentModel };
+  const roles = [...MODEL_ROLES, ...extraRoles(config)];
+  const resolutions = roles.map((role) => [role, resolveRole(config, role, context)] as const);
+  const blocked = resolutions.filter(([, resolution]) => resolution.kind === "blocked");
+  const pools = resolutions.filter(([, resolution]) => resolution.kind === "pool" && resolution.choices.length > 1);
+  if (!isRestricting(filter) && pools.length === 0 && blocked.length === 0) return undefined;
+  const lines: string[] = [];
+  if (isRestricting(filter)) {
+    lines.push(`Model filter: ${describeOrigin(origin)}. The adapter blocks a delegation whose model it excludes, or whose model it cannot tell.`);
+    lines.push(`Put this line in each brief, verbatim: "${briefLine(filter)}"`);
+  }
+  if (pools.length > 0) {
+    lines.push(
+      `Pools: ${pools.map(([role, resolution]) => `\`${role}\` picks one of ${describeRole(resolution, role)[0].replace(/^pool, pick one of /, "")}`).join("; ")}. For each delegation, pick ONE eligible model from the role's pool by fit. A pool is not a retry list and not a panel: do not start the same task on several of its models, and when a delegation fails, report the failure instead of trying another model.`,
+    );
+  }
+  if (blocked.length > 0) {
+    lines.push(
+      `Blocked roles: ${blocked.map(([role, resolution]) => `\`${role}\` (${resolution.kind === "blocked" ? resolution.reason : ""})`).join("; ")}. Do not delegate work for a blocked role, and do not move it to \`general\` or your own model. Tell the user which role is blocked and why.`,
+    );
+  }
+  return lines.join("\n\n");
+}
+
+function extraRoles(config: AdapterConfig): string[] {
+  return Object.keys(config.models)
+    .filter((role) => !MODEL_ROLES.includes(role) && !PANEL_ROLES.includes(role))
+    .sort();
 }
 
 function describeDelegation(capabilities: readonly CapabilityStatus[]): string {
@@ -294,6 +354,8 @@ export function renderCheck(
   delegation?: CapabilityStatus,
   /** The workflow's panels, from `renderPanels`. */
   panels?: string,
+  /** Pools, the model filter, and blocked roles, from `renderModelPolicy`. */
+  policy?: string,
 ): string {
   const parts = [`\`/skill:${skill.generatedName}\` is tier **${skill.tier}**.`];
   if (entry.note) parts.push(entry.note);
@@ -313,6 +375,7 @@ export function renderCheck(
     );
   }
   if (panels && skill.tier !== "unsupported") parts.push(panels);
+  if (policy && skill.capabilities.includes("delegation") && skill.tier !== "unsupported") parts.push(policy);
   if (skill.tier === "experimental" && report.ok) {
     parts.push("Tier `experimental` means parts of this workflow have no Pi equivalent. Expect gaps.");
   }

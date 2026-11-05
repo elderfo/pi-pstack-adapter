@@ -7,6 +7,21 @@ import { expandHome } from "./paths.ts";
 import { MAX_PANEL_ENTRIES, isPanelRole } from "./registry.ts";
 import { DEFAULT_DELEGATION, DELEGATION_PROVIDERS, isDelegationProvider } from "./delegation.ts";
 import type { DelegationProvider, SourceSelection, Trust } from "./types.ts";
+import { type ModelFilter, parseModelFilter } from "./filter.ts";
+
+/**
+ * A role's model. A list is a pool of alternatives for an ordinary role: each delegation picks one
+ * eligible entry. A panel role keeps its space-separated string, one seat per entry.
+ */
+export type ModelValue = string | readonly string[];
+
+/** A pool holds this many alternatives at most, like a panel's seat limit. */
+export const MAX_POOL_ENTRIES = 8;
+
+/** The entries of a role value, one for a plain string. */
+export function poolEntries(value: ModelValue): readonly string[] {
+  return typeof value === "string" ? [value] : value;
+}
 
 export interface AdapterConfig {
   readonly namespace: string;
@@ -19,7 +34,9 @@ export interface AdapterConfig {
   readonly pinnedCommit?: string;
   readonly allowBootstrap: boolean;
   readonly cacheDir?: string;
-  readonly models: Readonly<Record<string, string>>;
+  readonly models: Readonly<Record<string, ModelValue>>;
+  /** The saved model filter and the layer it came from. A later layer replaces it whole. */
+  readonly modelFilter?: { readonly filter: ModelFilter; readonly source: string };
   /** The delegation backend tried first. The other one is the fallback. */
   readonly delegation: DelegationProvider;
   readonly sources: readonly string[];
@@ -34,7 +51,8 @@ export interface ConfigFile {
   pinnedCommit?: string;
   allowBootstrap?: boolean;
   cacheDir?: string;
-  models?: Record<string, string>;
+  models?: Record<string, ModelValue>;
+  modelFilter?: ModelFilter;
   delegation?: string;
 }
 
@@ -304,9 +322,64 @@ function invalidModelMessage(model: unknown): string {
   return `Invalid model value ${typeof model === "string" ? `(${model.length} characters)` : safeEcho(model)}. Use provider/model or provider/model:thinking with no spaces or markup characters, at most 128 characters.`;
 }
 
-/** `role=provider/model[:thinking],role2=provider/model2` */
-export function parseModelRoles(value: string): Record<string, string> {
-  const roles: Record<string, string> = {};
+export type PoolAssignment =
+  | { readonly kind: "assign"; readonly value: ModelValue }
+  | { readonly kind: "rejected"; readonly message: string };
+
+/**
+ * Validates a `set_model` pool for an ordinary role. `thinking` applies to each entry without its own
+ * `:level`. Every entry must be a registry model; one bad entry rejects the whole pool. A pool of one
+ * is written as a plain string, the format older adapters read.
+ */
+export function planPoolAssignment(
+  entries: readonly string[],
+  thinking: string | undefined,
+  available: readonly AvailableModel[],
+): PoolAssignment {
+  const requested = thinking?.trim().toLowerCase() || undefined;
+  if (requested !== undefined && !isThinkingLevel(requested)) {
+    return {
+      kind: "rejected",
+      message: `Unknown thinking level \`${safeEcho(thinking).replaceAll('"', "")}\`. Use one of ${THINKING_LEVELS.map((level) => `\`${level}\``).join(", ")}.`,
+    };
+  }
+  const trimmed = entries.map((entry) => (typeof entry === "string" ? entry.trim() : entry));
+  if (trimmed.length === 0 || trimmed.length > MAX_POOL_ENTRIES) {
+    return { kind: "rejected", message: `A pool takes 1 to ${MAX_POOL_ENTRIES} models. Pass \`inherit\` as a plain string to clear the role.` };
+  }
+  const written: string[] = [];
+  for (const entry of trimmed) {
+    if (typeof entry !== "string" || entry === "") return { kind: "rejected", message: "A pool entry must be a non-empty `provider/model` string." };
+    if (entry.toLowerCase() === INHERIT_ENTRY) {
+      return { kind: "rejected", message: "A pool lists models only. To make the role inherit, pass `model: \"inherit\"` as a plain string." };
+    }
+    const own = available.some((candidate) => candidate.id === entry) ? undefined : splitModelSpec(entry).thinking;
+    const plan = planModelAssignment(entry, own === undefined ? thinking : undefined, available);
+    if (plan.kind === "rejected") return { kind: "rejected", message: `Entry \`${safeEcho(entry).replaceAll('"', "")}\`: ${plan.message}` };
+    if (plan.kind === "assign") written.push(joinModelSpec(plan.spec));
+  }
+  return { kind: "assign", value: written.length === 1 ? (written[0] as string) : written };
+}
+
+function isValidPoolValue(value: unknown): value is readonly string[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.length <= MAX_POOL_ENTRIES &&
+    value.every((entry) => typeof entry === "string" && entry.toLowerCase() !== INHERIT_ENTRY && isValidModelSpec(entry))
+  );
+}
+
+function invalidPoolMessage(value: readonly unknown[]): string {
+  return `Invalid pool (${value.length} entries). Use a list of 1 to ${MAX_POOL_ENTRIES} entries, each \`provider/model\` or \`provider/model:thinking\`, with no \`inherit\` entry.`;
+}
+
+/**
+ * `role=provider/model[:thinking],role2=provider/model2`. An ordinary role takes a pool as
+ * `role=a/x|b/y`; `|` never appears in a model id. A panel keeps space-separated seats.
+ */
+export function parseModelRoles(value: string): Record<string, ModelValue> {
+  const roles: Record<string, ModelValue> = {};
   for (const pair of value.split(",")) {
     const trimmed = pair.trim();
     if (trimmed === "") continue;
@@ -321,6 +394,11 @@ export function parseModelRoles(value: string): Record<string, string> {
     if (model === "") continue;
     if (isPanelRole(role)) {
       if (!isValidPanelValue(model)) throw new Error(`Role ${safeEcho(role)}. ${invalidPanelMessage(model)}`);
+    } else if (model.includes("|")) {
+      const pool = model.split("|").map((entry) => entry.trim());
+      if (!isValidPoolValue(pool)) throw new Error(`Role ${safeEcho(role)}. ${invalidPoolMessage(pool)}`);
+      roles[role] = pool;
+      continue;
     } else if (!isValidModelSpec(model)) {
       throw new Error(invalidModelMessage(model));
     }
@@ -352,6 +430,7 @@ export function environmentLayer(env: NodeJS.ProcessEnv): ConfigLayer {
 export function mergeConfig(layers: readonly ConfigLayer[]): AdapterConfig {
   const merged: ConfigFile = {};
   const sources: string[] = [];
+  let filterSource = "";
   for (const layer of layers) {
     let contributed = false;
     for (const [key, value] of Object.entries(layer.values)) {
@@ -368,6 +447,11 @@ export function mergeConfig(layers: readonly ConfigLayer[]): AdapterConfig {
       }
       if (key === "models") {
         merged.models = { ...merged.models, ...validatedModels(value, layer.label) };
+      } else if (key === "modelFilter") {
+        const parsed = parseModelFilter(value);
+        if ("problem" in parsed) throw new Error(`${layer.label}: ${parsed.problem} Edit \`modelFilter\` in that file, then restart Pi.`);
+        merged.modelFilter = parsed.filter;
+        filterSource = layer.label;
       } else {
         (merged as Record<string, unknown>)[key] = value;
       }
@@ -390,17 +474,18 @@ export function mergeConfig(layers: readonly ConfigLayer[]): AdapterConfig {
     allowBootstrap: merged.allowBootstrap ?? false,
     cacheDir: merged.cacheDir,
     models: merged.models ?? {},
+    modelFilter: merged.modelFilter ? { filter: merged.modelFilter, source: filterSource } : undefined,
     delegation: validateDelegation(merged.delegation, layers),
     sources,
   };
 }
 
 /** A bad `models` entry fails with the layer that holds it, so status can still be reached after a fix. */
-function validatedModels(value: unknown, label: string): Record<string, string> {
+function validatedModels(value: unknown, label: string): Record<string, ModelValue> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(`${label} sets \`models\` to something other than an object of role to provider/model.`);
   }
-  const models: Record<string, string> = {};
+  const models: Record<string, ModelValue> = {};
   for (const [role, model] of Object.entries(value)) {
     if (!isValidRole(role)) {
       throw new Error(`${label}: ${invalidRoleMessage(role)} Edit that key in \`models\` in the named file, then restart Pi.`);
@@ -410,10 +495,13 @@ function validatedModels(value: unknown, label: string): Record<string, string> 
       if (typeof model !== "string" || !isValidPanelValue(model)) {
         throw new Error(`${label}: role ${safeEcho(role)}. ${invalidPanelMessage(model)}`);
       }
+    } else if (Array.isArray(model)) {
+      if (!isValidPoolValue(model)) throw new Error(`${label}: role ${safeEcho(role)}. ${invalidPoolMessage(model)}`);
     } else if (typeof model !== "string" || !isValidModelSpec(model)) {
       throw new Error(`${label}: role ${safeEcho(role)}. ${invalidModelMessage(model)}`);
     }
-    Object.defineProperty(models, role, { value: model, enumerable: true, writable: true, configurable: true });
+    const stored: ModelValue = Array.isArray(model) ? [...(model as string[])] : (model as string);
+    Object.defineProperty(models, role, { value: stored, enumerable: true, writable: true, configurable: true });
   }
   return models;
 }

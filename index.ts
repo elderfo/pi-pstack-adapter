@@ -7,7 +7,17 @@ import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerDelegationActivation } from "./src/activation.ts";
 import { registerAgents, unregisteredAgentDiagnostics, type RuntimeRegistration } from "./src/agents.ts";
-import { DEFAULT_DELEGATION } from "./src/delegation.ts";
+import { DEFAULT_DELEGATION, SUBAGENT_TOOL, T3_DELEGATE_TOOL } from "./src/delegation.ts";
+import {
+  FILTER_ENTRY_TYPE,
+  type ModelFilter,
+  activeFilter,
+  describeOrigin,
+  filterOf,
+  parseModelFilter,
+  sessionFilterFromEntries,
+} from "./src/filter.ts";
+import { gateDelegation } from "./src/gate.ts";
 import { checkPrerequisites, detectCapabilities, type ToolDescriptor } from "./src/capabilities.ts";
 import {
   type AdapterConfig,
@@ -22,6 +32,7 @@ import {
   mergeConfig,
   planModelAssignment,
   planPanelAssignment,
+  planPoolAssignment,
   readConfigFile,
   trustWarning,
   updateConfigFile,
@@ -32,7 +43,15 @@ import { MODE_ENTRY_TYPE, modeFromEntries, modeInstruction } from "./src/mode.ts
 import { CONFIG_FILE_NAME, agentDir, cacheRoot } from "./src/paths.ts";
 import { bashToolContext, probeExecutables } from "./src/executables.ts";
 import { SKILL_PANELS, entryFor, isPanelRole } from "./src/registry.ts";
-import { platformSupport, renderCheck, renderPanels, renderStatus, shellDiagnostics, type ShellState } from "./src/status.ts";
+import {
+  platformSupport,
+  renderCheck,
+  renderModelPolicy,
+  renderPanels,
+  renderStatus,
+  shellDiagnostics,
+  type ShellState,
+} from "./src/status.ts";
 import { BootstrapRequiredError, resolveRefToCommit, resolveSource } from "./src/upstream.ts";
 import { normalizeRepo } from "./src/config.ts";
 import type { CapabilityStatus, Diagnostic, GeneratedAgent, GenerationResult, ResolvedSource } from "./src/types.ts";
@@ -56,6 +75,11 @@ export default function (pi: ExtensionAPI) {
   let agentDiagnostics: readonly Diagnostic[] = [];
   let unregisteredAgents: readonly GeneratedAgent[] = [];
   let modeActive = false;
+  /** This session's own model filter, restored from the active branch. It wins over a saved one. */
+  let sessionFilter: ModelFilter | undefined;
+  let savedFilter: AdapterConfig["modelFilter"];
+  /** Why the config files could not be read, so the saved filter is unknown. */
+  let configError: string | undefined;
   const commandNamespace = startupNamespace();
 
   pi.on("session_start", async (_event, ctx) => {
@@ -63,9 +87,27 @@ export default function (pi: ExtensionAPI) {
     state = undefined;
     startupError = undefined;
     modeActive = modeFromEntries(ctx.sessionManager.getBranch() as never[]);
+    sessionFilter = sessionFilterFromEntries(ctx.sessionManager.getBranch() as never[]);
+    savedFilter = undefined;
+    configError = undefined;
+
+    let config: AdapterConfig;
+    try {
+      config = loadConfig(ctx);
+    } catch (error) {
+      startupError = error as Error;
+      try {
+        savedFilter = loadConfig(ctx, true).modelFilter;
+      } catch (filterError) {
+        configError = (filterError as Error).message;
+      }
+      if (ctx.hasUI) ctx.ui.notify(`pstack adapter: ${(error as Error).message}`, "error");
+      return;
+    }
+    savedFilter = config.modelFilter;
 
     try {
-      state = await bringUpUpstream(loadConfig(ctx), ctx);
+      state = await bringUpUpstream(config, ctx);
     } catch (error) {
       startupError = error as Error;
       if (ctx.hasUI) ctx.ui.notify(`pstack adapter: ${(error as Error).message}`, "error");
@@ -102,6 +144,29 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
+  // `/tree` moves the active branch, and with it the session filter that branch recorded.
+  pi.on("session_tree", async (_event, ctx) => {
+    sessionFilter = sessionFilterFromEntries(ctx.sessionManager.getBranch() as never[]);
+  });
+
+  // The model filter applies to every delegation in this session, pstack or not, because a
+  // delegation tool call names no pstack role. A blocked call fails; nothing retries it.
+  pi.on("tool_call", async (event, ctx) => {
+    if (event.toolName !== T3_DELEGATE_TOOL && event.toolName !== SUBAGENT_TOOL) return;
+    if (sessionFilter === undefined && configError !== undefined) {
+      return {
+        block: true,
+        reason: `Blocked by the pstack adapter: its config could not be read, so it cannot tell whether a saved model filter applies. ${configError} Fix the config and reload, or ask the user whether to set an explicit session filter with \`set_filter\`.`,
+      };
+    }
+    const decision = gateDelegation(event.toolName, event.input, {
+      filter: filterOf(activeFilter(sessionFilter, savedFilter)),
+      parentModel: parentModelOf(ctx),
+      resolveModel: (model) => resolveRegistryModel(ctx, model),
+    });
+    if (decision.kind === "block") return { block: true, reason: decision.reason };
+  });
+
   pi.on("resources_discover", async () => {
     if (!state) return {};
     return { skillPaths: [state.generation.skillsDir] };
@@ -127,7 +192,7 @@ export default function (pi: ExtensionAPI) {
     name: "pstack_adapter",
     label: "pstack adapter",
     description:
-      "Inspect and configure the pstack adapter. Use `status` for the full report, `check` before starting a pstack workflow, `models` to list real Pi model ids, `set_model` to assign a pstack role, and `set_source` to select another upstream revision.",
+      "Inspect and configure the pstack adapter. Use `status` for the full report, `check` before starting a pstack workflow, `models` to list real Pi model ids, `set_model` to assign a pstack role or a pool of models, `set_filter` to restrict which models delegation may use, and `set_source` to select another upstream revision.",
     parameters: Type.Object({
       action: Type.Union(
         [
@@ -135,6 +200,7 @@ export default function (pi: ExtensionAPI) {
           Type.Literal("check"),
           Type.Literal("models"),
           Type.Literal("set_model"),
+          Type.Literal("set_filter"),
           Type.Literal("set_source"),
         ],
         { description: "Operation to run" },
@@ -142,9 +208,9 @@ export default function (pi: ExtensionAPI) {
       skill: Type.Optional(Type.String({ description: "Skill name for `check`, with or without the namespace prefix" })),
       role: Type.Optional(Type.String({ description: "pstack model role for `set_model`" })),
       model: Type.Optional(
-        Type.String({
+        Type.Union([Type.String(), Type.Array(Type.String())], {
           description:
-            "`provider/model` id, or `inherit` to clear the role. For a panel role such as `arena-runners`, a list of entries separated by commas, one seat each.",
+            "`provider/model` id, or `inherit` to clear the role. A list of ids gives an ordinary role a pool: each delegation picks one. For a panel role such as `arena-runners`, a string of entries separated by commas, one seat each.",
         }),
       ),
       thinking: Type.Optional(
@@ -155,9 +221,16 @@ export default function (pi: ExtensionAPI) {
       repo: Type.Optional(Type.String({ description: "Upstream repository URL for `set_source`" })),
       ref: Type.Optional(Type.String({ description: "Branch, tag, or commit for `set_source`" })),
       localPath: Type.Optional(Type.String({ description: "Local pstack checkout for `set_source`" })),
+      include: Type.Optional(
+        Type.Array(Type.String(), {
+          description: "`set_filter`: patterns a delegation model must match, such as `gpt-*`. `*` is the only wildcard; a pattern with `/` matches `provider/model`.",
+        }),
+      ),
+      exclude: Type.Optional(Type.Array(Type.String(), { description: "`set_filter`: patterns no delegation model may match, such as `claude-*`. Exclude wins." })),
+      clear: Type.Optional(Type.Boolean({ description: "`set_filter`: remove the filter at `scope` instead of setting one." })),
       scope: Type.Optional(
-        Type.Union([Type.Literal("user"), Type.Literal("project")], {
-          description: "Config file to write. Defaults to user.",
+        Type.Union([Type.Literal("session"), Type.Literal("user"), Type.Literal("project")], {
+          description: "`set_filter` defaults to session, this session only. `set_model` and `set_source` write a config file: user (default) or project.",
         }),
       ),
     }),
@@ -211,15 +284,20 @@ export default function (pi: ExtensionAPI) {
       action: string;
       skill?: string;
       role?: string;
-      model?: string;
+      model?: string | string[];
       thinking?: string;
       repo?: string;
       ref?: string;
       localPath?: string;
-      scope?: "user" | "project";
+      include?: string[];
+      exclude?: string[];
+      clear?: boolean;
+      scope?: "session" | "user" | "project";
     },
     ctx: ExtensionContext,
   ): Promise<string> {
+    // A restriction must be settable even when the upstream checkout did not resolve.
+    if (params.action === "set_filter") return setFilter(params, params.scope ?? "session", ctx);
     if (startupError) return `The pstack adapter did not start: ${startupError.message}`;
     if (!state) return "The pstack adapter has not resolved its upstream checkout yet.";
 
@@ -239,6 +317,8 @@ export default function (pi: ExtensionAPI) {
           modeActive,
           cacheRoot: state.cacheRoot,
           bootstrapped: state.bootstrapped,
+          filter: activeFilter(sessionFilter, savedFilter),
+          parentModel: parentModelOf(ctx),
           runtimeDiagnostics: [
             ...agentDiagnostics,
             // Judged now, because T3's tools can connect after the agents were registered.
@@ -251,10 +331,14 @@ export default function (pi: ExtensionAPI) {
         return checkSkill(params.skill ?? "", ctx);
       case "models":
         return renderModels(ctx);
-      case "set_model":
+      case "set_model": {
+        if (params.scope === "session") return SESSION_SCOPE_ONLY_FILTER;
         return setModel(params.role, params.model, params.thinking, params.scope ?? "user", ctx);
-      case "set_source":
+      }
+      case "set_source": {
+        if (params.scope === "session") return SESSION_SCOPE_ONLY_FILTER;
         return setSource(params, params.scope ?? "user", ctx);
+      }
       default:
         return `Unknown action ${params.action}.`;
     }
@@ -282,12 +366,15 @@ export default function (pi: ExtensionAPI) {
     const shellProblems = shellDiagnostics(shell).map((diagnostic) => `${diagnostic.message} ${diagnostic.action ?? ""}`.trim());
     const current = capabilities();
     const panels = Object.hasOwn(SKILL_PANELS, skill.upstreamName) ? SKILL_PANELS[skill.upstreamName] : undefined;
+    const origin = activeFilter(sessionFilter, savedFilter);
+    const parentModel = parentModelOf(ctx);
     return renderCheck(
       skill,
       entryFor(skill.upstreamName, skill.generatedName.slice(prefix.length)),
       checkPrerequisites(skill.capabilities, current, skill.executables, executables.has, shellProblems),
       current.find((capability) => capability.id === "delegation"),
-      panels ? renderPanels(state.config, panels) : undefined,
+      panels ? renderPanels(state.config, panels, { filter: filterOf(origin), parentModel }) : undefined,
+      renderModelPolicy(state.config, origin, parentModel),
     );
   }
 
@@ -301,17 +388,23 @@ export default function (pi: ExtensionAPI) {
 
   function setModel(
     role: string | undefined,
-    model: string | undefined,
+    model: string | string[] | undefined,
     thinking: string | undefined,
     scope: "user" | "project",
     ctx: ExtensionContext,
   ): string {
     if (!role) return "set_model needs a `role`.";
-    if (!model) return "set_model needs a `model`, or `inherit` to clear the role.";
+    if (!model || model.length === 0) return "set_model needs a `model`, or `inherit` to clear the role.";
     if (!isValidRole(role)) return invalidRoleMessage(role);
     const available = ctx.modelRegistry
       .getAvailable()
       .map((candidate) => ({ id: `${candidate.provider}/${candidate.id}`, reasoning: candidate.reasoning }));
+    if (Array.isArray(model)) {
+      if (isPanelRole(role)) {
+        return `Panel \`${role}\` takes one string of entries separated by commas, one seat each, not a list. A list is a pool, which only ordinary roles have.`;
+      }
+      return setPool(role, model, thinking, available, scope, ctx);
+    }
     if (isPanelRole(role)) return setPanel(role, model, thinking, available, scope, ctx);
     const plan = planModelAssignment(model, thinking, available);
     if (plan.kind === "rejected") return plan.message;
@@ -339,11 +432,72 @@ export default function (pi: ExtensionAPI) {
         ? " This project is not trusted, so Pi ignores the file until you trust it, and the status report still shows the earlier value."
         : "";
     try {
-      if (state) state = { ...state, config: { ...state.config, models: loadConfig(ctx).models } };
+      const fresh = loadConfig(ctx);
+      savedFilter = fresh.modelFilter;
+      configError = undefined;
+      if (state) state = { ...state, config: { ...state.config, models: fresh.models, modelFilter: fresh.modelFilter } };
     } catch (error) {
       return `${untrusted} The write succeeded, but the session view was not refreshed: ${(error as Error).message}`;
     }
     return untrusted;
+  }
+
+  function setPool(
+    role: string,
+    entries: readonly string[],
+    thinking: string | undefined,
+    available: readonly { id: string; reasoning?: boolean }[],
+    scope: "user" | "project",
+    ctx: ExtensionContext,
+  ): string {
+    const plan = planPoolAssignment(entries, thinking, available);
+    if (plan.kind === "rejected") return plan.message;
+    const path = configPath(scope, ctx);
+    const stored = readConfigFile(path)?.values.models;
+    const models = typeof stored === "object" && stored !== null && !Array.isArray(stored) ? { ...stored } : {};
+    models[role] = plan.value;
+    updateConfigFile(path, { models });
+    const note = refreshModels(scope, ctx);
+    const listed = (typeof plan.value === "string" ? [plan.value] : plan.value).map((entry) => `\`${entry}\``).join(", ");
+    return typeof plan.value === "string"
+      ? `Role \`${role}\` now uses ${listed}. A pool of one is written as a plain model. Written to ${path}.${note}`
+      : `Role \`${role}\` now has a pool of ${plan.value.length} models: ${listed}. Each delegation picks one model the filter allows. Written to ${path}.${note}`;
+  }
+
+  function setFilter(
+    params: { include?: string[]; exclude?: string[]; clear?: boolean },
+    scope: "session" | "user" | "project",
+    ctx: ExtensionContext,
+  ): string {
+    const setting = params.include !== undefined || params.exclude !== undefined;
+    if (params.clear && setting) return "set_filter takes either `clear: true` or `include` and `exclude`, not both.";
+    if (!params.clear && !setting) {
+      return "set_filter needs `include`, `exclude`, or `clear: true`. Empty lists set an unrestricted filter at that scope.";
+    }
+    let filter: ModelFilter | undefined;
+    if (setting) {
+      const raw: Record<string, unknown> = {};
+      if (params.include !== undefined) raw.include = params.include;
+      if (params.exclude !== undefined) raw.exclude = params.exclude;
+      const parsed = parseModelFilter(raw);
+      if ("problem" in parsed) return parsed.problem;
+      filter = parsed.filter;
+    }
+    if (scope === "session") {
+      sessionFilter = filter;
+      pi.appendEntry(FILTER_ENTRY_TYPE, filter ? { filter } : { cleared: true });
+      const origin = activeFilter(sessionFilter, savedFilter);
+      return `${filter ? "This session's model filter is set" : "This session's model filter is cleared"}. Filter in force: ${describeOrigin(origin)}. It applies to every \`delegate_task\` and \`subagent\` call in this session, and is not saved to a config file.`;
+    }
+    const path = configPath(scope, ctx);
+    updateConfigFile(path, { modelFilter: filter });
+    const note = refreshModels(scope, ctx);
+    const origin = activeFilter(sessionFilter, savedFilter);
+    const shadowed =
+      sessionFilter !== undefined
+        ? " This session's own filter still wins over the saved one. Clear it with `set_filter`, `clear: true`, and `scope: \"session\"` to use the saved filter here."
+        : "";
+    return `${filter ? "Saved model filter" : "Removed the saved model filter"} in ${path}.${note}${shadowed} Filter in force: ${describeOrigin(origin)}.`;
   }
 
   function setPanel(
@@ -442,7 +596,24 @@ function startupNamespace(): string {
   }
 }
 
-function loadConfig(ctx: ExtensionContext): AdapterConfig {
+const SESSION_SCOPE_ONLY_FILTER =
+  "Only `set_filter` takes `scope: \"session\"`. `set_model` and `set_source` write a config file, so pass `scope: \"user\"` or `scope: \"project\"`.";
+
+function parentModelOf(ctx: ExtensionContext): string | undefined {
+  return ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined;
+}
+
+/** A requested model as its registry `provider/id`. A bare id counts only when exactly one model has it. */
+function resolveRegistryModel(ctx: ExtensionContext, model: string): string | undefined {
+  const ids = ctx.modelRegistry.getAvailable().map((candidate) => ({ full: `${candidate.provider}/${candidate.id}`, id: candidate.id }));
+  const exact = ids.find((candidate) => candidate.full === model);
+  if (exact) return exact.full;
+  if (model.includes("/")) return undefined;
+  const bare = ids.filter((candidate) => candidate.id === model);
+  return bare.length === 1 ? bare[0]?.full : undefined;
+}
+
+function loadConfig(ctx: ExtensionContext, filterOnly = false): AdapterConfig {
   const layers: ConfigLayer[] = [];
   const global = readConfigFile(userConfigPath());
   if (global) layers.push(global);
@@ -452,8 +623,8 @@ function loadConfig(ctx: ExtensionContext): AdapterConfig {
     // without desynchronizing `/<ns>-status` from the generated `<ns>-*` skills.
     if (project) layers.push({ ...project, values: { ...project.values, namespace: undefined } });
   }
-  layers.push(environmentLayer(process.env));
-  return mergeConfig(layers);
+  layers.push(environmentLayer(filterOnly ? { ...process.env, PISTACK_MODELS: undefined } : process.env));
+  return mergeConfig(filterOnly ? layers.map((layer) => ({ ...layer, values: { modelFilter: layer.values.modelFilter } })) : layers);
 }
 
 function configPath(scope: "user" | "project", ctx: ExtensionContext): string {

@@ -457,7 +457,7 @@ test("the adapter replaces the Cursor setup body and keeps the upstream skill re
 
   const description = /^description: (.*)$/m.exec(wrapper)?.[1] ?? "";
   assert.equal(description.includes("Fixture skill"), false, "a replaced body must not keep the upstream description");
-  assert.match(description, /Configure which Pi model each pstack role uses/);
+  assert.match(description, /Configure which Pi model or pool of models each pstack role uses, which models delegation may use/);
 });
 
 test("the setup skill makes asking for a thinking level a required step with a recommended preset", () => {
