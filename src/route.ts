@@ -10,6 +10,7 @@ import {
   splitModelSpec,
 } from "./config.ts";
 import { SUBAGENT_TOOL, T3_DELEGATE_TOOL } from "./delegation.ts";
+import { safeEcho } from "./echo.ts";
 import type { ModelFilter } from "./filter.ts";
 import { resolveRole } from "./pools.ts";
 import { MODEL_ROLES, PANEL_DEFAULT_ROLES, isPanelRole } from "./registry.ts";
@@ -122,12 +123,17 @@ export function applyRewrite(target: Record<string, unknown>, source: Readonly<R
 }
 
 function blockReason(where: string, text: string, problem: string): string {
-  return `Blocked by the pstack adapter: ${where} asks for \`${text}\`, but ${problem} This call was not retried.`;
+  return `Blocked by the pstack adapter: ${where} asks for ${text}, but ${problem} This call was not retried.`;
+}
+
+/** A parsed reference holds only role and model-id characters; anything else is echoed safely. */
+function quoted(request: Exclude<ModelRequest, { kind: "concrete" }>): string {
+  return request.kind === "role" ? `\`${request.text}\`` : safeEcho(request.text);
 }
 
 function routeReference(reference: RoleReference, where: string, requested: ThinkingLevel | undefined, task: string, context: RouteContext): ChildRoute {
-  const { role, text } = reference;
-  const block = (problem: string): ChildRoute => ({ kind: "block", reason: blockReason(where, text, problem) });
+  const { role } = reference;
+  const block = (problem: string): ChildRoute => ({ kind: "block", reason: blockReason(where, quoted(reference), problem) });
   if (context.config === undefined) {
     return block(`the adapter did not start, so it cannot resolve role \`${role}\`. Run \`pstack_adapter\` with \`action: "status"\` to see why, fix the problem, and reload.`);
   }
@@ -177,19 +183,19 @@ function routeT3(args: Record<string, unknown>, context: RouteContext): RouteDec
   const request = parseModelRequest(target.model);
   if (request.kind === "concrete") return UNCHANGED;
   const where = "`delegate_task` `target.model`";
-  if (request.kind === "invalid") return { kind: "block", reason: blockReason(where, request.text, request.problem) };
+  if (request.kind === "invalid") return { kind: "block", reason: blockReason(where, quoted(request), request.problem) };
   const provider = [target.providerInstanceId, target.driverKind].find((value) => value !== undefined && value !== "pi");
   if (provider !== undefined) {
     return {
       kind: "block",
-      reason: blockReason(where, request.text, `the target names T3 provider \`${String(provider)}\`, and a role reference names a Pi model. Use \`providerInstanceId: "pi"\`, or omit it.`),
+      reason: blockReason(where, quoted(request), `the target names T3 provider \`${String(provider)}\`, and a role reference names a Pi model. Use \`providerInstanceId: "pi"\`, or omit it.`),
     };
   }
   const optionLevel = readThinkingOption(target.options);
   if (optionLevel === "invalid") {
     return {
       kind: "block",
-      reason: blockReason(where, request.text, `\`target.options.thinking\` is not one of ${THINKING_LEVELS.map((level) => `\`${level}\``).join(", ")}. Lower the level with a \`:<level>\` suffix on the role reference instead.`),
+      reason: blockReason(where, quoted(request), `\`target.options.thinking\` is not one of ${THINKING_LEVELS.map((level) => `\`${level}\``).join(", ")}. Lower the level with a \`:<level>\` suffix on the role reference instead.`),
     };
   }
   const task = typeof args.task === "string" ? args.task : "";
@@ -277,7 +283,7 @@ function routeSubagent(args: Record<string, unknown>, context: RouteContext): Ro
   for (const slot of subagentSlots(next)) {
     const request = parseModelRequest(slot.holder.model);
     if (request.kind === "concrete") continue;
-    if (request.kind === "invalid") return { kind: "block", reason: blockReason(slot.where, request.text, request.problem) };
+    if (request.kind === "invalid") return { kind: "block", reason: blockReason(slot.where, quoted(request), request.problem) };
     const route = routeReference(request, slot.where, request.thinking, slot.task, context);
     if (route.kind === "block") return route;
     if (route.kind === "model") slot.holder.model = joinModelSpec(route.spec);
