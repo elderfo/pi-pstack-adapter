@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. release-please writes new entries from Conventional Commit PR titles.
 
+## [0.10.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.9.0...v0.10.0) (2026-11-05)
+
+
+### Features
+
+* **pools:** pick a pool's model in code from pstack:&lt;role&gt; delegations ([#33](https://github.com/elderfo/pi-pstack-adapter/issues/33)) ([ac270ae](https://github.com/elderfo/pi-pstack-adapter/commit/ac270ae946ec57378427e300cd2a8c9f67c100f6))
+
+
+### Bug Fixes
+
+* **host-mapping:** distinguish host PR event subscriptions from standalone Pi ([#29](https://github.com/elderfo/pi-pstack-adapter/issues/29)) ([8dacfa3](https://github.com/elderfo/pi-pstack-adapter/commit/8dacfa3ad578134b65eb848b5221cf70064fa18a))
+
 ## [0.9.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.8.0...v0.9.0) (2026-11-05)
 
 
