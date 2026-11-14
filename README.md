@@ -9,9 +9,9 @@ Use Cursor's [pstack](https://github.com/cursor/plugins/tree/main/pstack) skills
 
 pstack is Cursor's collection of engineering workflows: design reviews (`how`), prose cleanup
 (`unslop`), test-driven development (`tdd`), parallel fan-out (`swarm`), and the full Poteto Mode
-working style. This package downloads a tested pstack release and exposes every workflow as a
-Pi skill named `pistack-*`. The upstream files stay unmodified, so you can audit exactly what
-the agent reads.
+working style. This package downloads a tested pstack release and gives you every workflow as a
+Pi skill named `pistack-*`. The upstream files stay unmodified, so you can audit what the agent
+reads.
 
 ## Quick start
 
@@ -44,42 +44,7 @@ commands, so keep the `bash` tool active rather than switching to Pi's `powershe
 `/pistack-status` warns when Bash is missing or the `bash` tool is inactive. Pi inside WSL
 counts as Linux.
 
-### Add optional providers for delegating workflows
-
-Some workflows hand work to subagents or ask you multiple-choice questions. Two providers can run
-the subagents:
-
-- **T3 Code.** When Pi runs inside [T3 Code](https://github.com/pingdotgg/t3code), workflows
-  delegate through T3's `delegate_task` tool. Each child appears in T3, can run on any provider
-  and model T3 offers, and can work in its own worktree. You install nothing extra.
-- **pi-subagents.** Outside T3 Code, install `pi-subagents`. The upstream agents register as
-  `pistack-comment-sicko` and `pistack-poteto-agent`.
-
-For multiple-choice questions, install `pi-ask-user`:
-
-```bash
-pi install npm:pi-subagents
-pi install npm:pi-ask-user
-```
-
-The adapter uses T3 Code first and falls back to `pi-subagents`. To reverse that order, set
-`"delegation": "pi-subagents"` in the adapter config, or set `PISTACK_DELEGATION=pi-subagents`.
-Restart Pi or run `/reload` after changing it. `/pistack-status` shows the order and the
-provider the session resolved.
-
-The adapter counts T3's tools, including `task_status` and `orchestrator_capabilities`, only
-when T3 Code's own bridge registered them. A tool that another extension or MCP server registers
-under the same name is ignored, and `/pistack-check <skill>` names the one tool to delegate with.
-
-When a delegating workflow starts, the adapter turns on that provider's tool, even if you turned
-it off in the tool selector. This happens
-whether you run the workflow's `/skill:` command or the agent opens the skill itself. While Poteto
-Mode is on, the adapter turns it on for every prompt.
-
-To find missing providers or executables before you start a workflow, run
-`/pistack-check <skill>`.
-
-## Install from Git instead of npm
+### Install from Git instead of npm
 
 To track the repository directly, install from GitHub:
 
@@ -87,8 +52,10 @@ To track the repository directly, install from GitHub:
 pi install git:github.com/elderfo/pi-pstack-adapter
 ```
 
-To pin a release, add its tag, for example `git:github.com/elderfo/pi-pstack-adapter@v0.3.0`.
-For a pinned npm release, use `npm:pi-pstack-adapter@0.3.0`.
+To pin a release, add a tag from the
+[releases page](https://github.com/elderfo/pi-pstack-adapter/releases), as in
+`git:github.com/elderfo/pi-pstack-adapter@v<version>`. For a pinned npm release, use
+`npm:pi-pstack-adapter@<version>`.
 
 ## Run pstack workflows
 
@@ -106,153 +73,192 @@ Before you run a workflow, check what it needs:
 /pistack-check how
 ```
 
-The check reports the workflow's support tier and any missing capabilities or executables.
+The check reports the workflow's support tier and any providers or executables you still need
+to install.
 
 The adapter also adds these commands:
 
 | Command | What it does |
 | --- | --- |
-| `/pistack-status` | Shows versions, the resolved commit, trust, capabilities, support tiers, and diagnostics. |
+| `/pistack-status` | Shows versions, the pstack commit in use, trust, capabilities, support tiers, and diagnostics. |
 | `/pistack-check <skill>` | Checks one workflow's requirements. |
-| `/pistack-mode on\|off\|status` | Turns Poteto Mode on or off for the current session. |
-| `/skill:pistack-setup` | Assigns Pi models to pstack roles or changes the upstream source. |
-| `/skill:pistack-status` | Asks the agent to produce the status report. |
+| `/pistack-mode on\|off\|status` | Turns Poteto Mode on or off for every prompt in the current session. |
+| `/skill:pistack-setup` | Assigns Pi models to pstack roles, sets a model filter, or changes the pstack source. |
+| `/skill:pistack-status` | Asks the agent to produce the status report and explain it. |
 
-## Check how well a workflow is supported
+### Check how well a workflow is supported
 
 `/pistack-status` lists a support tier for each skill:
 
 | Tier | Meaning |
 | --- | --- |
 | `native` | The skill needs no Pi-specific changes, or the adapter supplies a Pi version. |
-| `adapted` | The upstream body works with the host mappings in its wrapper. |
-| `dependency-gated` | The workflow needs a capability or executable that may be missing. |
+| `adapted` | The skill works in Pi with the instructions the adapter adds to it. |
+| `dependency-gated` | The workflow needs a provider or executable that may be missing. |
 | `experimental` | Part of the workflow has no direct Pi equivalent. |
-| `unsupported` | Pi cannot provide a required host feature. |
+| `unsupported` | Pi cannot provide a feature the workflow requires. |
 
 The [compatibility registry](docs/compatibility.md) lists the tier and requirements of every
 skill.
+
+## Set up workflows that delegate or ask questions
+
+Some workflows hand work to subagents or ask you multiple-choice questions. Two providers can run
+the subagents:
+
+- **T3 Code.** When Pi runs inside [T3 Code](https://github.com/pingdotgg/t3code), workflows
+  delegate through T3's `delegate_task` tool. Each child appears in T3, can run on any provider
+  and model T3 offers, and can work in its own worktree. You install nothing extra.
+- **pi-subagents.** Outside T3 Code, install `pi-subagents`. The pstack agents appear as
+  `pistack-comment-sicko` and `pistack-poteto-agent`.
+
+For multiple-choice questions, install `pi-ask-user`:
+
+```bash
+pi install npm:pi-subagents
+pi install npm:pi-ask-user
+```
+
+When both providers are available, the adapter uses T3 Code. To prefer `pi-subagents`, set
+`"delegation": "pi-subagents"` in the adapter config, or set `PISTACK_DELEGATION=pi-subagents`.
+Restart Pi or run `/reload` after changing it. `/pistack-status` shows the order and the
+provider the session uses.
+
+When a delegating workflow starts, the adapter turns on that provider's tool, even if you turned
+it off in the tool selector. While Poteto Mode is on, it turns the tool on for every prompt.
+
+The adapter uses T3's tools only when T3 Code itself provides them. It ignores a tool with the
+same name from another extension or MCP server.
 
 ## Choose models for pstack roles
 
 pstack assigns work to named model roles such as `feature`, `bug-fix`, and `judgment`. The
 `general` role covers every other delegate, such as explorers, swarm workers, and ad-hoc helpers.
-A role you leave unset uses `general`, and uses the model of the agent that starts it only when
-`general` is unset too.
+A role you leave unset uses `general`. When `general` is unset too, the role uses the model of the
+agent that starts it.
 
-To list the models in your Pi installation and assign them to roles, run the setup skill:
+To see the models in your Pi installation and assign them to roles, run the setup skill:
 
 ```text
 /skill:pistack-setup
 ```
 
-In a noninteractive session, set roles with `PISTACK_MODELS`:
+The setup skill saves your choices in a config file. To set roles in a file or an environment
+variable yourself, see [Set roles without the setup skill](#set-roles-without-the-setup-skill).
 
-```bash
-PISTACK_MODELS='feature=provider/model,bug-fix=provider/other-model' pi
-```
+### Thinking levels
 
-Add a thinking level to a role with a `:level` suffix. The levels are `off`, `minimal`, `low`,
-`medium`, `high`, `xhigh`, and `max`:
+Each role can also have a thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or
+`max`. The level is a ceiling. A delegate may lower it for routine work but never raises it. A
+role without a level passes none, so the provider uses its own default. If the model does not
+offer the level, Pi limits it to what the model supports.
 
-```bash
-PISTACK_MODELS='feature=provider/model:medium,judgment=provider/other-model:high' pi
-```
+A role you leave unset, with `general` unset too, inherits the model and thinking level of the
+agent that starts it. A `strongest-judgment` delegate at `xhigh` would then start every helper at
+`xhigh`. Set `general` to keep helpers at a cheaper level.
 
-Panels such as `arena`'s runners and judge, `architect`'s runners, and `interrogate`'s adversaries
-use the panel roles `arena-runners`, `arena-cross-judge-pool`, `architect-runners`, and
-`interrogate-reviewers`. A panel holds a list of models, one seat each, separated by spaces.
-An `inherit` entry uses the model and thinking of the agent that starts the panel, which is
-your session unless a delegate runs the workflow:
+### Panels
 
-```bash
-PISTACK_MODELS='arena-runners=provider/model:high other-provider/other-model:high' pi
-```
+Some workflows run several models side by side: `arena`'s runners and judge, `architect`'s
+runners, and `interrogate`'s adversaries. Their panel roles are `arena-runners`,
+`arena-cross-judge-pool`, `architect-runners`, and `interrogate-reviewers`. A panel lists up to
+eight models, and each one gets a seat. An `inherit` seat uses the model and thinking level of
+the agent that starts the panel, which is your session unless a delegate runs the workflow.
 
-Upstream pstack defaults each panel to two model families. A panel you leave unset uses
-`judgment`, then `general`, so it covers two families only when those roles do. The status
-report warns when a panel's seats all run on one model.
+Upstream pstack gives each panel models from two model families. A panel you
+leave unset uses `judgment`, then `general`, so it covers two families only when those roles do.
+The status report warns when a panel's seats all run on one model.
 
-### Give a role a pool of models
+### Pools
 
-An ordinary role can list several models instead of one. The list is a ranking. The agent
-delegates by role, passing `pstack:<role>` as the model, and the adapter rewrites the call to the
-first model in the ranking that the filter allows, at that entry's thinking level. The agent that
-delegates may override the ranking with `pstack:<role>@<provider/model>` when the task clearly
-fits another model from the pool better, and it says which model it picked and why. The adapter
-blocks an override that is not an allowed entry of the pool. A `:<level>` suffix, as in
-`pstack:feature:low`, lowers the thinking level and never raises it above the configured one.
-A pool is not a panel: a panel runs one seat per entry, but a pool starts one
-child per task. A pool is not a retry list either: when a delegation fails, the agent reports the
-failure and does not try the next model. In a config file a pool is a JSON list:
+A role can list up to eight models in order of preference. Each delegation for that role runs on
+the first model that the [model filter](#restrict-which-models-delegation-uses) allows. When a
+task clearly suits another model in the pool, the agent may pick that one instead, and it tells
+you which model it picked and why. It cannot pick a model outside the pool.
+
+A pool runs one model per task, and a panel runs every seat. A pool is also not a retry list.
+When a delegation fails, the agent reports the failure and does not move on to the next model.
+
+### Set roles without the setup skill
+
+In a config file, a role takes one model, a pool takes a list, and a panel takes a string of
+seats separated by spaces. Add a thinking level to any model with a `:level` suffix:
 
 ```json
-{ "models": { "feature": ["provider/model-a:high", "provider/model-b:high", "provider/model-c"] } }
+{
+  "models": {
+    "general": "provider/cheap-model:low",
+    "judgment": "provider/strong-model:high",
+    "feature": ["provider/model-a:high", "provider/model-b:high", "provider/model-c"],
+    "arena-runners": "provider/model-a:high other-provider/model-d:high"
+  }
+}
 ```
 
-The `set_model` action takes the same list in `model`, and its `thinking` applies to each entry
-without its own `:level`. Every entry must be a model in your Pi installation, or nothing is
-written. In `PISTACK_MODELS`, separate a pool's entries with `|`:
+For a noninteractive session, set the same values in `PISTACK_MODELS`. Separate roles with
+commas and a pool's entries with `|`:
 
 ```bash
-PISTACK_MODELS='feature=provider/model-a:high|provider/model-b' pi
+PISTACK_MODELS='general=provider/cheap-model:low,feature=provider/model-a:high|provider/model-b' pi
+PISTACK_MODELS='arena-runners=provider/model-a:high other-provider/model-d:high' pi
 ```
 
-A panel keeps its string of seats. An unset panel's two default seats are delegated as
-`pstack:judgment` and `pstack:general`, so each runs once on the first allowed model of its pool,
-unless the delegating agent overrides the ranking.
+Role names use lowercase letters, digits, and hyphens. A model value is printable ASCII with no
+spaces or markup characters, at most 128 characters. If an entry breaks these rules, the adapter
+stops at startup with an error that names the file. Fix the entry and restart Pi.
 
-### Restrict which models delegation uses
+## Restrict which models delegation uses
 
-A model filter limits delegation to some models without changing the role assignments, for
-example to run an experiment on one model family only. Ask the agent, or call the
-`pstack_adapter` tool's `set_filter` action:
+A model filter limits delegation to some models without changing your role assignments, for
+example to run an experiment on one model family. Ask the agent, for example "only delegate to
+GPT models", or run `/skill:pistack-setup`. A filter has two lists of patterns:
 
-- `include: ["gpt-*"]` allows only models whose id starts with `gpt-`.
-- `exclude: ["*claude*"]` excludes model ids containing `claude`, including Bedrock-style ids.
-- `clear: true` removes the filter at that scope.
+- `include` lists the models delegation may use. `["gpt-*"]` allows only model ids that start
+  with `gpt-`.
+- `exclude` lists the models delegation may not use. `["*claude*"]` blocks every model id that
+  contains `claude`, including Bedrock-style ids.
 
 A pattern with a `/` matches `provider/model`, and one without matches the model id after the
 provider. `*` is the only wildcard, and matching ignores case. A model must match an `include`
-pattern when there are any, and must match no `exclude` pattern.
+pattern when the list has any, and must match no `exclude` pattern.
 
-A filter applies to the current session by default and is not saved. Pass `scope: "user"` or
-`scope: "project"` to save it as `modelFilter` in that config file. A saved filter takes effect
-at once, and a filter set for the session wins over a saved one until you clear it. The
-`model filter` row of `/pistack-status` shows the filter in force and where it came from.
-A trusted project's filter replaces the user filter as a whole, including an empty filter.
-Empty lists set an unrestricted override; clearing the session filter restores the saved filter.
-Wait for `set_filter` to finish before starting delegations, rather than issuing them together.
+A filter lasts for the current session unless you ask the agent to save it. A saved filter goes
+in your user or project config file as `modelFilter`, for example
+`{ "modelFilter": { "include": ["gpt-*"] } }`, and takes effect at once. A session filter
+overrides a saved one until you clear it. A project's saved filter replaces your user filter
+entirely. The `model filter` row of `/pistack-status` shows the filter in force and where it came
+from.
 
-Under a filter, the status report and `/pistack-check` mark each pool entry as allowed or
-excluded. A role with no allowed entry is blocked: its work is not moved to `general` or to the
-session's model. A role that inherits is blocked when the filter excludes the session's model.
-A panel seat on an excluded model is blocked, and the other seats still run.
+### What the filter blocks
 
-The adapter also checks every `delegate_task` and `subagent` call in the session, including
-calls that no pstack workflow made, and blocks one whose model the filter excludes or that it
-cannot check. That includes a call with no model while the session's model is excluded, a model
-Pi does not know, a T3 provider other than Pi, a `subagent` child without a model, a `subagent`
-workflow script, and a `subagent` action that restarts, refines, steers, or schedules a child,
-opens a project session, or configures a watchdog. A T3 target with a named environment is also
-blocked because its registry may differ. A blocked call is not retried. These limits apply:
+The status report and `/pistack-check` mark each pool entry as allowed or excluded. The adapter
+blocks a role with no allowed entry, and does not move its work to `general` or to your session's
+model. It blocks a role that inherits when the filter excludes your session's model. It blocks a
+panel seat on an excluded model, and the other seats still run.
 
-- A child does not inherit a session filter, so the agent puts it into each brief as an
-  instruction. A saved filter applies in a child where the adapter loads the same config files.
-- Other tools that start agents or processes, such as T3 Code's thread tools or a shell command,
-  are not checked. The filter does not block a provider or a model inside Pi.
-- Changing models with `/model` is not affected.
-- The filter is a model-selection guard, not an access-control boundary. The agent can change it
-  through `set_filter`, but is instructed to keep it unchanged unless the user requests a change.
+The adapter checks every `delegate_task` and `subagent` call in the session, not only the calls
+pstack workflows make. It blocks a call that would run on an excluded model, and a call it
+cannot check, such as:
 
-Role names are lowercase letters, digits, and hyphens. A model value is printable ASCII with no spaces or markup characters, at most 128 characters. A config entry that breaks these rules stops the adapter at startup with an error that names the file, so fix the key there and restart Pi.
+- a call with no model while the filter excludes your session's model
+- a model Pi does not know
+- a T3 provider other than Pi, or a T3 target that names an environment
+- a `subagent` child without a model, or a `subagent` workflow script
+- a `subagent` action that restarts, refines, steers, or schedules a child, opens a project
+  session, or configures a watchdog
 
-A role without a level passes none, so the delegation backend applies its own default. A role's
-level is a ceiling: a delegate may lower it for routine work but never raises it. A role you leave
-unset, with `general` unset too, inherits the model and thinking level of the agent that starts
-it. A `strongest-judgment` delegate at `xhigh` would then start every helper at `xhigh`, so set
-`general` to keep helpers at a cheaper level. The `pstack_adapter` tool's `set_model` action takes the same
-level in its `thinking` parameter. A level the model does not offer is clamped by Pi at run time.
+The agent does not retry a blocked call.
+
+### What the filter does not cover
+
+- A child agent does not inherit a session filter. The agent includes the filter in each child's
+  instructions instead. A saved filter applies in a child that loads the same config files.
+- The adapter does not check other tools that start agents or processes, such as T3 Code's
+  thread tools or a shell command.
+- The filter does not block a provider or a model inside Pi, and it does not affect switching
+  models with `/model`.
+- The filter guards model choice. It is not a security boundary. The agent can change it, but its
+  instructions say to keep it unless you ask for a change.
 
 ## Run Pi noninteractively
 
@@ -275,13 +281,28 @@ To select a branch, tag, commit, repository, or local checkout, run `/skill:pist
 adapter asks you to confirm before it changes the source. Restart Pi or run `/reload` afterward.
 
 A branch or tag resolves to one commit when you select it. The adapter records that commit and
-does not move it on later starts. `/pistack-status` warns when you use a custom repository or a
-revision the adapter has not certified.
+does not move it on later starts. The `trust` row of `/pistack-status` tells you how far to trust
+the source:
+
+| Trust | Meaning |
+| --- | --- |
+| `tested` | The certified commit from the official repository. |
+| `untested-ref` | Another commit from the official repository. Nobody has verified how it behaves in Pi. |
+| `untested-repo` | A custom repository. Its code runs with your permissions, so review it first. |
+| `local` | A local checkout. Its contents are unverified and can differ between machines. |
 
 ## Configuration reference
 
-The setup skill writes user settings to `~/.pi/agent/pi-pstack-adapter.json` and project
-settings to `.pi/pi-pstack-adapter.json`. Environment variables override both files:
+The adapter reads settings from these places. A later one overrides an earlier one:
+
+1. Your user config, `~/.pi/agent/pi-pstack-adapter.json`.
+2. The project config, `.pi/pi-pstack-adapter.json` in the working directory. Pi reads it only
+   after you trust the project, and a project cannot change `namespace`.
+3. Environment variables.
+
+The setup skill writes both files. The keys you are most likely to edit are `models`,
+`modelFilter`, and `delegation`. The setup skill also records the pstack source there, so change
+the source through it.
 
 | Variable | Effect |
 | --- | --- |

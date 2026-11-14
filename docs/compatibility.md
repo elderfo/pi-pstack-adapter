@@ -47,8 +47,8 @@ small Git repository holding a token-bucket rate limiter with two marked bugs.
   `recall` rises to `dependency-gated`, because the transcript was its only Cursor-specific
   step. In a fresh session it read the two earlier chats itself, so its fan-out did not run. An
   earlier fresh run looked in the default session folder, which the sandbox had moved, so the
-  host mapping now says to find the folder from `$PI_SESSION_FILE` first. `reflect` copied the upstream skill
-  to a Pi skill location before editing it, but its create-skill route did not run, and
+  host mapping now says to find the folder from `$PI_SESSION_FILE` first. `reflect` copied the
+  upstream skill to a Pi skill location before editing it, but its create-skill route did not run, and
   `automate-me` found nothing to draft, so both stay `experimental`.
 - `poteto-mode`'s Orchestrate playbook ran a two-unit program in a linked worktree. Each unit had
   an owner on its own branch and worktree, and a verifier from another model family checked the
@@ -223,10 +223,10 @@ Earlier Windows evidence, gathered at pstack `0.15.26` with the same toolchain:
 - `create-formal-verification-skill` completed in the isolated install without `subagent` or
   `ask_user`. It generated `.pi/skills/verify-inventory-reservations/SKILL.md` and a dependency-free
   Node 22 explicit-state verifier that imports the fixture's actual reserve/release functions.
-  It checked 49 reachable states and 490 transitions for stock 0–3 and five request IDs, caught
+  It checked 49 reachable states and 490 transitions for stock from 0 to 3 and five request IDs, caught
   six mutant copies, then caught a removed retry guard in the actual product file. Restoring
-  that file restored the passing result and its original hash. This supports `adapted`: the
-  generated skill path is mapped to Pi. It does not certify TLA+, proof assistants, installation
+  that file restored the passing result and its original hash. This supports `adapted`, because
+  the host mapping maps the generated skill path to Pi. It does not certify TLA+, proof assistants, installation
   of other verifiers, unbounded inputs, or real database/async concurrency.
 - The revised `ketchup` ran read-only in a separate fixture. It listed both supplied product
   choices (CSV versus JSON and seven versus thirty days of history), drew a Mermaid sequence
@@ -237,8 +237,9 @@ Earlier Windows evidence, gathered at pstack `0.15.26` with the same toolchain:
   `ketchup`, but still names `uptime` as missing for `benchmark-checklist`. Delegation and
   structured questions remain unavailable in the isolated install; no delegating tier changed.
 - A cache inside a Git worktree must own its worktree, Git directory, and common directory before
-  bootstrap or reuse can change Git state. The Windows run exposed ancestor discovery from an
-  empty nested cache; this is fixed. Regressions also cover incomplete metadata, a foreign Git
+  bootstrap or reuse can change Git state. The Windows run found that Git, started in an
+  empty nested cache, discovered the enclosing repository. That is fixed. Regression tests also
+  cover incomplete metadata, a foreign Git
   file, foreign worktree/common directory settings, and short paths, while checking that the
   enclosing repository's HEAD, config, index, and tracked bytes stay unchanged.
 
@@ -287,13 +288,13 @@ A session that replaces the `bash` tool with `powershell` cannot run the skills.
 
 ## Changing a tier
 
-A tier is a claim about what was verified, so raising one needs evidence, not optimism.
+A tier is a claim about what a run verified, so raising one needs evidence from a run.
 
 1. Run the workflow end to end in Pi against the certified revision.
 2. Record what the workflow produced, not that it started. A `dependency-gated` skill rises to
    `adapted` only when its delegation or question steps completed against a real provider.
 3. An `experimental` skill rises only when every Cursor-specific step has a Pi equivalent that
-   was exercised, not merely described in the host mapping.
+   a run exercised, not one the host mapping only describes.
 4. An `unsupported` skill rises only when the missing host feature exists in Pi.
 5. Add or update a test that fails if the claim regresses.
 
@@ -395,8 +396,8 @@ T3 Code's `delegate_task` has no named agents. Generation writes each agent's pr
 `adapter/agents/<pi-name>.md`, with skill paths relative to that file. The parent begins the
 child's task by telling it to read that file as its system prompt.
 
-Both agents also register through the `pi-subagents:runtime-agent-register:v1` contract. Without an owner for
-that event, the status report says so rather than dropping them silently.
+Both agents also register through the `pi-subagents:runtime-agent-register:v1` contract. When no
+extension handles that event, the status report says the agents did not register.
 
 ## Delegation providers
 
@@ -434,11 +435,10 @@ through `delegate_task`. That run is the evidence the tier rules above require.
 `setup-pstack` writes a Cursor `.mdc` rule, so the adapter substitutes its own body and
 publishes it as `/skill:pistack-setup`. Upstream's optional closing offers to run
 `create-verification-skill` and `create-formal-verification-skill` are left out of the Pi body;
-both skills stay available by name. The upstream skill stays represented, and the
+both skills stay available by name. The registry still lists the upstream skill, and the
 wrapper frontmatter records `pistack-upstream-skill: setup-pstack`.
 
 ## Unknown skills
 
 A skill present upstream but absent from the registry is generated as `experimental` and reported
-in diagnostics. A skill in the registry but absent upstream is reported as removed. Neither case
-is silent.
+in diagnostics. A skill in the registry but absent upstream is reported as removed.

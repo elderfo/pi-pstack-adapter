@@ -1,7 +1,7 @@
 # pstack adapter status
 
-Report what the adapter is actually running, so nobody has to guess whether a pstack workflow
-is verified here.
+Report what the adapter is running, so the user can see whether a pstack workflow is verified
+here.
 
 1. Call the adapter tool with `action: "status"`.
 2. Show the user the full report. Do not summarize away the trust line, the resolved commit, or
@@ -15,7 +15,7 @@ To check one workflow before starting it, call the tool with `action: "check"` a
 name. That reports the capabilities and executables that workflow needs and whether this
 environment has them, before the workflow does any work.
 
-Support tiers mean this.
+The support tiers mean the following.
 
 | tier | meaning |
 | --- | --- |

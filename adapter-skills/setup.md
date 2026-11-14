@@ -4,17 +4,17 @@ Upstream pstack ships a `setup-pstack` skill that writes `~/.cursor/rules/pstack
 a Cursor-only always-applied rule full of Cursor model slugs. Pi has neither that file nor
 those models, so this adapter replaces the body with the Pi equivalent.
 
-Four things are configurable. Model roles, the model filter, the upstream source, and the
+You can configure four things: model roles, the model filter, the upstream source, and the
 delegation order.
 
 ## Model roles
 
-pstack skills name a model per role. In Pi those names mean nothing, so each role maps to a
-model in your own catalogue. A role you never configure uses the `general` role. When `general` is
+pstack skills name a model per role. Pi has no such models, so each role maps to a
+model in your Pi installation. A role you never configure uses the `general` role. When `general` is
 unconfigured too, the role inherits the model of whichever agent starts it, which is a working
 default, not a failure.
 
-Roles used by pstack workflows.
+pstack workflows use these roles.
 
 | role | used by |
 | --- | --- |
@@ -41,7 +41,7 @@ Upstream defaults each panel to two model families, one Claude model and one Gro
 left unset uses `judgment`, then `general`, so it spans two families only when those roles do.
 `arena` takes its judge from the pool only when the model is from a family other than the
 session's model, so a pool on the session's family skips the judge. The status report warns when
-a panel's seats all land on one model.
+a panel's seats all use one model.
 
 A panel value lists entries in order. An entry is a model id, optionally with a thinking level,
 or `inherit` for the model and thinking of the agent that starts the panel, which is the
@@ -59,14 +59,14 @@ configure `general` to stop that. A role's level is a ceiling: delegates may low
 work, but never raise it. Model choice often affects cost more than thinking level does, so
 consider a cheaper model for the bulk roles as well.
 
-Steps.
+Follow these steps.
 
 1. Call the adapter tool with `action: "models"` to list the provider and model ids this Pi
-   installation can actually reach. Do not invent ids.
+   installation can reach. Do not invent ids.
 2. Ask the user which model each role should use. Offer the listed ids, and offer
    `inherit` for any role they do not care about. Use the structured question tool when it is
-   available; otherwise ask in plain text. Only ids from step 1 are accepted. A user who wants
-   alternatives for a role gets a pool: a ranked list of models. The adapter runs each delegation
+   available; otherwise ask in plain text. The tool accepts only ids from step 1. For a user who
+   wants alternatives for a role, offer a pool, which is a ranked list of models. The adapter runs each delegation
    on the first one the model filter allows, unless the delegating agent overrides the ranking
    for that task, so ask for the order.
    A pool is a set of choices, not a retry list and not a panel, so say that when you offer it.
@@ -91,7 +91,7 @@ Steps.
    only when the user says it should differ from its group. Backend default passes no level and
    leaves the choice to the delegation backend. A Custom user who wants thinking disabled picks
    `off`.
-   A model may not offer every level. A level it lacks is clamped when it runs, so say that
+   A model may not offer every level. Pi clamps a level it lacks when the role runs, so say that
    instead of asking again. The tool rejects any level other than `off` on a model that has no reasoning support.
    When it does, set that role with no level and tell the user which role has none.
 4. For each role, call the adapter tool with `action: "set_model"`, the role, the chosen
@@ -116,8 +116,8 @@ For a scripted environment, set `PISTACK_MODELS` instead, for example
 `PISTACK_MODELS=feature=anthropic/claude-sonnet-4-5:medium,bug-fix=openai/gpt-5:high`. The
 optional `:level` suffix sets the thinking level. A pool's entries are separated by `|`, as in
 `feature=anthropic/claude-sonnet-4-5:high|openai/gpt-5:high`. A panel's entries are separated by spaces, as
-in `PISTACK_MODELS='arena-runners=anthropic/claude-sonnet-4-5:high openai/gpt-5:high'`. The environment wins
-over both config files, so CI never needs this dialog.
+in `PISTACK_MODELS='arena-runners=anthropic/claude-sonnet-4-5:high openai/gpt-5:high'`. `PISTACK_MODELS` overrides
+both config files, so CI does not need this dialog.
 
 ## Model filter
 
@@ -129,10 +129,11 @@ without rewriting the roles. Call the adapter tool with `action: "set_filter"` a
 - `clear: true` to remove the filter at that scope.
 
 A pattern with `/` matches `provider/model`; one without matches the model id. `*` is the only
-wildcard. The filter applies to this session only, unless the user asks to save it: then pass
-`scope: "user"` or `scope: "project"`. A session filter wins over a saved one until it is cleared.
-A trusted project's filter replaces the user filter as a whole. Empty lists set an unrestricted
-override; clearing the session filter restores the saved filter. Wait for `set_filter` to finish
+wildcard. The filter applies to this session only. When the user asks to save it, pass
+`scope: "user"` or `scope: "project"`. A session filter wins over a saved one until you clear it.
+A trusted project's filter replaces the user filter as a whole. Empty `include` and `exclude`
+lists set an override that allows every model. Clearing the session filter restores the saved
+filter. Wait for `set_filter` to finish
 before issuing delegation calls. Keep the active filter unchanged unless the user requests a change.
 
 Read back `action: "status"`. Report the `model filter` row, and any role or panel seat the
@@ -140,34 +141,35 @@ Read back `action: "status"`. Report the `model filter` row, and any role or pan
 Tell the user the limits: the adapter blocks `delegate_task` and `subagent` calls in this session
 that the filter does not allow. A child does not inherit a session filter and follows it only as
 an instruction in its brief. A saved filter applies in a child where the adapter loads the same
-config files. Other tools that start agents are not checked. This is a model-selection guard,
+config files. The adapter does not check other tools that start agents. This is a model-selection guard,
 not an access-control boundary.
 
 ## Upstream source
 
 By default the adapter uses the pstack revision this release was tested against. Change it only
-when you are deliberately testing another revision.
+to test another revision.
 
 Call the adapter tool with `action: "set_source"` and one of these.
 
-- `ref` with a branch, tag, or commit. A branch or tag is resolved to a commit once, here, and
-  recorded. Later sessions keep that commit. The adapter never advances it on its own.
+- `ref` with a branch, tag, or commit. The adapter resolves a branch or tag to a commit once, during
+  this call, and records it. Later sessions keep that commit. The adapter never advances it on its own.
 - `repo` with another repository. This is outside the tested trust boundary.
 - `localPath` with a directory holding a pstack checkout. Use this when developing pstack itself.
 
 The adapter asks the user to confirm every source change itself and refuses without an
-interactive session, so a change cannot happen on your say-so alone. Explain the consequence in
+interactive session, so you cannot change the source without the user's confirmation. Explain the consequence in
 plain words before you call it, and report a refusal as a refusal.
 
-Regeneration happens on the next Pi start. Tell the user to restart Pi, or run `/reload`.
+The adapter regenerates its wrappers on the next Pi start. Tell the user to restart Pi, or run
+`/reload`.
 
 ## Delegation order
 
 Delegating workflows try T3 Code's `delegate_task` first, then pi-subagents' `subagent`. A user
 who wants `subagent` first sets `"delegation": "pi-subagents"` in the adapter config file, or
 `PISTACK_DELEGATION=pi-subagents`. The adapter tool has no action for this. Tell the user which
-file to edit: the `config layers` row of the status report lists them. Regeneration happens on
-the next Pi start.
+file to edit: the `config layers` row of the status report lists them. The change takes effect
+on the next Pi start.
 
 ## Finish
 

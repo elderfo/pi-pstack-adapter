@@ -5,7 +5,7 @@ description: Certify a new upstream pstack revision in pi-pstack-adapter. Use wh
 
 # Certify a new pstack revision
 
-Certification is a verification claim: every upstream skill at the new commit has a reviewed support tier, and each tier rests on evidence. `AGENTS.md` and `docs/compatibility.md` own the contract and the tier rules; this skill is the procedure that satisfies them. The pstack 0.15.2 → 0.15.9 bump (PR #3) is the worked example.
+Certification is a verification claim: every upstream skill at the new commit has a reviewed support tier, and each tier rests on evidence. `AGENTS.md` and `docs/compatibility.md` own the contract and the tier rules; this skill is the procedure that satisfies them. The pstack 0.15.2 to 0.15.9 bump (PR #3) is the worked example.
 
 ## Files that move together
 
@@ -59,7 +59,7 @@ Keep scratch work in `.work/`; ensure `.work/` is in `.git/info/exclude`. Leave 
    - State a write footprint in the `note` when a skill commits (`correct` lands one commit per mistake class).
    - Gate only on installed executables and capabilities. Prerequisite checks cannot test write access, so a committing skill needs no extra gate.
 
-6. **Map new vocabulary.** Port each `TERMS` entry that step 1 found new into `CURSOR_TERMS`, with a `key` that your row's Cursor column contains. Give each `host-mapping:<term>` warning a row, and check its meaning in the skills that use it. A Cursor-only step maps to the skip line the host mapping defines, but a skip never raises a tier. When upstream adds role values or role-line names, extend `hostMappingDocument`. 0.15.9 added `auto` and `inherit-parent` (omit `model`, use the parent) and role lines mapped to adapter roles: `hardest tasks` → `strongest-judgment`, `judgment and prose` → `judgment`. Map named roles explicitly; an unmapped role line silently inherits the parent model. The mapping text is part of the generation cache digest, so edits regenerate wrappers.
+6. **Map new vocabulary.** Port each `TERMS` entry that step 1 found new into `CURSOR_TERMS`, with a `key` that your row's Cursor column contains. Give each `host-mapping:<term>` warning a row, and check its meaning in the skills that use it. A Cursor-only step maps to the skip line the host mapping defines, but a skip never raises a tier. When upstream adds role values or role-line names, extend `hostMappingDocument`. 0.15.9 added `auto` and `inherit-parent` (omit `model`, use the parent) and role lines mapped to adapter roles: `hardest tasks` maps to `strongest-judgment`, and `judgment and prose` maps to `judgment`. Map named roles explicitly; an unmapped role line silently inherits the parent model. The mapping text is part of the generation cache digest, so edits regenerate wrappers.
 
 7. **Edit together.** Update every file in the table above in one change. Keep docs table counts equal to the registry.
 
