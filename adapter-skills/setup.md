@@ -66,9 +66,9 @@ Follow these steps.
 2. Ask the user which model each role should use. Offer the listed ids, and offer
    `inherit` for any role they do not care about. Use the structured question tool when it is
    available; otherwise ask in plain text. The tool accepts only ids from step 1. For a user who
-   wants alternatives for a role, offer a pool, which is a ranked list of models. The adapter runs each delegation
-   on the first one the model filter allows, unless the delegating agent overrides the ranking
-   for that task, so ask for the order.
+   wants alternatives for a role, offer a pool, which is a ranked list of models. Ask for the
+   ranking. The adapter normally picks the first model the filter allows. The delegating agent
+   may pick another allowed entry for a particular task.
    A pool is a set of choices, not a retry list and not a panel, so say that when you offer it.
 3. Ask for a thinking level. Do not assume the user wants none. Skip this step only when every
    role is on `inherit`. It applies to every role that got a model in step 2. A role on
@@ -91,8 +91,9 @@ Follow these steps.
    only when the user says it should differ from its group. Backend default passes no level and
    leaves the choice to the delegation backend. A Custom user who wants thinking disabled picks
    `off`.
-   A model may not offer every level. Pi clamps a level it lacks when the role runs, so say that
-   instead of asking again. The tool rejects any level other than `off` on a model that has no reasoning support.
+   A model may not offer every level. Pi clamps a level it lacks when the role runs. Under T3 Code,
+   T3 may reject the level instead, and the delegating agent then lowers it and tells the user.
+   Say that instead of asking again. The tool rejects any level other than `off` on a model that has no reasoning support.
    When it does, set that role with no level and tell the user which role has none.
 4. For each role, call the adapter tool with `action: "set_model"`, the role, the chosen
    `provider/model` id, and `thinking` when step 3 picked a level. For a pool, pass `model` as a

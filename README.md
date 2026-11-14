@@ -151,7 +151,8 @@ variable yourself, see [Set roles without the setup skill](#set-roles-without-th
 Each role can also have a thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or
 `max`. The level is a ceiling. A delegate may lower it for routine work but never raises it. A
 role without a level passes none, so the provider uses its own default. If the model does not
-offer the level, Pi limits it to what the model supports.
+offer the level, Pi limits it to what the model supports. Under T3 Code, T3 may reject the level
+instead. The agent then lowers the level to one the model offers and tells you.
 
 A role you leave unset, with `general` unset too, inherits the model and thinking level of the
 agent that starts it. A `strongest-judgment` delegate at `xhigh` would then start every helper at
@@ -159,11 +160,15 @@ agent that starts it. A `strongest-judgment` delegate at `xhigh` would then star
 
 ### Panels
 
-Some workflows run several models side by side: `arena`'s runners and judge, `architect`'s
-runners, and `interrogate`'s adversaries. Their panel roles are `arena-runners`,
-`arena-cross-judge-pool`, `architect-runners`, and `interrogate-reviewers`. A panel lists up to
-eight models, and each one gets a seat. An `inherit` seat uses the model and thinking level of
-the agent that starts the panel, which is your session unless a delegate runs the workflow.
+Some workflows run several models side by side: `arena`'s runners, `architect`'s runners, and
+`interrogate`'s adversaries. Their panel roles are `arena-runners`, `architect-runners`, and
+`interrogate-reviewers`. A panel lists up to eight models, and each one gets a seat. An `inherit`
+seat uses the model and thinking level of the agent that starts the panel, which is your session
+unless a delegate runs the workflow.
+
+The `arena-cross-judge-pool` role works differently. `arena`, and `architect` through it, pick
+one judge from this list, the first model from a family other than your session's. When no model
+qualifies, `arena` skips the judge and says so. An `inherit` entry never judges.
 
 Upstream pstack gives each panel models from two model families. A panel you
 leave unset uses `judgment`, then `general`, so it covers two families only when those roles do.
@@ -176,7 +181,7 @@ the first model that the [model filter](#restrict-which-models-delegation-uses) 
 task clearly suits another model in the pool, the agent may pick that one instead, and it tells
 you which model it picked and why. It cannot pick a model outside the pool.
 
-A pool runs one model per task, and a panel runs every seat. A pool is also not a retry list.
+A pool runs one model per task, and a runner panel runs every seat. A pool is also not a retry list.
 When a delegation fails, the agent reports the failure and does not move on to the next model.
 
 ### Set roles without the setup skill
@@ -218,8 +223,8 @@ GPT models", or run `/skill:pistack-setup`. A filter has two lists of patterns:
 - `exclude` lists the models delegation may not use. `["*claude*"]` blocks every model id that
   contains `claude`, including Bedrock-style ids.
 
-A pattern with a `/` matches `provider/model`, and one without matches the model id after the
-provider. `*` is the only wildcard, and matching ignores case. A model must match an `include`
+A pattern with a `/` matches `provider/model`, and one without matches the part of the id after
+the last `/`. `*` is the only wildcard, and matching ignores case. A model must match an `include`
 pattern when the list has any, and must match no `exclude` pattern.
 
 A filter lasts for the current session unless you ask the agent to save it. A saved filter goes
@@ -287,7 +292,7 @@ the source:
 | Trust | Meaning |
 | --- | --- |
 | `tested` | The certified commit from the official repository. |
-| `untested-ref` | Another commit from the official repository. Nobody has verified how it behaves in Pi. |
+| `untested-ref` | A source from the official repository without this release's certified pin. This release has not verified it. |
 | `untested-repo` | A custom repository. Its code runs with your permissions, so review it first. |
 | `local` | A local checkout. Its contents are unverified and can differ between machines. |
 
