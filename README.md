@@ -167,8 +167,9 @@ seat uses the model and thinking level of the agent that starts the panel, which
 unless a delegate runs the workflow.
 
 The `arena-cross-judge-pool` role works differently. `arena`, and `architect` through it, pick
-one judge from this list, the first model from a family other than your session's. When no model
-qualifies, `arena` skips the judge and says so. An `inherit` entry never judges.
+one judge from this list, the first model from a family other than your session's. When no entry
+qualifies, `arena` tries `judgment`, then `general`. If neither qualifies, it skips the judge and
+says so. An `inherit` entry never judges.
 
 Upstream pstack gives each panel models from two model families. A panel you
 leave unset uses `judgment`, then `general`, so it covers two families only when those roles do.
