@@ -706,8 +706,8 @@ function probedShellState(ctx: ExtensionContext, activeTools: readonly string[])
 
 function upstreamVersion(pluginDir: string): string {
   try {
-    const raw = JSON.parse(readFileSync(join(pluginDir, ".cursor-plugin", "plugin.json"), "utf8")) as { version?: string };
-    return raw.version ?? "unknown";
+    const raw = JSON.parse(readFileSync(join(pluginDir, ".cursor-plugin", "plugin.json"), "utf8")) as { version?: unknown };
+    return typeof raw.version === "string" ? raw.version : "unknown";
   } catch {
     return "unknown";
   }
