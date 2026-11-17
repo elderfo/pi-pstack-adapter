@@ -123,10 +123,32 @@ test("the status report lists each panel apart from the model roles, and warns w
   assert.match(report, /\| arena-runners \| anthropic\/one at high; openai\/two at high \| configured \|/);
   assert.match(report, /\| architect-runners \| anthropic\/one at medium \(judgment\); anthropic\/one at medium \(general\) \| unset, so judgment, general \|/);
   assert.doesNotMatch(report, /Every seat of `arena-runners`/);
-  for (const panel of ["arena-cross-judge-pool", "interrogate-reviewers"]) {
+  for (const panel of ["arena-cross-judge-pool", "architect-runners", "interrogate-reviewers"]) {
     assert.match(report, new RegExp(`> Warning\\. Every seat of \`${panel}\` runs on \`anthropic/one\``));
   }
-  assert.doesNotMatch(report, /Every seat of `architect-runners`/, "no workflow reads architect-runners since pstack 0.15.43");
+});
+
+test("the status report warns about architect-runners only for revisions before pstack 0.15.43", () => {
+  const config = mergeConfig([layer({ judgment: "anthropic/one:medium", general: "anthropic/one:medium" })]);
+  const report = (upstreamVersion: string) =>
+    renderStatus({
+      adapterVersion: "0.1.0",
+      config,
+      source: { selection: { kind: "local", path: "/x" }, trust: "local", checkoutDir: "/x", pluginDir: "/x" },
+      upstreamVersion,
+      generation: { outDir: "/o", skillsDir: "/o/s", skills: [], agents: [], agentPromptsDir: "/o/a", diagnostics: [] },
+      capabilities: [],
+      platform: "supported",
+      platformName: "linux",
+      modeActive: false,
+      cacheRoot: "/c",
+      bootstrapped: false,
+    });
+  assert.match(report("0.15.42"), /> Warning\. Every seat of `architect-runners` runs on `anthropic\/one`/);
+  for (const version of ["0.15.43", "0.16.0", "1.0.0", "unknown"]) {
+    assert.doesNotMatch(report(version), /Every seat of `architect-runners`/, version);
+    assert.match(report(version), /> Warning\. Every seat of `arena-runners` runs on `anthropic\/one`/, version);
+  }
 });
 
 test("check lists a workflow's panels with their seats and any warning", () => {

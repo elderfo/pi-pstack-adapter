@@ -122,6 +122,7 @@ export function renderStatus(input: StatusInput): string {
   }
   lines.push("");
   const readPanels = new Set(Object.values(SKILL_PANELS).flat());
+  if (readsArchitectRunners(input.upstreamVersion)) readPanels.add("architect-runners");
   for (const panel of panels) {
     if (!readPanels.has(panel.role)) continue;
     const warning = panelWarning(panel, config, context);
@@ -296,6 +297,13 @@ export function renderModelPolicy(config: AdapterConfig, origin: FilterOrigin, p
     );
   }
   return lines.join("\n\n");
+}
+
+function readsArchitectRunners(upstreamVersion: string): boolean {
+  const parts = /^(\d+)\.(\d+)\.(\d+)$/.exec(upstreamVersion.trim());
+  if (!parts) return false;
+  const [major, minor, patch] = parts.slice(1).map(Number) as [number, number, number];
+  return major === 0 && (minor < 15 || (minor === 15 && patch < 43));
 }
 
 function extraRoles(config: AdapterConfig): string[] {
