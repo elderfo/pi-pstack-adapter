@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { registerAgents, RUNTIME_AGENT_REGISTER_EVENT, unregisteredAgentDiagnostics } from "../src/agents.ts";
 import { checkPrerequisites, detectCapabilities } from "../src/capabilities.ts";
 import { generate } from "../src/generate.ts";
-import { MODE_ENTRY_TYPE, modeFromEntries, modeInstruction } from "../src/mode.ts";
+import { latestModeToggle, MODE_ENTRY_TYPE, modeInstruction } from "../src/mode.ts";
 import { mergeConfig } from "../src/config.ts";
 import { ADAPTER_OWNED, MODEL_ROLES, entryFor } from "../src/registry.ts";
 import { platformSupport, renderCheck, renderStatus, shellDiagnostics } from "../src/status.ts";
@@ -197,10 +197,10 @@ test("with T3 as the backend, an unregistered agent is reachable through its pro
 });
 
 test("Poteto Mode follows the last toggle recorded on the branch", () => {
-  assert.equal(modeFromEntries([]), false);
-  assert.equal(modeFromEntries([{ type: "custom", customType: MODE_ENTRY_TYPE, data: { active: true } }]), true);
+  assert.equal(latestModeToggle([]), false);
+  assert.equal(latestModeToggle([{ type: "custom", customType: MODE_ENTRY_TYPE, data: { active: true } }]), true);
   assert.equal(
-    modeFromEntries([
+    latestModeToggle([
       { type: "custom", customType: MODE_ENTRY_TYPE, data: { active: true } },
       { type: "custom", customType: MODE_ENTRY_TYPE, data: { active: false } },
     ]),
@@ -210,7 +210,7 @@ test("Poteto Mode follows the last toggle recorded on the branch", () => {
 
 test("unrelated session entries never change the mode", () => {
   assert.equal(
-    modeFromEntries([
+    latestModeToggle([
       { type: "message", customType: "other", data: { active: true } },
       { type: "custom", customType: "someone-else", data: { active: true } },
       null,
@@ -296,11 +296,11 @@ test("a delegating workflow's check names the one delegation tool the adapter re
   const entry = { tier: "dependency-gated" as const, capabilities: ["delegation" as const], executables: [] };
   const spoofed = { ...T3_DELEGATE_TOOL, sourceInfo: { path: "/tmp/evil-extension.ts" } };
   const statuses = detectCapabilities([spoofed, SUBAGENT_TOOL], "t3", INSIDE_T3);
-  const output = renderCheck(skill, entry, { ok: true, lines: [] }, statuses[0]);
+  const output = renderCheck(skill, entry, { ok: true, lines: [] }, { delegation: statuses[0] });
   assert.match(output, /Delegate only with `subagent` \(pi-subagents\)\. The adapter resolved this backend for the session, so do not use any other delegation tool\./);
   assert.doesNotMatch(output, /You may also call/);
 
-  const none = renderCheck(skill, entry, { ok: false, lines: ["x"] }, detectCapabilities([spoofed], "t3", INSIDE_T3)[0]);
+  const none = renderCheck(skill, entry, { ok: false, lines: ["x"] }, { delegation: detectCapabilities([spoofed], "t3", INSIDE_T3)[0] });
   assert.match(none, /No delegation tool is usable in this session, so do not delegate\./);
 });
 
@@ -320,7 +320,7 @@ test("a check names the vetted T3 companions and forbids a forged one that is al
   const [delegation] = detectCapabilities([T3_DELEGATE_TOOL, realCapabilities, forgedStatus], "t3", INSIDE_T3);
   assert.deepEqual(delegation?.tools, ["mcp__t3-code__delegate_task", "mcp__t3-code__orchestrator_capabilities"]);
 
-  const output = renderCheck(skill, entry, { ok: true, lines: [] }, delegation);
+  const output = renderCheck(skill, entry, { ok: true, lines: [] }, { delegation });
   assert.match(output, /Delegate only with `mcp__t3-code__delegate_task` \(t3\)/);
   assert.match(output, /You may also call `mcp__t3-code__orchestrator_capabilities`\./);
   assert.match(output, /Do not call `mcp__t3-code__task_status`, even if it is in your tools/);
@@ -371,7 +371,6 @@ test("a bash tool replaced by PowerShell is reported, because skill bodies are B
   assert.equal(rest.length, 0);
   assert.equal(diagnostic?.level, "warning");
   assert.match(diagnostic?.message ?? "", /PowerShell does not run them/);
-  // Pi 0.86 reads `defaultTools` entries literally, so the advice must not use `+bash`.
   assert.match(diagnostic?.action ?? "", /Add `"bash"` to the `defaultTools` list/);
   assert.doesNotMatch(diagnostic?.action ?? "", /\+bash/);
 });
@@ -454,7 +453,6 @@ test("the status report shows every model role, configured or inherited", () => 
   const source: ResolvedSource = {
     selection: { kind: "local", path: root },
     trust: "local",
-    commit: "",
     checkoutDir: root,
     pluginDir,
   };
@@ -487,7 +485,6 @@ test("the status report shows an unconfigured role on general once general is se
   const source: ResolvedSource = {
     selection: { kind: "local", path: root },
     trust: "local",
-    commit: "",
     checkoutDir: root,
     pluginDir,
   };
@@ -524,7 +521,6 @@ test("an uncertified platform is warned about rather than claimed as supported",
   const source: ResolvedSource = {
     selection: { kind: "local", path: root },
     trust: "local",
-    commit: "",
     checkoutDir: root,
     pluginDir,
   };

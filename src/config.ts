@@ -9,17 +9,10 @@ import { DEFAULT_DELEGATION, DELEGATION_PROVIDERS, isDelegationProvider } from "
 import type { DelegationProvider, SourceSelection, Trust } from "./types.ts";
 import { type ModelFilter, parseModelFilter } from "./filter.ts";
 
-/**
- * A role's model. A list is a ranked pool of alternatives for an ordinary role: each delegation runs
- * on the first eligible entry unless it overrides the ranking. A panel role keeps its
- * space-separated string, one seat per entry.
- */
 export type ModelValue = string | readonly string[];
 
-/** A pool holds this many alternatives at most, like a panel's seat limit. */
 export const MAX_POOL_ENTRIES = 8;
 
-/** The entries of a role value, one for a plain string. */
 export function poolEntries(value: ModelValue): readonly string[] {
   return typeof value === "string" ? [value] : value;
 }
@@ -29,16 +22,12 @@ export interface AdapterConfig {
   readonly repo: string;
   readonly ref: string;
   readonly pluginPath: string;
-  /** Absolute path to a local pstack checkout, replacing the git source. */
   readonly localPath?: string;
-  /** Commit recorded by a previous explicit setup. Startup never advances it. */
   readonly pinnedCommit?: string;
   readonly allowBootstrap: boolean;
   readonly cacheDir?: string;
   readonly models: Readonly<Record<string, ModelValue>>;
-  /** The saved model filter and the layer it came from. A later layer replaces it whole. */
   readonly modelFilter?: { readonly filter: ModelFilter; readonly source: string };
-  /** The delegation backend tried first. The other one is the fallback. */
   readonly delegation: DelegationProvider;
   readonly sources: readonly string[];
 }
@@ -97,7 +86,6 @@ export function readConfigFile(path: string): ConfigLayer | undefined {
   return { label: path, path, values: parsed as ConfigFile };
 }
 
-/** Shallow patch. A `models` value replaces the stored map, so callers control removals. */
 export function updateConfigFile(path: string, patch: ConfigFile): ConfigFile {
   const current = readConfigFile(path)?.values ?? {};
   const next: ConfigFile = { ...current, ...patch };
@@ -109,7 +97,6 @@ export function updateConfigFile(path: string, patch: ConfigFile): ConfigFile {
   return next;
 }
 
-/** Thinking levels Pi accepts as a `:level` suffix on a model id. */
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
@@ -122,10 +109,6 @@ export interface ModelSpec {
   readonly thinking?: ThinkingLevel;
 }
 
-/**
- * Splits `provider/model[:thinking]`. Only a known level is a suffix, so a model id that
- * itself contains a colon, such as `ollama/qwen:7b`, stays whole. Pi parses ids the same way.
- */
 export function splitModelSpec(spec: string): ModelSpec {
   const separator = spec.lastIndexOf(":");
   if (separator > 0) {
@@ -149,7 +132,10 @@ export type ModelAssignment =
   | { readonly kind: "assign"; readonly spec: ModelSpec }
   | { readonly kind: "rejected"; readonly message: string };
 
-/** Validates a `set_model` request. `available` holds `provider/id` entries from the registry. */
+function endsInLevelWord(id: string): boolean {
+  return splitModelSpec(id).thinking !== undefined;
+}
+
 export function planModelAssignment(
   model: string,
   thinking: string | undefined,
@@ -166,7 +152,6 @@ export function planModelAssignment(
     return { kind: "inherit" };
   }
   const whole = model.trim();
-  // A registry id that itself ends in a level word, such as `x/model:low`, wins over a split.
   const exact = available.some((candidate) => candidate.id === whole);
   const spec = exact ? { model: whole } : splitModelSpec(whole);
   const requested = thinking?.trim().toLowerCase() || undefined;
@@ -184,8 +169,8 @@ export function planModelAssignment(
   }
   const level = requested !== undefined && isThinkingLevel(requested) ? requested : spec.thinking;
   if (!isValidModelSpec(spec.model)) return { kind: "rejected", message: invalidModelMessage(spec.model) };
-  if (exact && requested === undefined && splitModelSpec(whole).thinking !== undefined) {
-    // Stored whole, `x/model:low` would read back as model `x/model` at thinking `low`.
+  const wouldMisreadAsThinking = exact && requested === undefined && endsInLevelWord(whole);
+  if (wouldMisreadAsThinking) {
     return {
       kind: "rejected",
       message: `Model \`${whole}\` ends in a thinking-level word, so a plain assignment would be misread. Pass \`thinking\` explicitly, for example \`high\`.`,
@@ -211,17 +196,14 @@ export function planModelAssignment(
 
 const MAX_MODEL_SPEC_LENGTH = 128;
 
-/** A panel entry that runs on the parent session's model, like upstream's `inherit-parent`. */
 export const INHERIT_ENTRY = "inherit";
 
 export type PanelEntry = { readonly kind: "inherit" } | { readonly kind: "model"; readonly spec: ModelSpec };
 
-/** Splits a panel value. Entries are separated by ASCII spaces, because a model id has none. */
 export function splitPanelValue(value: string): string[] {
   return value.split(/ +/).filter((entry) => entry !== "");
 }
 
-/** The longest value `set_model` can write: every entry at its limit, one space apart. */
 const MAX_PANEL_VALUE_LENGTH = MAX_PANEL_ENTRIES * (MAX_MODEL_SPEC_LENGTH + 1) - 1;
 
 export function panelEntries(value: string): PanelEntry[] {
@@ -249,11 +231,6 @@ export type PanelAssignment =
   | { readonly kind: "assign"; readonly value: string }
   | { readonly kind: "rejected"; readonly message: string };
 
-/**
- * Validates a `set_model` request for a panel role. The value lists entries separated by commas or
- * spaces. `thinking` applies to each model entry that has no `:level` suffix of its own. A value of
- * just `inherit` clears the panel, so it falls back to its default roles.
- */
 export function planPanelAssignment(
   value: string,
   thinking: string | undefined,
@@ -292,14 +269,7 @@ export function planPanelAssignment(
   return { kind: "assign", value: written.join(" ") };
 }
 
-/** Role names reach generated markdown and status tables, so they stay plain kebab-case. */
 const ROLE_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
-/**
- * A model spec is also rendered into markdown the agent reads, so it is printable ASCII with the
- * markup characters removed. An allow-list of ASCII keeps invisible text (tag characters, zero-width
- * and bidi controls) out; catalogue ids such as OpenRouter's `~anthropic/...` aliases are ASCII.
- * A trailing colon is never a valid id or level.
- */
 const PRINTABLE_ASCII = /^[\x21-\x7e]+$/;
 const MARKUP_CHARACTERS = /[`|<>[\]()\\*]/;
 
@@ -307,7 +277,6 @@ const MARKUP_CHARACTERS = /[`|<>[\]()\\*]/;
 export function isValidModelSpec(model: string): boolean {
   const plain = (value: string) => PRINTABLE_ASCII.test(value) && !MARKUP_CHARACTERS.test(value) && !value.endsWith(":");
   if (model.length > MAX_MODEL_SPEC_LENGTH || !plain(model)) return false;
-  // `x/model::high` splits to `x/model:`, which is no model id.
   return plain(splitModelSpec(model).model);
 }
 
@@ -327,11 +296,6 @@ export type PoolAssignment =
   | { readonly kind: "assign"; readonly value: ModelValue }
   | { readonly kind: "rejected"; readonly message: string };
 
-/**
- * Validates a `set_model` pool for an ordinary role. `thinking` applies to each entry without its own
- * `:level`. Every entry must be a registry model; one bad entry rejects the whole pool. A pool of one
- * is written as a plain string, the format older adapters read.
- */
 export function planPoolAssignment(
   entries: readonly string[],
   thinking: string | undefined,
@@ -375,10 +339,6 @@ function invalidPoolMessage(value: readonly unknown[]): string {
   return `Invalid pool (${value.length} entries). Use a list of 1 to ${MAX_POOL_ENTRIES} entries, each \`provider/model\` or \`provider/model:thinking\`, with no \`inherit\` entry.`;
 }
 
-/**
- * `role=provider/model[:thinking],role2=provider/model2`. An ordinary role takes a pool as
- * `role=a/x|b/y`; `|` never appears in a model id. A panel keeps space-separated seats.
- */
 export function parseModelRoles(value: string): Record<string, ModelValue> {
   const roles: Record<string, ModelValue> = {};
   for (const pair of value.split(",")) {
@@ -391,7 +351,6 @@ export function parseModelRoles(value: string): Record<string, ModelValue> {
     const role = trimmed.slice(0, separator).trim();
     const model = trimmed.slice(separator + 1).trim();
     if (!isValidRole(role)) throw new Error(invalidRoleMessage(role));
-    // An empty value is an unset variable that expanded to nothing, not a model.
     if (model === "") continue;
     if (isPanelRole(role)) {
       if (!isValidPanelValue(model)) throw new Error(`Role ${safeEcho(role)}. ${invalidPanelMessage(model)}`);
@@ -428,6 +387,14 @@ export function environmentLayer(env: NodeJS.ProcessEnv): ConfigLayer {
   return { label: "environment", values };
 }
 
+function retireOtherSource(merged: ConfigFile, key: string): void {
+  if (key === "repo" || key === "ref") merged.localPath = undefined;
+  if (key === "localPath") {
+    merged.repo = undefined;
+    merged.ref = undefined;
+  }
+}
+
 export function mergeConfig(layers: readonly ConfigLayer[]): AdapterConfig {
   const merged: ConfigFile = {};
   const sources: string[] = [];
@@ -439,13 +406,7 @@ export function mergeConfig(layers: readonly ConfigLayer[]): AdapterConfig {
       // `JSON.parse` yields `__proto__` as an own key, and a plain assignment would invoke the
       // prototype setter, letting a config file reach fields the caller deliberately removed.
       if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
-      // Source selection follows layer precedence: a later layer naming a git source retires an
-      // earlier local checkout, and vice versa.
-      if (key === "repo" || key === "ref") merged.localPath = undefined;
-      if (key === "localPath") {
-        merged.repo = undefined;
-        merged.ref = undefined;
-      }
+      retireOtherSource(merged, key);
       if (key === "models") {
         merged.models = { ...merged.models, ...validatedModels(value, layer.label) };
       } else if (key === "modelFilter") {
@@ -481,7 +442,6 @@ export function mergeConfig(layers: readonly ConfigLayer[]): AdapterConfig {
   };
 }
 
-/** A bad `models` entry fails with the layer that holds it, so status can still be reached after a fix. */
 function validatedModels(value: unknown, label: string): Record<string, ModelValue> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(`${label} sets \`models\` to something other than an object of role to provider/model.`);
@@ -507,11 +467,6 @@ function validatedModels(value: unknown, label: string): Record<string, ModelVal
   return models;
 }
 
-/**
- * The certified commit is the default, not a floor. Naming a ref or a repository without a
- * commit means the user asked for that ref, so the pin must get out of the way and trust
- * must fall to `untested-*`.
- */
 function resolvePin(merged: ConfigFile): string | undefined {
   if (merged.pinnedCommit) return merged.pinnedCommit;
   if (merged.ref) return undefined;

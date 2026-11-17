@@ -1,17 +1,11 @@
 import { safeEcho } from "./echo.ts";
 import { splitModelSpec } from "./config.ts";
 
-/**
- * Which models delegation may use. A pattern with a `/` matches the whole `provider/id`; a pattern
- * without one matches the model id after the last `/`. `*` is the only wildcard. An empty or
- * missing list does not restrict anything.
- */
 export interface ModelFilter {
   readonly include?: readonly string[];
   readonly exclude?: readonly string[];
 }
 
-/** Where the filter in force came from, for the status report. */
 export type FilterOrigin =
   | { readonly kind: "none" }
   | { readonly kind: "session"; readonly filter: ModelFilter; readonly shadows?: string }
@@ -31,7 +25,6 @@ export function filterPatternProblem(pattern: unknown): string | undefined {
   return undefined;
 }
 
-/** Parses an untrusted filter value from a config file or a tool call. */
 export function parseModelFilter(value: unknown): { readonly filter: ModelFilter } | { readonly problem: string } {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return { problem: "`modelFilter` must be an object with optional `include` and `exclude` lists of patterns." };
@@ -89,7 +82,6 @@ function patternMatches(pattern: string, model: string): boolean {
   return globMatches(pattern, model.slice(model.lastIndexOf("/") + 1));
 }
 
-/** `model` is `provider/id`, optionally with a thinking suffix, which is ignored. */
 export function modelAllowed(filter: ModelFilter | undefined, model: string): boolean {
   if (!isRestricting(filter)) return true;
   const bare = splitModelSpec(model).model;
@@ -104,7 +96,6 @@ export function describeFilter(filter: ModelFilter): string {
   return `include ${list(filter.include)}; exclude ${list(filter.exclude)}`;
 }
 
-/** The session's filter from the last entry on the active branch: a filter, or a clear. */
 export function sessionFilterFromEntries(entries: readonly unknown[]): ModelFilter | undefined {
   let current: ModelFilter | undefined;
   for (const candidate of entries) {
@@ -122,7 +113,6 @@ export function sessionFilterFromEntries(entries: readonly unknown[]): ModelFilt
   return current;
 }
 
-/** The filter in force. An explicit session filter wins over the saved one, even an empty one. */
 export function activeFilter(session: ModelFilter | undefined, saved: { readonly filter: ModelFilter; readonly source: string } | undefined): FilterOrigin {
   if (session !== undefined) return { kind: "session", filter: session, shadows: saved?.source };
   if (saved !== undefined) return { kind: "saved", filter: saved.filter, source: saved.source };
@@ -144,7 +134,6 @@ export function describeOrigin(origin: FilterOrigin): string {
   }
 }
 
-/** One line for each delegation brief, so a child knows the restriction its parent works under. */
 export function briefLine(filter: ModelFilter): string {
   return `Model restriction for this task: use only models allowed by ${describeFilter(filter)}. A pattern with a \`/\` matches \`provider/model\`, one without matches the model id, and \`*\` matches anything. Give every agent you start an allowed model and this line, verbatim. If no allowed model fits, stop and report it.`;
 }

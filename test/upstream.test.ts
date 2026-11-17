@@ -252,7 +252,6 @@ test("a cleartext or credential-bearing remote is refused", () => {
   assert.equal(validateRepo("https://example.test/a@b/plugins"), "https://example.test/a@b/plugins");
 });
 
-/** Runs `body` with a global git config that converts LF to CRLF on checkout, as Git for Windows ships. */
 async function withGlobalAutocrlf(body: () => Promise<void>): Promise<void> {
   const original = process.env.GIT_CONFIG_GLOBAL;
   const config = join(makeTempDir("crlf-config"), "gitconfig");
@@ -270,18 +269,12 @@ function upstreamSkillFile(pluginDir: string): string {
   return readFileSync(join(pluginDir, "skills", "unslop", "SKILL.md"), "utf8");
 }
 
-/**
- * Recreates what an earlier adapter left under Git for Windows: no local line-ending override,
- * and CRLF copies checked out by Git itself, so their index entries are stat-clean. A file
- * rewritten by hand would be stat-dirty, which hides the case where `checkout --force` does nothing.
- */
 function makeLegacyCrlfCache(checkoutDir: string): void {
   git(["config", "--local", "--unset", "core.autocrlf"], checkoutDir);
   git(["config", "--local", "--unset", "core.eol"], checkoutDir);
   git(["-c", "core.autocrlf=true", "rm", "-r", "--cached", "--quiet", "--", "pstack"], checkoutDir);
   rmSync(join(checkoutDir, "pstack"), { recursive: true, force: true });
   git(["-c", "core.autocrlf=true", "checkout", "--quiet", "HEAD", "--", "pstack"], checkoutDir);
-  // Age the files so the index records them as clean rather than racily clean.
   const past = new Date(Date.now() - 60_000);
   for (const file of git(["ls-files", "-z", "--", "pstack"], checkoutDir).split("\0").filter(Boolean)) {
     utimesSync(join(checkoutDir, file), past, past);
@@ -325,7 +318,6 @@ test("a repair interrupted after dropping index entries is finished on the next 
   const first = await resolveSource({ config, mayBootstrap: true });
   makeLegacyCrlfCache(first.checkoutDir);
 
-  // The first start drops the stale entries, then dies before checking the files out again.
   const dyingGit = async (args: readonly string[], cwd?: string) =>
     args.includes("checkout") && args.includes("HEAD")
       ? { code: 1, stdout: "", stderr: "killed" }
@@ -356,7 +348,6 @@ test("a cache that cannot be repaired refuses to serve converted bytes and says 
   const first = await resolveSource({ config, mayBootstrap: true });
   makeLegacyCrlfCache(first.checkoutDir);
 
-  // A cache whose config cannot be written and whose files cannot be rewritten.
   const readOnlyGit = async (args: readonly string[], cwd?: string) =>
     (args[0] === "config" && !args.includes("--get")) || args.includes("checkout") || args.includes("rm") || args[0] === "fetch"
       ? { code: 1, stdout: "", stderr: "read-only file system" }

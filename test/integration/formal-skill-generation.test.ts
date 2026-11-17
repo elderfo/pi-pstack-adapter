@@ -74,7 +74,6 @@ test("the statechart wrapper preserves manual invocation, its nested scripts, an
   const root = mkdtempSync(join(scratch, "statechart-wrapper-"));
   try {
     const body = "# Statechart\n\nDraw what the user sees from a TLA+ model.\n";
-    // Inert stand-ins for the nested scripts the body runs from `<skill dir>/scripts`; never executed.
     const supportFiles = {
       "scripts/statechart": "# fixture\nexit 0\n",
       "scripts/statechart.ts": "// fixture\nexport {};\n",
@@ -106,7 +105,6 @@ test("the statechart wrapper preserves manual invocation, its nested scripts, an
     for (const [path, content] of Object.entries(supportFiles)) {
       assert.equal(readFileSync(join(result.skillsDir, "pistack-statechart", path), "utf8"), content, path);
     }
-    // Since pstack 0.15.34 the body runs `<skill dir>/scripts/statechart` directly, so the launcher must stay executable.
     if (process.platform === "win32") {
       t.diagnostic("Windows file systems have no executable bit, so only the launcher's bytes are checked.");
     } else {

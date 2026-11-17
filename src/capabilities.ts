@@ -18,7 +18,6 @@ export interface ToolDescriptor {
 interface CapabilityProbe {
   readonly id: CapabilityId;
   readonly toolName: string;
-  /** Parameter names the tool must accept for the capability to be usable. */
   readonly requiredParameters: readonly string[];
   readonly recommendation: string;
 }
@@ -43,7 +42,6 @@ export function detectCapabilities(
   return [detectDelegation(tools, preferred, host), ...PROBES.map((probe) => detectTool(tools, probe))];
 }
 
-/** The first usable backend in preference order satisfies `delegation`. */
 function detectDelegation(
   tools: readonly ToolDescriptor[],
   preferred: DelegationProvider,
@@ -91,7 +89,6 @@ export function checkPrerequisites(
   statuses: readonly CapabilityStatus[],
   executables: readonly string[],
   hasExecutable: (name: string) => boolean,
-  /** Session problems that stop every workflow, such as a missing Bash shell. */
   blockers: readonly string[] = [],
 ): PrerequisiteReport {
   const lines: string[] = [...blockers];

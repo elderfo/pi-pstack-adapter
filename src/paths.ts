@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, posix, resolve, win32 } from "node:path";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 export const CONFIG_FILE_NAME = "pi-pstack-adapter.json";
 
@@ -12,13 +13,15 @@ export function expandHome(value: string): string {
   return value;
 }
 
-/**
- * Mirrors Pi's own `getAgentDir()`, so a sandboxed `PI_CODING_AGENT_DIR` keeps its cache
- * beside its own config instead of writing into the real one.
- */
 export function agentDir(): string {
-  const override = process.env.PI_CODING_AGENT_DIR;
-  return override ? resolve(expandHome(override)) : join(homedir(), ".pi", "agent");
+  return resolve(getAgentDir());
+}
+
+export function samePath(a: string, b: string, platform: NodeJS.Platform): boolean {
+  const paths = platform === "win32" ? win32 : posix;
+  const left = paths.resolve(a);
+  const right = paths.resolve(b);
+  return platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
 }
 
 export function cacheRoot(override?: string): string {
@@ -47,10 +50,6 @@ export function stateFile(root: string): string {
   return join(root, "state.json");
 }
 
-/**
- * A relative location inside the checkout. An upstream manifest and a config layer both
- * supply these, so neither may escape the directory the adapter controls.
- */
 export function validateContainedPath(value: string, label: string): string {
   const normalized = value.trim().replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/, "");
   const escapes =

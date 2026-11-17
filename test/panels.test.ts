@@ -24,9 +24,7 @@ test("a malformed panel value names the layer and the role", () => {
   assert.throws(() => mergeConfig([layer({ "arena-runners": "a/b `c`" })]), /global: role "arena-runners"\. Invalid panel value/);
   assert.throws(() => mergeConfig([layer({ "arena-runners": ["a/b"] })]), /Invalid panel value/);
   assert.throws(() => mergeConfig([layer({ "arena-runners": Array(9).fill("a/b").join(" ") })]), /1 to 8 entries/);
-  // A list on an ordinary role stays an invalid model id, so lists cannot leak into single roles.
   assert.throws(() => mergeConfig([layer({ judgment: "a/b c/d" })]), /Invalid model value/);
-  // Only ASCII spaces separate entries, and the whole value stays within what set_model can write.
   assert.throws(() => mergeConfig([layer({ "arena-runners": "a/b\nc/d" })]), /Invalid panel value/);
   assert.throws(() => mergeConfig([layer({ "arena-runners": "a/b\u2028c/d" })]), /Invalid panel value/);
   assert.throws(() => mergeConfig([layer({ "arena-runners": `a/b${" ".repeat(2000)}c/d` })]), /Invalid panel value/);
@@ -66,7 +64,6 @@ test("an unset panel follows judgment, then general, the way delegation resolves
 const warn = (config: AdapterConfig, role: string): string | undefined => panelWarning(resolvePanel(config, role), config);
 
 test("a panel collapsed onto one model is reported as configuration, with the setup fix", () => {
-  // The case that misled an agent: judgment and general on one model, other roles on other families.
   const collapsed = mergeConfig([
     layer({ judgment: "anthropic/opus:medium", general: "anthropic/opus:medium", "perf-issue": "openai/gpt:high" }),
   ]);
@@ -100,7 +97,6 @@ test("a panel on two models, or one deliberate runner, gets no warning; a one-mo
   const split = mergeConfig([layer({ judgment: "anthropic/opus", general: "openai/gpt" })]);
   for (const role of PANEL_ROLES) assert.equal(warn(split, role), undefined, role);
 
-  // Upstream lets a panel line hold one entry on purpose.
   const single = mergeConfig([layer({ "arena-runners": "openai/gpt", "arena-cross-judge-pool": "openai/gpt" })]);
   assert.equal(warn(single, "arena-runners"), undefined);
   assert.match(warn(single, "arena-cross-judge-pool") ?? "", /gets no judge from the pool/);
@@ -113,7 +109,7 @@ test("the status report lists each panel apart from the model roles, and warns w
   const report = renderStatus({
     adapterVersion: "0.1.0",
     config,
-    source: { selection: { kind: "local", path: "/x" }, trust: "local", commit: "", checkoutDir: "/x", pluginDir: "/x" },
+    source: { selection: { kind: "local", path: "/x" }, trust: "local", checkoutDir: "/x", pluginDir: "/x" },
     upstreamVersion: "0.15.2",
     generation: { outDir: "/o", skillsDir: "/o/s", skills: [], agents: [], agentPromptsDir: "/o/a", diagnostics: [] },
     capabilities: [],

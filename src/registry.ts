@@ -1,10 +1,5 @@
 import type { CapabilityId, RegistryEntry, SupportTier } from "./types.ts";
 
-/**
- * Support tiers for the certified upstream revision. Classification came from reading
- * every upstream SKILL.md; see `docs/compatibility.md` for how a tier changes.
- * Skills absent from this table are generated as `experimental`.
- */
 export const SKILL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   "architect": { tier: "dependency-gated", capabilities: ["delegation"], executables: [], note: "Phase B delegates to arena runners, so it cannot run without parallel subagents." },
   "arena": { tier: "adapted", capabilities: ["delegation"], executables: ["git"], note: "The whole skill is spawning N candidate subagents plus a judge. Since pstack 0.15.36 the judge must come from a model family other than the parent's, and since pstack 0.15.42 from another vendor, where Fable and the other Claude models are one vendor. Its default runners and pool are now one Fable, one Opus, and one Gemini model. The adapter maps the cross-judge pool to the `arena-cross-judge-pool` panel role, which uses `judgment`, then `general` while unset, so when the parent knows its model, the judge comes from the first pool entry from another vendor. When no entry qualifies, arena tries `judgment`, then `general`, and only when neither is from another vendor does it skip the judge, pick the base alone, and say so. The status report and `check` warn when that pool is on one model. When the parent does not know its model, arena tries the pool in order anyway and says the vendor check did not run. Verified end to end in Pi on Linux at pstack 0.15.36 with pi-subagents: two candidates on the `judgment` and `general` roles, then a judge from the family other than the parent's, which scored them. The parent picked a base, took the fixes for two bugs from the other candidate, fixed a third that both shared, and finished with passing tests. It left the candidate worktrees for comparison. The pstack 0.15.42 vendor rule has not run in Pi." },
@@ -66,7 +61,6 @@ export const SKILL_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   "why": { tier: "dependency-gated", capabilities: [], executables: ["git", "gh"], note: "Since pstack 0.15.42 it spawns no subagents. It answers inline from the commits and PR discussions behind the target, and from other sources when that trail is thin, so it needs git, and gh for the PR discussions. The inline path has not run in Pi." },
 };
 
-/** Adapter-owned skills with no upstream counterpart. Keyed by unprefixed generated name. */
 export const ADAPTER_SKILLS: Readonly<Record<string, RegistryEntry>> = {
   status: { tier: "native", capabilities: [], executables: [], replacement: "status.md" },
 };
@@ -93,11 +87,6 @@ export const CAPABILITY_LABELS: Readonly<Record<CapabilityId, string>> = {
 
 export const ADAPTER_OWNED = "(adapter-owned)";
 
-/**
- * Model roles pstack workflows name. `general` covers every delegate no other role names. A role
- * with no configured model falls back to `general`, and inherits the parent only when `general`
- * is unconfigured too.
- */
 export const GENERAL_ROLE = "general";
 
 export const MODEL_ROLES: readonly string[] = [
@@ -111,11 +100,6 @@ export const MODEL_ROLES: readonly string[] = [
   GENERAL_ROLE,
 ];
 
-/**
- * Upstream's panel lines, such as `arena runners`, hold a list of models with one seat per entry.
- * Upstream defaults each to several model families from two vendors. A panel left unset here uses the roles in
- * `PANEL_DEFAULT_ROLES`, so it spans two families only when those roles do.
- */
 export const PANEL_ROLES: readonly string[] = [
   "arena-runners",
   "arena-cross-judge-pool",
@@ -125,10 +109,8 @@ export const PANEL_ROLES: readonly string[] = [
 
 export const PANEL_DEFAULT_ROLES: readonly string[] = ["judgment", GENERAL_ROLE];
 
-/** A panel value names this many seats at most, so a typo cannot fan out without bound. */
 export const MAX_PANEL_ENTRIES = 8;
 
-/** The panels each upstream skill reads, so `check` can report them before the workflow starts. */
 export const SKILL_PANELS: Readonly<Record<string, readonly string[]>> = {
   architect: ["architect-runners", "arena-cross-judge-pool"],
   arena: ["arena-runners", "arena-cross-judge-pool"],

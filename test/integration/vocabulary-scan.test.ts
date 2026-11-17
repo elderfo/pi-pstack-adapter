@@ -36,7 +36,6 @@ test("the vocabulary scan reads every Markdown file in a skill, nested ones incl
   }
 });
 
-// Windows needs privileges or Developer Mode for symbolic links, so this case runs on POSIX only.
 const symlinkSkip = process.platform === "win32" && "creating a symbolic link needs Developer Mode or an administrator on Windows";
 test("the vocabulary scan does not follow a symbolic link out of the skill", { skip: symlinkSkip }, () => {
   const root = scratchRoot("vocabulary-link");

@@ -31,7 +31,6 @@ export function readManifest(pluginDir: string): UpstreamManifest {
   }
   const record = parsed as Record<string, unknown>;
   const name = requireString(record, "name", path);
-  // The upstream repository owns its own manifest, so these must stay inside the plugin.
   const skillsDir = validateContainedPath(requireString(record, "skills", path), `the "skills" path in ${path}`);
   const agentsDir = validateContainedPath(requireString(record, "agents", path), `the "agents" path in ${path}`);
   const version = typeof record.version === "string" ? record.version : "unknown";
@@ -63,7 +62,7 @@ export function discover(pluginDir: string, manifest: UpstreamManifest): Discove
       });
       continue;
     }
-    resources.push({ name, kind: "skill", dir, entryPath });
+    resources.push({ name, kind: "skill", entryPath });
   }
 
   const agentsRoot = join(pluginDir, manifest.agentsDir);
@@ -72,7 +71,6 @@ export function discover(pluginDir: string, manifest: UpstreamManifest): Discove
     resources.push({
       name: file.slice(0, -3),
       kind: "agent",
-      dir: agentsRoot,
       entryPath: join(agentsRoot, file),
     });
   }

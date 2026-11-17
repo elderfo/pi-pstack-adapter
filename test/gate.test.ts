@@ -43,7 +43,6 @@ test("every child a subagent call starts must name an allowed model", () => {
   const context = noClaude("cliproxyapi/gpt-6.1-sol");
   assert.equal(kind("subagent", { agent: "pistack-poteto-agent", task: "x", model: "cliproxyapi/gpt-6.1-sol:high" }, context), "allow");
   assert.equal(kind("subagent", { agent: "delegate", task: "x", model: "kimi-k3" }, context), "allow");
-  // An agent can carry its own default model, so an omitted model cannot be checked.
   assert.equal(kind("subagent", { agent: "delegate", task: "x" }, context), "block");
   assert.equal(kind("subagent", { agent: "delegate", task: "x", model: "cliproxyapi/claude-opus-5-5" }, context), "block");
   assert.equal(

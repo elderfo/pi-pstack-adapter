@@ -1,10 +1,6 @@
 export const MODE_ENTRY_TYPE = "pistack-mode";
 
-/**
- * Poteto Mode is session-scoped. The latest recorded toggle on the active branch wins,
- * so a resumed or forked session keeps whatever the branch last said.
- */
-export function modeFromEntries(entries: readonly unknown[]): boolean {
+export function latestModeToggle(entries: readonly unknown[]): boolean {
   let active = false;
   for (const candidate of entries) {
     if (typeof candidate !== "object" || candidate === null) continue;

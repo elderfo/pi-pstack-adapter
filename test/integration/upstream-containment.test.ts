@@ -16,7 +16,6 @@ function git(args: readonly string[], cwd: string): string {
   }).trim();
 }
 
-// Run only on the scheduled integration lane: these tests spawn Git and write fixtures.
 for (const state of ["empty", "incomplete-metadata", "foreign-gitfile", "foreign-worktree", "foreign-common-dir", "short-path"] as const) {
   test(`a nested ${state} cache cannot change its enclosing repository`, {
     skip: state === "short-path" && process.platform !== "win32" && "8.3 path aliases are Windows-specific",
@@ -40,7 +39,6 @@ for (const state of ["empty", "incomplete-metadata", "foreign-gitfile", "foreign
       writeFileSync(join(owner, ".git", "info", "exclude"), "/cache/\n");
       git(["add", "original.txt"], owner);
       git(["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "owner"], owner);
-      // Also exercise reuse when ancestor discovery can find the requested object.
       git(["fetch", "--quiet", upstream, commit], owner);
       const before = {
         head: git(["rev-parse", "HEAD"], owner),
@@ -71,10 +69,7 @@ for (const state of ["empty", "incomplete-metadata", "foreign-gitfile", "foreign
         else writeFileSync(join(dir, ".git", "commondir"), `${join(owner, ".git")}\n`);
       }
 
-      // Keep the red run safe: observe real Git discovery, but stop BEFORE a buggy
-      // implementation could mutate the ancestor's origin, config, index, or HEAD.
       const guardedGit: GitRunner = async (args, cwd) => {
-        // Keep ownership probes usable on Git versions before 2.31.
         if (args.includes("--path-format=absolute")) {
           return { code: 129, stdout: "", stderr: "unsupported --path-format (pre-2.31 Git)" };
         }

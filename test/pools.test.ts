@@ -76,7 +76,6 @@ test("a pattern with `/` matches provider/model, one without matches the model i
   assert.equal(modelAllowed({ include: ["cliproxyapi/*"] }, "other/gpt-6.1-sol"), false);
   assert.equal(modelAllowed({ include: ["gpt-*", "kimi-*"] }, "cliproxyapi/kimi-k3"), true);
   assert.equal(modelAllowed({ include: ["*"], exclude: ["CLAUDE-*"] }, "cliproxyapi/claude-opus-5-5"), false);
-  // A bare pattern sees only the id after the provider, so a provider name cannot satisfy it.
   assert.equal(modelAllowed({ include: ["cliproxyapi*"] }, "cliproxyapi/gpt-6.1-sol"), false);
   assert.equal(modelAllowed({ include: [], exclude: [] }, "x/anything"), true);
   assert.equal(modelAllowed(undefined, "x/anything"), true);
@@ -117,7 +116,6 @@ test("a role resolves to its pool, general, or the parent, and a filtered-out po
   assert.equal(feature.kind, "pool");
   assert.deepEqual(feature.choices.map((choice) => choice.eligible), [false, true, false]);
 
-  // `bug-fix` is unset, so it uses `general`, whose only model is excluded. It must not reach the parent.
   const bugFix = resolveRole(config, "bug-fix", { filter: NO_CLAUDE, parentModel: "cliproxyapi/gpt-6.1-sol" });
   assert.equal(bugFix.kind, "blocked");
   assert.equal(bugFix.from, "general");
@@ -153,7 +151,6 @@ test("panel seats keep their meaning: an excluded seat is blocked, and a default
   const text = renderPanels(config, ["arena-runners", "architect-runners"], context);
   assert.match(text, /BLOCKED, `cliproxyapi\/claude-opus-5-5` is excluded by the model filter/);
   assert.match(text, /ranked cliproxyapi\/gpt-6\.1-sol at backend default, then cliproxyapi\/kimi-k3 at backend default; as `pstack:judgment` it runs once on the first, unless the delegating agent overrides the ranking \(judgment\)/);
-  // A seat that may pick another model does not make the panel one-model.
   assert.equal(panelWarning(defaults, config, context), undefined);
 });
 

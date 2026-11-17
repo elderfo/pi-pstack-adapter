@@ -4,10 +4,6 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { makeTempDir, writePluginFixture } from "../support/fixture.ts";
 
-/**
- * Drives the real extension entry point through a minimal stand-in for Pi's extension API: config
- * files on disk, the session entries Pi would keep, and the `tool_call` hook Pi runs before a tool.
- */
 const root = makeTempDir("model-pools");
 const checkout = join(root, "checkout");
 mkdirSync(checkout, { recursive: true });
@@ -92,7 +88,6 @@ test("a pool and a session filter work end to end, and saved filters persist wit
   assert.match(await session.call({ action: "set_model", role: "general", model: "cliproxyapi/kimi-k3", scope: "session" }), /Only `set_filter` takes `scope: "session"`/);
   assert.match(await session.call({ action: "set_model", role: "arena-runners", model: ["cliproxyapi/kimi-k3"] }), /takes one string of entries/);
 
-  // Before any filter, omitted models and a status report behave as before.
   assert.equal(await session.delegate(T3, { task: "x" }), undefined);
   const before = await session.call({ action: "status" });
   assert.match(before, /\| model filter \| none, every model is allowed \|/);
@@ -105,10 +100,8 @@ test("a pool and a session filter work end to end, and saved filters persist wit
   const status = await session.call({ action: "status" });
   assert.match(status, /\| model filter \| include none; exclude `claude-\*` \(this session\) \|/);
   assert.match(status, /\| feature \| pool, ranked cliproxyapi\/gpt-6\.1-sol at max, then cliproxyapi\/kimi-k3 at high; excluded by the model filter: cliproxyapi\/claude-opus-5-5 at high \| per choice \|/);
-  // The session runs on Claude, so a role that would inherit it is blocked instead of running there.
   assert.match(status, /\| judgment \| BLOCKED, it inherits, and the parent session's model `cliproxyapi\/claude-opus-5-5` is excluded by the model filter\. Do not delegate this role \| - \|/);
 
-  // A role reference is rewritten in place to the first model the filter allows, at its thinking.
   const routed = { task: "x", target: { providerInstanceId: "pi", model: "pstack:feature" } };
   assert.equal(await session.delegate(T3, routed), undefined);
   assert.deepEqual(routed.target, { providerInstanceId: "pi", model: "cliproxyapi/gpt-6.1-sol", options: { thinking: "max" } });
@@ -138,7 +131,6 @@ test("a pool and a session filter work end to end, and saved filters persist wit
   assert.deepEqual(userConfig().modelFilter, { include: ["gpt-*"] });
   assert.deepEqual(await session.delegate(T3, { task: "x", target: { model: "cliproxyapi/kimi-k3" } }), undefined, "the session filter still applies");
 
-  // A fork keeps the branch's session filter; a new session starts with only the saved one.
   const fork = await host();
   fork.branch.push(...session.branch);
   await fork.emit("session_start", { reason: "fork" });
@@ -149,7 +141,6 @@ test("a pool and a session filter work end to end, and saved filters persist wit
   assert.match(await fresh.call({ action: "status" }), /\| model filter \| include `gpt-\*`; exclude none \(saved in .*pi-pstack-adapter\.json\) \|/);
   assert.equal(((await fresh.delegate(T3, { task: "x", target: { model: "cliproxyapi/kimi-k3" } })) as { block?: boolean }).block, true);
 
-  // `/tree` back to a point before the session filter, then to a branch that cleared it.
   fresh.branch.push({ type: "custom", customType: "pistack-model-filter", data: { filter: { include: [], exclude: [] } } });
   await fresh.emit("session_tree", {});
   assert.deepEqual(await fresh.delegate(T3, { task: "x", target: { model: "cliproxyapi/kimi-k3" } }), undefined, "an empty session filter is an explicit unrestricted override");

@@ -360,7 +360,6 @@ test("every upstream role line maps to an adapter role, so no delegate falls bac
   assert.doesNotMatch(mapping, /so the child runs on the parent model/);
   assert.match(rowFor("| role line `reflect judgment, divergent, synthesizer`"), /\| adapter role `judgment`\. \|$/);
   assert.match(rowFor("| role lines `reflect tooling`"), /`swarm workers`, and verification \| adapter role `general`\. \|$/);
-  // pstack 0.15.42 retired the how and why role lines, so the mapping names none of them.
   assert.doesNotMatch(mapping, /`how explorer`|`how explainer`|`why investigators`|`why synthesizer`/);
   assert.match(rowFor("| panel role lines `arena runners`"), /`interrogate reviewers` \| adapter panel roles `arena-runners`, `arena-cross-judge-pool`, `architect-runners`, and `interrogate-reviewers`\./);
   assert.match(rowFor("| panel role lines `arena runners`"), /An unset panel uses `judgment`, then `general`/);
@@ -411,7 +410,6 @@ test("the host mapping covers the default models and setup marker new in pstack 
   const rowFor = (start: string) => mapping.split("\n").find((line) => line.startsWith(start)) ?? "";
 
   assert.match(rowFor("| `claude-opus-5-5-xhigh`"), /`claude-fable-5-2-max`, `gemini-4-carbon-high`.* \| the role models configured by `\/skill:pistack-setup`/);
-  // poteto-mode asks the user to rerun setup when the rule lacks `# defaults: 2`; the adapter config never has it.
   assert.match(rowFor("| the rule's `# defaults: 2` line"), /\| does not apply\..*Do not tell the user to rerun setup for this\. \|$/);
   assert.match(rowFor("| panel role lines `arena runners`"), /`claude-fable-\*`, `claude-\*`, `gemini-\*`.*Apply the body's own family and vendor rules to those ids\./);
 });
@@ -436,7 +434,6 @@ test("symbolic links are never created and are reported instead", (t) => {
   try {
     symlinkSync(join(pluginDir, "skills", "linky", "real.txt"), join(pluginDir, "skills", "linky", "alias.txt"), "file");
   } catch (error) {
-    // Windows only lets an administrator or Developer Mode create symbolic links. CI runners can.
     if (process.platform === "win32" && (error as NodeJS.ErrnoException).code === "EPERM") {
       t.skip("creating a symbolic link needs Developer Mode or an administrator on Windows");
       return;
@@ -487,7 +484,6 @@ test("the setup skill makes asking for a thinking level a required step with a r
   assert.match(wrapper, /including the\s+thinking\s+column/);
   assert.match(wrapper, /Skip this step only when every\s+role is on\s+`inherit`/);
 
-  // The preset table must stay consistent with the code it describes.
   const rows = wrapper.split("\n").filter((line) => /^\s*\| (Balanced|Low cost|Maximum quality) /.test(line));
   assert.equal(rows.length, 3);
   for (const row of rows) {
@@ -619,7 +615,6 @@ test("each agent gets a prompt file that a child without named agents can read",
   assert.match(prompt, /Pi name in \.\.\/skill-names\.md\./);
   assert.match(prompt, /Never search `~\/\.cursor\/plugins\/`/);
   assert.equal(prompt.includes(root), false, "the file must not pin the cache location");
-  // The relative paths resolve from the file's own directory.
   assert.equal(existsSync(join(result.agentPromptsDir, "..", "..", "skills", "pistack-poteto-mode", "SKILL.md")), true);
   assert.equal(existsSync(join(result.agentPromptsDir, "..", "skill-names.md")), true);
 });

@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# Installs this package into a throwaway Pi config directory from a fresh git clone and
-# asserts what Pi actually loaded. Nothing here reads the caller's settings, packages, or
-# skills, so a capability the developer happens to have installed cannot mask a gap.
-#
-# Usage: test/isolated-install.sh [--keep]
-# Requires: git, node, npm, pi on PATH. Copies only auth.json from the real config dir.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

@@ -53,7 +53,6 @@ test("the certification probe CLI reports usage, success, and an unreadable tree
   assert.match(missing.stderr, /^probe failed: /);
 });
 
-// Windows needs privileges or developer mode for symbolic links, so this case runs on POSIX only.
 const symlinkSkip = process.platform === "win32" && "creating a symbolic link needs Developer Mode or an administrator on Windows";
 test("the certification probe CLI runs when invoked through a symbolic link", { skip: symlinkSkip }, () => {
   const root = makeTempDir("probe-link");

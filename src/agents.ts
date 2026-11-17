@@ -21,16 +21,10 @@ export interface EventBus {
 
 export interface AgentRegistrationResult {
   readonly registrations: readonly RuntimeRegistration[];
-  /** Agents no installed extension accepted as named agents. */
   readonly unregistered: readonly GeneratedAgent[];
-  /** Registrations a provider refused. */
   readonly diagnostics: readonly Diagnostic[];
 }
 
-/**
- * Hands the converted upstream agents to whichever installed extension owns the
- * pi-subagents runtime registration contract. No owner means no delegation provider.
- */
 export function registerAgents(
   bus: EventBus,
   agents: readonly GeneratedAgent[],
@@ -69,10 +63,6 @@ export function registerAgents(
   return { registrations, unregistered, diagnostics };
 }
 
-/**
- * T3 Code children have no named agents and load an agent from its prompt file, so a missing
- * pi-subagents registration only blocks delegation when T3 is not the resolved backend.
- */
 export function unregisteredAgentDiagnostics(
   unregistered: readonly GeneratedAgent[],
   backend: DelegationProvider | undefined,

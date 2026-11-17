@@ -6,16 +6,13 @@ import { getShellConfig } from "@earendil-works/pi-coding-agent";
 import { bashToolContext, probeExecutables, shellExecutables, type BashToolContext, type ShellProbe } from "../src/executables.ts";
 import { makeTempDir } from "./support/fixture.ts";
 
-/** The context Pi's `bash` tool uses on this machine: Git Bash on Windows, bash elsewhere. */
 function piContext(overrides: Partial<BashToolContext> = {}): BashToolContext {
   return { shell: getShellConfig(), cwd: process.cwd(), env: process.env, ...overrides };
 }
 
-/** The names a probe found, or a failure marker so a broken probe cannot look like "none found". */
 const found = (probe: ShellProbe) => (probe.kind === "ran" ? [...probe.found] : [`failed: ${probe.reason}`]);
 
 const posixPath = (path: string) => path.replace(/\\/g, "/");
-/** A directory as a PATH entry inside the shell: Git Bash writes `C:\x` as `/c/x`. */
 const shellDir = (path: string) => posixPath(path).replace(/^([A-Za-z]):/, (_, drive: string) => `/${drive.toLowerCase()}`);
 
 test("the shell probe reports which names its shell can run", () => {
@@ -53,7 +50,6 @@ test("an untrusted project cannot choose the shell the probe spawns", () => {
   assert.notEqual(untrusted.shell.shell, planted);
   assert.equal(untrusted.prefix, undefined);
 
-  // Trusted, the project setting wins, so Pi refuses the missing executable instead of using it.
   assert.throws(() => bashToolContext(project, agentDir, true), /Custom shell path not found/);
 });
 
@@ -69,7 +65,6 @@ test("every platform looks executables up in Pi's bash context, including its pr
 });
 
 test("a shell that resolves but cannot run a command is reported, even when a skill needs no executables", () => {
-  // A real executable that is not a shell: it cannot run the probe script.
   const broken = piContext({ shell: { shell: process.execPath, args: ["-c"] } });
   for (const names of [[], ["sh"]]) {
     const report = probeExecutables(names, () => broken);
@@ -80,7 +75,6 @@ test("a shell that resolves but cannot run a command is reported, even when a sk
 });
 
 test("a probe that exits cleanly without running is a failure, not an empty result", () => {
-  // A program that exits 0 but is not a shell, and a prefix that stops the command early.
   const exitsZero = piContext({ shell: { shell: process.execPath, args: ["-e", "process.exit(0)", "--"] } });
   const earlyExit = piContext({ prefix: "exit 0" });
   for (const [label, context] of [["non-shell", exitsZero], ["early exit", earlyExit]] as const) {

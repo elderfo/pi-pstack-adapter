@@ -4,7 +4,6 @@ import { accessSync, constants, existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { getShellConfig, SettingsManager } from "@earendil-works/pi-coding-agent";
 
-/** The shell Pi's `bash` tool runs commands with, as `getShellConfig()` reports it. */
 export interface ShellConfig {
   readonly shell: string;
   readonly args: readonly string[];
@@ -12,10 +11,8 @@ export interface ShellConfig {
   readonly commandTransport?: "argv" | "stdin";
 }
 
-/** Everything that decides what a command run by Pi's `bash` tool can find. */
 export interface BashToolContext {
   readonly shell: ShellConfig;
-  /** Pi's `shellCommandPrefix`, which runs before every command. */
   readonly prefix?: string;
   readonly cwd: string;
   readonly env: NodeJS.ProcessEnv;
@@ -23,11 +20,6 @@ export interface BashToolContext {
 
 export type ExecutableCheck = (name: string) => boolean;
 
-/**
- * The context Pi's `bash` tool would run in for this session. Project settings count only in a
- * trusted project, as in Pi itself, so an untrusted checkout cannot choose the executable or the
- * prefix this spawns. Throws when Pi cannot resolve a Bash shell.
- */
 export function bashToolContext(cwd: string, agentDir: string, projectTrusted: boolean): BashToolContext {
   const settings = SettingsManager.create(cwd, agentDir, { projectTrusted });
   return {
@@ -47,7 +39,6 @@ function piShellEnv(agentDir: string): NodeJS.ProcessEnv {
   return { ...process.env, [pathKey]: entries.includes(binDir) ? current : [binDir, current].filter(Boolean).join(delimiter) };
 }
 
-/** True when `command` is an executable file on this process's PATH. */
 export function onPath(command: string, platform: NodeJS.Platform = process.platform): boolean {
   const paths = (process.env.PATH ?? "").split(delimiter).filter((entry) => entry !== "");
   const extensions = platform === "win32" ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";") : [""];
@@ -59,16 +50,12 @@ export function onPath(command: string, platform: NodeJS.Platform = process.plat
         accessSync(candidate, constants.X_OK);
         return true;
       } catch {
-        // Not executable by this user. Keep looking.
       }
     }
   }
   return false;
 }
 
-// `$1` is a per-run nonce. Only lines carrying it count, so output from Pi's `shellCommandPrefix`
-// cannot fake a result, and the closing `done` line proves the script ran to the end: a program
-// that exits 0 without being a shell, or a prefix that exits early, never prints it.
 const PROBE_SCRIPT =
   'nonce=$1; shift; for name in "$@"; do command -v -- "$name" >/dev/null 2>&1 && printf "%s found %s\\n" "$nonce" "$name"; done; printf "%s done\\n" "$nonce"; exit 0';
 
@@ -76,12 +63,6 @@ export type ShellProbe =
   | { readonly kind: "ran"; readonly found: ReadonlySet<string> }
   | { readonly kind: "failed"; readonly reason: string };
 
-/**
- * Runs `command -v` for each name in the bash tool's context, with Pi's `shellCommandPrefix`
- * first, exactly as the tool would run a command. It runs even with no names, because a shell
- * that cannot run a command blocks every workflow. Names travel as positional arguments, never
- * inside the script text.
- */
 export function shellExecutables(context: BashToolContext, names: readonly string[]): ShellProbe {
   const script = context.prefix ? `${context.prefix}\n${PROBE_SCRIPT}` : PROBE_SCRIPT;
   // With `-c` the word after the script is `$0`; with `-s` the script arrives on stdin, and `--`
@@ -104,28 +85,27 @@ export function shellExecutables(context: BashToolContext, names: readonly strin
     const detail = (result.stderr ?? "").trim().split(/\r?\n/)[0];
     return { kind: "failed", reason: `it exited ${result.status ?? result.signal}${detail ? `: ${detail}` : ""}` };
   }
-  const lines = result.stdout.split(/\r?\n/);
-  if (!lines.includes(`${nonce} done`)) {
+  const probe = parseProbeOutput(result.stdout, nonce);
+  if (probe.kind === "failed") return probe;
+  return { kind: "ran", found: new Set([...probe.found].filter((name) => names.includes(name))) };
+}
+
+function parseProbeOutput(stdout: string, nonce: string): ShellProbe {
+  const doneLine = `${nonce} done`;
+  const foundPrefix = `${nonce} found `;
+  const lines = stdout.split(/\r?\n/);
+  if (!lines.includes(doneLine)) {
     return { kind: "failed", reason: "it exited without running the probe command" };
   }
-  const marker = `${nonce} found `;
-  const found = lines.filter((line) => line.startsWith(marker)).map((line) => line.slice(marker.length));
-  return { kind: "ran", found: new Set(found.filter((name) => names.includes(name))) };
+  const found = lines.filter((line) => line.startsWith(foundPrefix)).map((line) => line.slice(foundPrefix.length));
+  return { kind: "ran", found: new Set(found) };
 }
 
 export interface ExecutableReport {
   readonly has: ExecutableCheck;
-  /** Set when Pi's bash shell resolved but could not run a command. */
   readonly shellFailure?: string;
 }
 
-/**
- * Skill bodies run their commands through Pi's `bash` tool, so executables are looked up there:
- * with Pi's `shellCommandPrefix` and its `bin` directory on every platform, and on native Windows
- * inside Git Bash, whose PATH adds `/usr/bin` and `/mingw64/bin` to the PATH Pi started with.
- * Pass no context when the tool is inactive or its shell cannot be resolved; the shell
- * diagnostics report that, and the PATH scan answers for the executables.
- */
 export function probeExecutables(
   names: readonly string[],
   resolveContext: (() => BashToolContext) | undefined,

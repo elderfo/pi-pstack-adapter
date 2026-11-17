@@ -1,7 +1,3 @@
-/**
- * The one upstream revision this adapter release was tested against.
- * Adapter semantic versions move independently of these values.
- */
 export const CERTIFIED = {
   repo: "https://github.com/cursor/plugins",
   ref: "main",

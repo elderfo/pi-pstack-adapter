@@ -181,7 +181,6 @@ test("a T3-named tool that T3 Code's bridge did not register is ignored in favou
   assert.deepEqual(activateDelegation(tools, "t3", INSIDE_T3), { kind: "activated", backend: "pi-subagents" });
   assert.deepEqual(tools.active, ["read", "subagent"]);
 
-  // Outside T3 Code no bridge path exists, so even the real file name does not count.
   const outside = loadout(["read", "subagent", ...T3_TOOLS], ["read"]);
   assert.deepEqual(activateDelegation(outside, "t3", OUTSIDE_T3), { kind: "activated", backend: "pi-subagents" });
   assert.equal(outside.active.includes("mcp__t3-code__delegate_task"), false);
@@ -231,7 +230,6 @@ function host(options: { modeActive?: boolean; subagentInstalled?: boolean; insi
   );
   const handlers = new Map<string, Handler>();
   const pi = { ...tools, on: (event: string, handler: Handler) => handlers.set(event, handler) };
-  // Spreading copies the fake's methods, so read the live selection through the copy.
   pi.getActiveTools = () => [...pi.active];
   pi.setActiveTools = (names: string[]) => {
     pi.active = names;

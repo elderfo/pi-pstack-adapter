@@ -6,30 +6,18 @@ import { type ModelFilter, describeFilter, isRestricting, modelAllowed } from ".
 export type GateDecision = { readonly kind: "allow" } | { readonly kind: "block"; readonly reason: string };
 
 export interface GateContext {
-  /** The filter in force. Undefined or empty lets every call through. */
   readonly filter?: ModelFilter;
-  /** `provider/id` of the session's model, which a child with no model runs on. */
   readonly parentModel?: string;
-  /** Maps a requested model to its registry `provider/id`, or undefined when Pi does not know it. */
   readonly resolveModel: (model: string) => string | undefined;
 }
 
 const ALLOW: GateDecision = { kind: "allow" };
 
-/**
- * pi-subagents actions that start or restart a child, or schedule one, outside the `model` the
- * call names. The gate cannot see which model they run on, so it blocks them under a filter.
- * Steering can also revive a child. Status, listing, and stopping do not launch children.
- */
-const LAUNCHING_ACTIONS = new Set([
+const ACTIONS_WITH_UNSEEN_MODEL = new Set([
   "resume", "append-step", "debug.run", "refine", "project.open", "watchdog.configure", "steer",
   "schedule.create", "schedule.run", "schedule.run-due", "schedule.resume",
 ]);
 
-/**
- * Checks one delegation tool call against the session's model filter. Only `delegate_task` and
- * `subagent` are checked, whoever starts the delegation. Every other tool passes.
- */
 export function gateDelegation(toolName: string, input: unknown, context: GateContext): GateDecision {
   if (!isRestricting(context.filter)) return ALLOW;
   const args = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
@@ -67,11 +55,6 @@ function checkParent(where: string, context: GateContext & { filter: ModelFilter
   return ALLOW;
 }
 
-/**
- * T3's `delegate_task` starts one child per call. No `target`, or a target without a model, runs on
- * the parent's model. A provider other than Pi names models outside Pi's registry, so the filter
- * cannot match them.
- */
 function gateT3(args: Record<string, unknown>, context: GateContext): GateDecision {
   const filter = context.filter as ModelFilter;
   const scoped = { ...context, filter };
@@ -90,18 +73,13 @@ function gateT3(args: Record<string, unknown>, context: GateContext): GateDecisi
   return checkModel(model, "`delegate_task`", scoped);
 }
 
-/**
- * pi-subagents starts one child from `agent`, several from `tasks` or `chain`, or any number from a
- * workflow script. An agent can carry its own default model, and an external runner or another
- * machine picks its own, so under a filter every child must name an allowed model.
- */
 function gateSubagent(args: Record<string, unknown>, context: GateContext): GateDecision {
   const filter = context.filter as ModelFilter;
   const scoped = { ...context, filter };
   const options = typeof args.options === "object" && args.options !== null ? (args.options as Record<string, unknown>) : {};
   const action = args.action;
   if (typeof action === "string" && action.trim() !== "") {
-    if (LAUNCHING_ACTIONS.has(action.trim())) {
+    if (ACTIONS_WITH_UNSEEN_MODEL.has(action.trim())) {
       return block(`\`subagent\` action \`${action.trim()}\` can start a child on a model the adapter cannot see.`, filter);
     }
     return ALLOW;

@@ -1,25 +1,4 @@
 #!/usr/bin/env bash
-# Launch Pi against a throwaway config root with only this adapter and its capability
-# providers installed, so hands-on testing sees nothing from your real ~/.pi/agent.
-#
-# Usage:
-#   ./pi-sandbox.sh                    launch in the default scratch directory
-#   ./pi-sandbox.sh ~/code/myapp       launch in a real project, which Pi may edit
-#   ./pi-sandbox.sh --reset            delete the sandbox config first, then launch
-#   ./pi-sandbox.sh --cold             also clear the pstack cache, to retest first-run download
-#   ./pi-sandbox.sh --project-skills   also load the project's own .agents/skills and .pi/skills
-#   ./pi-sandbox.sh --global-skills    also load ~/.agents/skills, hidden by default
-#   ./pi-sandbox.sh --no-agents-md     start without your global AGENTS.md instructions
-#   ./pi-sandbox.sh <dir> -- <pi args> pass the rest through to pi, e.g. -- -p "hi"
-#
-# The sandbox isolates configuration, not the working tree. Pointing it at a real project
-# gives Pi the same write access it normally has there, so use a branch you can throw away.
-# PISTACK_SANDBOX_WORK sets the default directory. Copies only auth.json and the default
-# model from your real config, plus your global AGENTS.md unless --no-agents-md. The copied
-# credential is removed when Pi exits. Delete ~/.pistack-sandbox to revert the sandbox itself.
-#
-# Any pstack skill you run here has the same shell and file access Pi always has. The sandbox
-# separates configuration, not privilege.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,6 +7,29 @@ SANDBOX="$HOME/.pistack-sandbox"
 DEFAULT_WORK="${PISTACK_SANDBOX_WORK:-$HOME/.pistack-sandbox-work}"
 WORK="$DEFAULT_WORK"
 
+usage() {
+  cat <<'EOF'
+Launch Pi against a throwaway config root with only this adapter and its capability
+providers installed, so hands-on testing sees nothing from your real ~/.pi/agent.
+
+Usage:
+  ./pi-sandbox.sh                    launch in the default scratch directory
+  ./pi-sandbox.sh ~/code/myapp       launch in a real project, which Pi may edit
+  ./pi-sandbox.sh --reset            delete the sandbox config first, then launch
+  ./pi-sandbox.sh --cold             also clear the pstack cache, to retest first-run download
+  ./pi-sandbox.sh --project-skills   also load the project's own .agents/skills and .pi/skills
+  ./pi-sandbox.sh --global-skills    also load ~/.agents/skills, hidden by default
+  ./pi-sandbox.sh --no-agents-md     start without your global AGENTS.md instructions
+  ./pi-sandbox.sh <dir> -- <pi args> pass the rest through to pi, e.g. -- -p "hi"
+
+The sandbox isolates configuration, not the working tree. Pointing it at a real project
+gives Pi the same write access it normally has there, so use a branch you can throw away.
+PISTACK_SANDBOX_WORK sets the default directory. Copies only auth.json and the default
+model from your real config, plus your global AGENTS.md unless --no-agents-md. The copied
+credential is removed when Pi exits. Delete ~/.pistack-sandbox to revert the sandbox itself.
+EOF
+}
+
 reset=0
 cold=0
 skills=hidden
@@ -35,7 +37,7 @@ agents_md=1
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    -h|--help) sed -n '2,19p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) usage; exit 0 ;;
     --reset) reset=1; shift ;;
     --cold) cold=1; shift ;;
     --global-skills) skills=global; shift ;;
@@ -86,8 +88,6 @@ umask 077
 mkdir -p "$SANDBOX"
 cp "$REAL_CONFIG/auth.json" "$SANDBOX/auth.json"
 
-# Refreshed every run so edits to your real instructions reach the sandbox. These files point
-# at ~/.agents/AGENTS.md by absolute path, which the config override does not move.
 if [ "$agents_md" -eq 1 ]; then
   for name in AGENTS.md AGENTS.override.md CLAUDE.md; do
     [ -f "$REAL_CONFIG/$name" ] && cp "$REAL_CONFIG/$name" "$SANDBOX/$name"
@@ -96,26 +96,27 @@ else
   rm -f "$SANDBOX/AGENTS.md" "$SANDBOX/AGENTS.override.md" "$SANDBOX/CLAUDE.md"
 fi
 
-# Only seed settings on a fresh sandbox. Rewriting it would drop packages that `pi install`
-# recorded and any `pi config` choice made by hand.
-if [ ! -f "$SANDBOX/settings.json" ]; then
-  node -e '
-    const { readFileSync, writeFileSync } = require("node:fs");
-    const real = JSON.parse(readFileSync(process.argv[1], "utf8"));
-    writeFileSync(process.argv[2], JSON.stringify({
-      defaultProvider: real.defaultProvider,
-      defaultModel: real.defaultModel,
-      packages: [],
-      skills: [],
-      extensions: [],
-    }, null, 2) + "\n");
-  ' "$REAL_CONFIG/settings.json" "$SANDBOX/settings.json"
+seed_settings_only_when_fresh() {
+  if [ ! -f "$SANDBOX/settings.json" ]; then
+    node -e '
+      const { readFileSync, writeFileSync } = require("node:fs");
+      const real = JSON.parse(readFileSync(process.argv[1], "utf8"));
+      writeFileSync(process.argv[2], JSON.stringify({
+        defaultProvider: real.defaultProvider,
+        defaultModel: real.defaultModel,
+        packages: [],
+        skills: [],
+        extensions: [],
+      }, null, 2) + "\n");
+    ' "$REAL_CONFIG/settings.json" "$SANDBOX/settings.json"
 
-  cd "$SANDBOX"
-  pi install npm:pi-subagents
-  pi install npm:pi-ask-user
-  pi install "$REPO"
-fi
+    cd "$SANDBOX"
+    pi install npm:pi-subagents
+    pi install npm:pi-ask-user
+    pi install "$REPO"
+  fi
+}
+seed_settings_only_when_fresh
 
 if [ "$WORK" != "$DEFAULT_WORK" ] && [ -d "$WORK/.git" ]; then
   echo "Sandbox config: $SANDBOX"
@@ -124,8 +125,6 @@ if [ "$WORK" != "$DEFAULT_WORK" ] && [ -d "$WORK/.git" ]; then
 fi
 
 cd "$WORK"
-# Not `exec`: the copied credential is removed when Pi exits, so it does not sit at a
-# predictable path between sessions. `pi install` above already recorded the packages.
 trap 'rm -f "$SANDBOX/auth.json"' EXIT INT TERM
 status=0
 pi "${skill_args[@]}" "$@" || status=$?

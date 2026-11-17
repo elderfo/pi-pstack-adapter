@@ -1,12 +1,9 @@
-import { posix, win32 } from "node:path";
+import { samePath } from "./paths.ts";
 import type { DelegationProvider } from "./types.ts";
 
-/** T3 Code sets this to the path of the Pi extension that owns the `mcp__t3-code__` tools. */
 export const T3_BRIDGE_ENV = "T3_PI_MCP_EXTENSION_PATH";
 
-/** The pi-subagents tool a delegation skill calls. */
 export const SUBAGENT_TOOL = "subagent";
-/** The pi-subagents loader that exposes a registered but inactive `subagent` tool. */
 export const SUBAGENT_LOADER = "subagents_enable";
 
 /**
@@ -21,11 +18,8 @@ export const T3_CAPABILITIES_TOOL = `${T3_TOOL_PREFIX}orchestrator_capabilities`
 export interface DelegationBackend {
   readonly id: DelegationProvider;
   readonly label: string;
-  /** The tool that starts a child. Its presence decides whether the backend exists. */
   readonly tool: string;
-  /** Tools a delegating workflow also needs, activated alongside `tool` when registered. */
   readonly companions: readonly string[];
-  /** Parameter names `tool` must accept for the backend to be usable. */
   readonly requiredParameters: readonly string[];
 }
 
@@ -53,7 +47,6 @@ export function isDelegationProvider(value: unknown): value is DelegationProvide
   return typeof value === "string" && (DELEGATION_PROVIDERS as readonly string[]).includes(value);
 }
 
-/** The preferred backend first, then the fallback. */
 export function delegationOrder(preferred: DelegationProvider): readonly DelegationBackend[] {
   return [preferred, ...DELEGATION_PROVIDERS.filter((id) => id !== preferred)].map((id) => DELEGATION_BACKENDS[id]);
 }
@@ -65,13 +58,11 @@ export interface ToolPresence {
   readonly sourceInfo?: { readonly source?: string; readonly path?: string };
 }
 
-/** A hidden registration only reserves a name, so it does not count as a callable tool. */
 export function callableTool<T extends ToolPresence>(tools: readonly T[], name: string): T | undefined {
   return tools.find((tool) => tool.name === name && tool.exposure !== "hidden");
 }
 
 export interface DelegationHost {
-  /** `T3_PI_MCP_EXTENSION_PATH`, set only when T3 Code launched this Pi process. */
   readonly t3BridgePath?: string;
   readonly platform?: NodeJS.Platform;
 }
@@ -85,16 +76,10 @@ export type DelegationResolution =
       readonly kind: "resolved";
       readonly backend: DelegationBackend;
       readonly tool: ToolPresence;
-      /** Companion tools that pass the same ownership check as `tool`. */
       readonly companions: readonly string[];
     }
   | { readonly kind: "unavailable"; readonly problems: readonly string[] };
 
-/**
- * The first usable backend in preference order. Detection and activation both use this, so the
- * status report always names the backend a workflow actually gets. A T3 tool counts only when
- * T3 Code's own bridge registered it, because any extension or MCP server can claim the name.
- */
 export function resolveDelegation(
   tools: readonly ToolPresence[],
   preferred: DelegationProvider,
@@ -129,10 +114,7 @@ function fromT3Bridge(tool: ToolPresence, host: DelegationHost): boolean {
   const owner = tool.sourceInfo?.path;
   if (!host.t3BridgePath || !owner) return false;
   const platform = host.platform ?? process.platform;
-  const paths = platform === "win32" ? win32 : posix;
-  // Windows paths are case-insensitive, so compare them after resolving both sides.
-  const key = (value: string) => (platform === "win32" ? paths.resolve(value).toLowerCase() : paths.resolve(value));
-  return key(owner) === key(host.t3BridgePath);
+  return samePath(owner, host.t3BridgePath, platform);
 }
 
 export function parameterNames(parameters: unknown): Set<string> {

@@ -33,11 +33,8 @@ export interface StatusInput {
   readonly modeActive: boolean;
   readonly cacheRoot: string;
   readonly bootstrapped: boolean;
-  /** Runtime findings that generation could not know, such as agent registration results. */
   readonly runtimeDiagnostics?: readonly Diagnostic[];
-  /** The model filter in force and where it came from. None when omitted. */
   readonly filter?: FilterOrigin;
-  /** `provider/id` of the session's model, which an inheriting role runs on. */
   readonly parentModel?: string;
 }
 
@@ -184,19 +181,14 @@ function describeSeat(seat: PanelSeat): string {
 
 const PARENT_MODEL = "the model of the agent that starts the panel";
 
-/**
- * The model a seat runs on, when it is already determined. A default seat runs as `pstack:<role>`,
- * so with `ranked` its first choice counts; without it, a seat with several choices is open,
- * because the delegating agent may override the ranking.
- */
-function seatModel(seat: PanelSeat, ranked: boolean): string | undefined {
+function seatModel(seat: PanelSeat, choice: "ranked" | "open"): string | undefined {
   switch (seat.kind) {
     case "parent":
       return PARENT_MODEL;
     case "model":
       return seat.spec.model;
     case "choice": {
-      if (ranked) return seat.choices[0]?.model;
+      if (choice === "ranked") return seat.choices[0]?.model;
       const models = new Set(seat.choices.map((choice) => choice.model));
       return models.size === 1 ? [...models][0] : undefined;
     }
@@ -205,24 +197,19 @@ function seatModel(seat: PanelSeat, ranked: boolean): string | undefined {
   }
 }
 
-function seatModels(seats: readonly PanelSeat[], ranked: boolean): Set<string> | undefined {
+function seatModels(seats: readonly PanelSeat[], choice: "ranked" | "open"): Set<string> | undefined {
   const models = new Set<string>();
   for (const seat of seats) {
-    const model = seatModel(seat, ranked);
+    const model = seatModel(seat, choice);
     if (model !== undefined) models.add(model);
     else if (seat.kind === "choice") return undefined;
   }
   return models;
 }
 
-/**
- * Upstream's default panels span several model families and two vendors. A panel whose seats all land on one model
- * lost that because of configuration, not because no other model exists, so say so where the
- * agent reads it. Families are left to the agent, which knows them better than a prefix list.
- */
 export function panelWarning(panel: ResolvedPanel, config: AdapterConfig, context: ResolutionContext = {}): string | undefined {
   const usable = panel.seats.filter((seat) => seat.kind !== "blocked");
-  const models = seatModels(usable, true);
+  const models = seatModels(usable, "ranked");
   const pool = panel.role === "arena-cross-judge-pool";
   // Upstream lets a panel line hold one entry on purpose, so only the judge pool warns at one seat.
   if (models === undefined || models.size !== 1 || (usable.length < 2 && !pool)) return undefined;
@@ -242,7 +229,7 @@ export function panelWarning(panel: ResolvedPanel, config: AdapterConfig, contex
  */
 function poolEffect(panel: ResolvedPanel, config: AdapterConfig, model: string | undefined, context: ResolutionContext): string {
   const fallback = defaultSeats(config, context);
-  const fallbackModels = seatModels(fallback, false);
+  const fallbackModels = seatModels(fallback, "open");
   const lead =
     model === PARENT_MODEL
       ? "and an `inherit` entry never judges, so arena"
@@ -253,7 +240,6 @@ function poolEffect(panel: ResolvedPanel, config: AdapterConfig, model: string |
     : `${lead} tries its default pool, ${fallback.map(describeSeat).join("; ")}, before it skips the judge`;
 }
 
-/** The panels a workflow reads, for its `check` report. */
 export function renderPanels(config: AdapterConfig, roles: readonly string[], context: ResolutionContext = {}): string {
   const lines = roles.map((role) => {
     const panel = resolvePanel(config, role, context);
@@ -264,7 +250,6 @@ export function renderPanels(config: AdapterConfig, roles: readonly string[], co
   return `Panels this workflow uses, one seat per entry:\n${lines.join("\n")}`;
 }
 
-/** One `model roles` row: the model column and the thinking column. */
 function describeRole(resolution: RoleResolution, role: string): readonly [string, string] {
   const via = resolution.from === role ? "" : ` (from ${resolution.from})`;
   switch (resolution.kind) {
@@ -285,10 +270,6 @@ function describeRole(resolution: RoleResolution, role: string): readonly [strin
   }
 }
 
-/**
- * The delegation rules a workflow's `check` report adds when pools, a model filter, or blocked roles
- * are in play. Nothing when none of them is, so the report stays as it was.
- */
 export function renderModelPolicy(config: AdapterConfig, origin: FilterOrigin, parentModel: string | undefined): string | undefined {
   const filter = filterOf(origin);
   const context: ResolutionContext = { filter, parentModel };
@@ -357,12 +338,7 @@ export function renderCheck(
   skill: GeneratedSkill,
   entry: RegistryEntry,
   report: PrerequisiteReport,
-  /** The resolved `delegation` capability, named for a workflow that delegates. */
-  delegation?: CapabilityStatus,
-  /** The workflow's panels, from `renderPanels`. */
-  panels?: string,
-  /** Pools, the model filter, and blocked roles, from `renderModelPolicy`. */
-  policy?: string,
+  { delegation, panels, policy }: { readonly delegation?: CapabilityStatus; readonly panels?: string; readonly policy?: string } = {},
 ): string {
   const parts = [`\`/skill:${skill.generatedName}\` is tier **${skill.tier}**.`];
   if (entry.note) parts.push(entry.note);
@@ -408,24 +384,16 @@ function delegationInstruction(backend: DelegationProvider, tools: readonly stri
   return lines.join(" ");
 }
 
-/** Platforms a release certifies. Windows means native Windows with Pi's Git Bash `bash` tool. */
 export function platformSupport(platform: string): PlatformSupport {
   return platform === "linux" || platform === "darwin" || platform === "win32" ? "supported" : "experimental";
 }
 
 export interface ShellState {
-  /** Why Pi could not resolve the shell its `bash` tool runs, or undefined when it can. */
   readonly shellError?: string;
-  /** Why the resolved shell could not run a command, when a probe ran and failed. */
   readonly runError?: string;
-  /** Whether the `bash` tool is in the active tool set, for example not replaced by `powershell`. */
   readonly bashToolActive: boolean;
 }
 
-/**
- * Upstream skill bodies are written as Bash commands for Pi's `bash` tool, so a session without
- * that tool or its shell cannot run them. On Windows that shell is Git Bash.
- */
 export function shellDiagnostics(state: ShellState): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   if (state.shellError !== undefined) {

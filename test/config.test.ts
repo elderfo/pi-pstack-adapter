@@ -73,13 +73,13 @@ test("an untested ref and a custom repository get different warnings", () => {
 
 test("pins to previously certified pstack commits lose tested trust", () => {
   for (const commit of [
-    "0b8e952052d482ee6de06deebf14d590d77b1b34", // pstack 0.15.26
-    "d457567332aa6989e753ea289f30ea2bfbc80bc0", // pstack 0.15.28
-    "88d47514b82e7c44f00f2b2a72ff6dd12158038c", // pstack 0.15.29
-    "eb4db2b55b2b7dec3d9282754cddf0a56bf4ff10", // pstack 0.15.30
-    "9580c23696ac8d7abed0c166f2f9918800afb819", // pstack 0.15.32
-    "519d36aa98955bf680db01bcde5fdfba686dc901", // pstack 0.15.34
-    "c742dd61706fbacc1b95f1a20b7b988cf096ce6c", // pstack 0.15.36
+    "0b8e952052d482ee6de06deebf14d590d77b1b34",
+    "d457567332aa6989e753ea289f30ea2bfbc80bc0",
+    "88d47514b82e7c44f00f2b2a72ff6dd12158038c",
+    "eb4db2b55b2b7dec3d9282754cddf0a56bf4ff10",
+    "9580c23696ac8d7abed0c166f2f9918800afb819",
+    "519d36aa98955bf680db01bcde5fdfba686dc901",
+    "c742dd61706fbacc1b95f1a20b7b988cf096ce6c",
   ]) {
     const previous = mergeConfig([layer("global", { pinnedCommit: commit })]);
     assert.equal(trustOf(previous), "untested-ref", commit);
@@ -371,7 +371,6 @@ test("a role name or model string that could inject markup is refused everywhere
   assert.match(invalidRoleMessage("__proto__"), /Invalid role name "__proto__"/);
 
   assert.throws(() => parseModelRoles("__proto__=a/b"), /Invalid role name/);
-  // `|` separates a pool's entries, so each entry is checked on its own.
   assert.throws(() => parseModelRoles("feature=a/b|c`d"), /Role "feature"\. Invalid pool/);
   assert.throws(() => parseModelRoles("feature=a/b|"), /Invalid pool/);
   assert.throws(() => parseModelRoles("feature=a/b:"), /Invalid model/);

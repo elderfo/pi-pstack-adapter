@@ -7,8 +7,7 @@ export type Trust = "tested" | "untested-ref" | "untested-repo" | "local";
 export interface ResolvedSource {
   readonly selection: SourceSelection;
   readonly trust: Trust;
-  /** Empty for a local checkout that is not a git worktree. */
-  readonly commit: string;
+  readonly commit?: string;
   readonly checkoutDir: string;
   readonly pluginDir: string;
 }
@@ -22,7 +21,6 @@ export type SupportTier =
 
 export type CapabilityId = "delegation" | "structured-question";
 
-/** Where a delegating workflow starts its children. */
 export type DelegationProvider = "t3" | "pi-subagents";
 
 export interface RegistryEntry {
@@ -30,9 +28,7 @@ export interface RegistryEntry {
   readonly capabilities: readonly CapabilityId[];
   readonly executables: readonly string[];
   readonly note?: string;
-  /** Adapter-owned body file under `adapter-skills/`, replacing the upstream body. */
   readonly replacement?: string;
-  /** Unprefixed generated name when it differs from the upstream directory name. */
   readonly rename?: string;
 }
 
@@ -46,8 +42,6 @@ export interface UpstreamManifest {
 export interface UpstreamResource {
   readonly name: string;
   readonly kind: "skill" | "agent";
-  /** Skill directory, or the agents directory for an agent. */
-  readonly dir: string;
   readonly entryPath: string;
 }
 
@@ -88,7 +82,6 @@ export interface GenerationResult {
   readonly skillsDir: string;
   readonly skills: readonly GeneratedSkill[];
   readonly agents: readonly GeneratedAgent[];
-  /** One `<generatedName>.md` system prompt per agent, for providers without named agents. */
   readonly agentPromptsDir: string;
   readonly diagnostics: readonly Diagnostic[];
 }
@@ -97,9 +90,7 @@ export interface CapabilityStatus {
   readonly id: CapabilityId;
   readonly available: boolean;
   readonly provider?: string;
-  /** The delegation backend that satisfies `delegation`, when one does. */
   readonly backend?: DelegationProvider;
-  /** Every tool of that backend the adapter vetted: the delegation tool, then its companions. */
   readonly tools?: readonly string[];
   readonly recommendation: string;
 }

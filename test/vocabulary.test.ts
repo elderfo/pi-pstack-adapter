@@ -18,7 +18,6 @@ test("every Cursor term has a host mapping row that names it in the Cursor colum
 });
 
 test("every Cursor term matches the upstream wording it was ported for", () => {
-  // Phrases from pstack 0.15.34 skills, plus upstream's own TERMS alternatives.
   const examples: Readonly<Record<string, readonly string[]>> = {
     "`Task` tool": ["Spawn `Task` with", "Every spawn is a Task subagent", "one Task call"],
     "`AskQuestion`": ["use AskQuestion"],

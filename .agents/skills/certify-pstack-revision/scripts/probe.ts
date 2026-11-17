@@ -1,14 +1,3 @@
-// Generates wrappers from an exported pstack tree with this checkout's adapter, then checks
-// that every upstream body that is not replaced survived byte for byte.
-//
-// Usage: node --experimental-strip-types --no-warnings probe.ts <pluginDir> <commit> <cacheRoot>
-//   pluginDir  the exported `pstack/` directory
-//   commit     the full upstream commit the tree was exported from
-//   cacheRoot  a scratch directory; use a fresh one for each adapter state you compare
-// It also scans every upstream skill's Markdown for Cursor terms that the host mapping has no row
-// for, the way upstream's harness generator checks its Claude Code adapter.
-// Exits 0 only when no body mismatches, and neither generation nor the scan reports a warning or error.
-// test/certify-probe.test.ts covers this script.
 import { readFileSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +5,7 @@ import { CERTIFIED } from "../../../../src/certified.ts";
 import { DEFAULT_DELEGATION } from "../../../../src/delegation.ts";
 import { extractUpstreamBody, generate, hostMappingDocument } from "../../../../src/generate.ts";
 import { discover, isDiagnostic, parseResource, readManifest } from "../../../../src/manifest.ts";
+import { samePath } from "../../../../src/paths.ts";
 import { entryFor } from "../../../../src/registry.ts";
 import type { Diagnostic, ResolvedSource } from "../../../../src/types.ts";
 import { CURSOR_TERMS, type CursorTerm, type SkillMarkdown, skillMarkdown, vocabularyDiagnostics } from "../../../../src/vocabulary.ts";
@@ -35,7 +25,6 @@ export function probe(
   pluginDir: string,
   commit: string,
   cacheRoot: string,
-  /** Cursor terms to scan for. Tests pass a term with no row to prove the scan can fail. */
   terms: readonly CursorTerm[] = CURSOR_TERMS,
 ): ProbeReport {
   const source: ResolvedSource = {
@@ -55,11 +44,10 @@ export function probe(
   const resources = discover(pluginDir, readManifest(pluginDir)).resources.filter((r) => r.kind === "skill");
   for (const resource of [...resources].sort((a, b) => a.name.localeCompare(b.name))) {
     if (entryFor(resource.name).replacement) {
-      // Pi never sees a replaced skill's upstream text, so its Cursor terms need no row.
       replaced.push(resource.name);
       continue;
     }
-    markdown.push(...skillMarkdown(resource.name, resource.dir, resource.entryPath));
+    markdown.push(...skillMarkdown(resource.name, dirname(resource.entryPath), resource.entryPath));
     const parsed = parseResource(resource);
     const wrapperPath = wrapperPaths.get(resource.name);
     if (isDiagnostic(parsed) || !wrapperPath) {
@@ -91,13 +79,9 @@ export function probe(
 function isEntryPoint(): boolean {
   const entry = process.argv[1];
   if (!entry) return false;
-  // Canonical paths, so a symlinked or differently cased entry path still runs the CLI.
-  const canonical = (path: string) => {
-    const real = realpathSync.native(path);
-    return process.platform === "win32" ? real.toLowerCase() : real;
-  };
+  const comparablePath = (path: string) => realpathSync.native(path);
   try {
-    return canonical(fileURLToPath(import.meta.url)) === canonical(resolve(entry));
+    return samePath(comparablePath(fileURLToPath(import.meta.url)), comparablePath(resolve(entry)), process.platform);
   } catch {
     return false;
   }
@@ -106,7 +90,15 @@ function isEntryPoint(): boolean {
 if (isEntryPoint()) {
   const [pluginDir, commit, cacheRoot] = process.argv.slice(2);
   if (!pluginDir || !commit || !cacheRoot) {
-    console.error("usage: probe.ts <pluginDir> <commit> <cacheRoot>");
+    console.error(
+      [
+        "usage: probe.ts <pluginDir> <commit> <cacheRoot>",
+        "  pluginDir  the exported `pstack/` directory",
+        "  commit     the full upstream commit the tree was exported from",
+        "  cacheRoot  a fresh scratch directory for each adapter state you compare",
+        "Exits 0 only when no body mismatches, and neither generation nor the scan reports a warning or error.",
+      ].join("\n"),
+    );
     process.exit(2);
   }
   try {

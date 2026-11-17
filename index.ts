@@ -40,7 +40,7 @@ import {
 } from "./src/config.ts";
 import { generate } from "./src/generate.ts";
 import { safeEcho } from "./src/echo.ts";
-import { MODE_ENTRY_TYPE, modeFromEntries, modeInstruction } from "./src/mode.ts";
+import { MODE_ENTRY_TYPE, latestModeToggle, modeInstruction } from "./src/mode.ts";
 import { CONFIG_FILE_NAME, agentDir, cacheRoot } from "./src/paths.ts";
 import { bashToolContext, probeExecutables } from "./src/executables.ts";
 import { SKILL_PANELS, entryFor, isPanelRole } from "./src/registry.ts";
@@ -76,18 +76,16 @@ export default function (pi: ExtensionAPI) {
   let agentDiagnostics: readonly Diagnostic[] = [];
   let unregisteredAgents: readonly GeneratedAgent[] = [];
   let modeActive = false;
-  /** This session's own model filter, restored from the active branch. It wins over a saved one. */
   let sessionFilter: ModelFilter | undefined;
   let savedFilter: AdapterConfig["modelFilter"];
-  /** Why the config files could not be read, so the saved filter is unknown. */
   let configError: string | undefined;
-  const commandNamespace = startupNamespace();
+  const commandNamespace = namespaceWithoutProjectLayer();
 
   pi.on("session_start", async (_event, ctx) => {
     disposeAgents();
     state = undefined;
     startupError = undefined;
-    modeActive = modeFromEntries(ctx.sessionManager.getBranch() as never[]);
+    modeActive = latestModeToggle(ctx.sessionManager.getBranch() as never[]);
     sessionFilter = sessionFilterFromEntries(ctx.sessionManager.getBranch() as never[]);
     savedFilter = undefined;
     configError = undefined;
@@ -145,31 +143,26 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  // `/tree` moves the active branch, and with it the session filter that branch recorded.
   pi.on("session_tree", async (_event, ctx) => {
     sessionFilter = sessionFilterFromEntries(ctx.sessionManager.getBranch() as never[]);
   });
 
-  // A `pstack:<role>` model is rewritten to the model the adapter picks for that role. The model
-  // filter then applies to every delegation in this session, pstack or not, because a call that
-  // names a concrete model names no role. A blocked call fails; nothing retries it.
   pi.on("tool_call", async (event, ctx) => {
     if (event.toolName !== T3_DELEGATE_TOOL && event.toolName !== SUBAGENT_TOOL) return;
     const unreadable = configBlock();
     if (unreadable) return unreadable;
-    const context = {
+    const currentGateContext = () => ({
       filter: filterOf(activeFilter(sessionFilter, savedFilter)),
       parentModel: parentModelOf(ctx),
       resolveModel: (model: string) => resolveRegistryModel(ctx, model),
-    };
+    });
+    const context = currentGateContext();
     const route = await routeDelegation(event.toolName, event.input, { ...context, config: state?.config, parentThinking: ctx.thinkingLevel });
     if (route.kind === "block") return { block: true, reason: route.reason };
     if (route.kind === "rewrite") applyRewrite(event.input as Record<string, unknown>, route.input);
-    // Read the config state, filter, and parent model again: a pick that waits on a service could span
-    // a reload, a `set_filter`, or a model change.
     const unreadableNow = configBlock();
     if (unreadableNow) return unreadableNow;
-    const decision = gateDelegation(event.toolName, event.input, { ...context, filter: filterOf(activeFilter(sessionFilter, savedFilter)), parentModel: parentModelOf(ctx) });
+    const decision = gateDelegation(event.toolName, event.input, currentGateContext());
     if (decision.kind === "block") return { block: true, reason: decision.reason };
   });
 
@@ -310,7 +303,6 @@ export default function (pi: ExtensionAPI) {
     },
     ctx: ExtensionContext,
   ): Promise<string> {
-    // A restriction must be settable even when the upstream checkout did not resolve.
     if (params.action === "set_filter") return setFilter(params, params.scope ?? "session", ctx);
     if (startupError) return `The pstack adapter did not start: ${startupError.message}`;
     if (!state) return "The pstack adapter has not resolved its upstream checkout yet.";
@@ -335,7 +327,6 @@ export default function (pi: ExtensionAPI) {
           parentModel: parentModelOf(ctx),
           runtimeDiagnostics: [
             ...agentDiagnostics,
-            // Judged now, because T3's tools can connect after the agents were registered.
             ...unregisteredAgentDiagnostics(unregisteredAgents, delegation?.backend, state.generation.agentPromptsDir),
             ...shellDiagnostics(probedShellState(ctx, pi.getActiveTools())),
           ],
@@ -373,7 +364,6 @@ export default function (pi: ExtensionAPI) {
       return `No pstack skill named ${safeEcho(requested)}. Run the adapter tool with action "status" for the full list.`;
     }
     const resolved = shellState(ctx, pi.getActiveTools());
-    // An inactive bash tool or an unresolved shell is already a blocker, so do not spawn anything.
     const usable = resolved.bashToolActive && resolved.shellError === undefined;
     const executables = probeExecutables(skill.executables, usable ? () => sessionBashContext(ctx) : undefined);
     const shell: ShellState = { ...resolved, runError: executables.shellFailure };
@@ -386,9 +376,11 @@ export default function (pi: ExtensionAPI) {
       skill,
       entryFor(skill.upstreamName, skill.generatedName.slice(prefix.length)),
       checkPrerequisites(skill.capabilities, current, skill.executables, executables.has, shellProblems),
-      current.find((capability) => capability.id === "delegation"),
-      panels ? renderPanels(state.config, panels, { filter: filterOf(origin), parentModel }) : undefined,
-      renderModelPolicy(state.config, origin, parentModel),
+      {
+        delegation: current.find((capability) => capability.id === "delegation"),
+        panels: panels ? renderPanels(state.config, panels, { filter: filterOf(origin), parentModel }) : undefined,
+        policy: renderModelPolicy(state.config, origin, parentModel),
+      },
     );
   }
 
@@ -435,11 +427,6 @@ export default function (pi: ExtensionAPI) {
       : `Role \`${role}\` now uses \`${plan.spec.model}\` with thinking \`${plan.spec.thinking}\`. Written to ${path}.${note}`;
   }
 
-  /**
-   * Status and `check` read roles from `state`, so a written role takes effect now. Only `models`
-   * moves: the source and generation stay as they were until the next start. Returns a note for
-   * the reply when the session view does not match what was written.
-   */
   function refreshModels(scope: "user" | "project", ctx: ExtensionContext): string {
     const untrusted =
       scope === "project" && !ctx.isProjectTrusted()
@@ -575,11 +562,6 @@ export default function (pi: ExtensionAPI) {
     return `Upstream source is now ${repo}@${params.ref}, recorded as commit ${commit} in ${path}.${scopeNote} Restart Pi or run /reload to regenerate.`;
   }
 
-  /**
-   * Changing the upstream source decides which third-party content becomes Pi skills and
-   * where the adapter reaches on the network. The model may propose it; only a person may
-   * approve it, because an untrusted upstream body can ask the model to propose anything.
-   */
   async function approveSource(ctx: ExtensionContext, question: string): Promise<boolean> {
     if (!ctx.hasUI) return false;
     return ctx.ui.confirm("Change the pstack source?", question);
@@ -590,7 +572,6 @@ export default function (pi: ExtensionAPI) {
       try {
         registration.dispose();
       } catch {
-        // A provider that already tore down its registry is not an adapter problem.
       }
     }
     registrations = [];
@@ -598,11 +579,7 @@ export default function (pi: ExtensionAPI) {
   }
 }
 
-/**
- * Command names are fixed at load time, before any project trust decision, so a project
- * cannot rename another project's commands. Everything else honors the project layer.
- */
-function startupNamespace(): string {
+function namespaceWithoutProjectLayer(): string {
   try {
     const layers: ConfigLayer[] = [];
     const global = readConfigFile(userConfigPath());
@@ -610,8 +587,6 @@ function startupNamespace(): string {
     layers.push(environmentLayer(process.env));
     return mergeConfig(layers).namespace;
   } catch {
-    // A broken config must not take the diagnostics commands down with it. session_start
-    // reloads the same config inside a try/catch and reports the real error there.
     return DEFAULT_NAMESPACE;
   }
 }
@@ -623,7 +598,6 @@ function parentModelOf(ctx: ExtensionContext): string | undefined {
   return ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined;
 }
 
-/** A requested model as its registry `provider/id`. A bare id counts only when exactly one model has it. */
 function resolveRegistryModel(ctx: ExtensionContext, model: string): string | undefined {
   const ids = ctx.modelRegistry.getAvailable().map((candidate) => ({ full: `${candidate.provider}/${candidate.id}`, id: candidate.id }));
   const exact = ids.find((candidate) => candidate.full === model);
@@ -639,12 +613,14 @@ function loadConfig(ctx: ExtensionContext, filterOnly = false): AdapterConfig {
   if (global) layers.push(global);
   if (ctx.isProjectTrusted()) {
     const project = readConfigFile(projectConfigPath(ctx.cwd));
-    // Command names are bound before trust resolves, so a project cannot move the namespace
-    // without desynchronizing `/<ns>-status` from the generated `<ns>-*` skills.
-    if (project) layers.push({ ...project, values: { ...project.values, namespace: undefined } });
+    if (project) layers.push(withoutProjectNamespace(project));
   }
   layers.push(environmentLayer(filterOnly ? { ...process.env, PISTACK_MODELS: undefined } : process.env));
   return mergeConfig(filterOnly ? layers.map((layer) => ({ ...layer, values: { modelFilter: layer.values.modelFilter } })) : layers);
+}
+
+function withoutProjectNamespace(layer: ConfigLayer): ConfigLayer {
+  return { ...layer, values: { ...layer.values, namespace: undefined } };
 }
 
 function configPath(scope: "user" | "project", ctx: ExtensionContext): string {
@@ -664,7 +640,6 @@ async function bringUpUpstream(config: AdapterConfig, ctx: ExtensionContext): Pr
   let bootstrapped = false;
   let source: ResolvedSource;
   try {
-    // Probe without permission first, so the report can tell a download apart from a reuse.
     source = await resolveSource({ config, mayBootstrap: false });
   } catch (error) {
     if (!(error instanceof BootstrapRequiredError)) throw error;
@@ -689,14 +664,14 @@ function buildState(
   root: string,
   bootstrapped: boolean,
 ): AdapterState {
+  const localCheckoutNeverCached = source.selection.kind === "local";
   const generation = generate({
     source,
     namespace: config.namespace,
     cacheRoot: root,
     adapterVersion: ADAPTER_VERSION,
     delegation: config.delegation,
-    // A local checkout has uncommitted edits the digest cannot see, so never reuse its output.
-    force: source.selection.kind === "local",
+    force: localCheckoutNeverCached,
   });
 
   return {
@@ -723,7 +698,6 @@ function shellState(ctx: ExtensionContext, activeTools: readonly string[]): Shel
   return { shellError, bashToolActive: activeTools.includes("bash") };
 }
 
-/** `shellState` plus one real command, for reports that can afford to start the shell. */
 function probedShellState(ctx: ExtensionContext, activeTools: readonly string[]): ShellState {
   const resolved = shellState(ctx, activeTools);
   if (!resolved.bashToolActive || resolved.shellError !== undefined) return resolved;

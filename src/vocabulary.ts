@@ -2,21 +2,13 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import type { Diagnostic } from "./types.ts";
 
-/**
- * A Cursor name that an upstream body can use. `key` must appear in the Cursor column of a
- * host mapping row, so deleting the row, or adding a term without one, fails certification.
- */
 export interface CursorTerm {
   readonly key: string;
   readonly pattern: RegExp;
 }
 
-/**
- * Ported from the `TERMS` list in upstream's `scripts/generate-pstack-harness-trees.mjs`, which
- * fails when a skill uses a term that `pstack/docs/harness/claude-code.md` has no row for. The
- * keys name this adapter's rows. Upstream's single "Cursor-only features" term is split into one
- * term per feature, and the terms after it cover rows upstream does not scan for.
- */
+const RULES_EXCEPT_PSTACK_MODELS = /\.cursor\/rules(?!\/pstack-models\.mdc)/;
+
 export const CURSOR_TERMS: readonly CursorTerm[] = [
   { key: "`Task` tool", pattern: /`Task`|\bTask (tool|subagent|call)/ },
   { key: "`AskQuestion`", pattern: /AskQuestion/ },
@@ -40,8 +32,7 @@ export const CURSOR_TERMS: readonly CursorTerm[] = [
   { key: "`~/.cursor/rules/pstack-models.mdc`", pattern: /pstack-models\.mdc/ },
   { key: "`.cursor/skills/`", pattern: /\.cursor\/skills/ },
   { key: "`~/.cursor/plugins/`", pattern: /\.cursor\/plugins|\.cursor-plugin/ },
-  // pstack-models.mdc has its own row, so it does not count as a use of the general rule row.
-  { key: "`.cursor/rules/*.mdc`", pattern: /\.cursor\/rules(?!\/pstack-models\.mdc)|always-applied rule/ },
+  { key: "`.cursor/rules/*.mdc`", pattern: new RegExp(`${RULES_EXCEPT_PSTACK_MODELS.source}|always-applied rule`) },
   { key: "agent-transcripts", pattern: /agent-transcripts|\.cursor\/projects/ },
   { key: "Bugbot", pattern: /Bugbot/ },
   { key: "Cursor Automations", pattern: /Cursor [Aa]utomation|cursor\.(sh|com)\/automations/ },
@@ -57,20 +48,12 @@ export const CURSOR_TERMS: readonly CursorTerm[] = [
   { key: "`# defaults: 2`", pattern: /# defaults: \d/ },
 ];
 
-/** One upstream Markdown file, named by its skill and its path inside the skill directory. */
 export interface SkillMarkdown {
   readonly skill: string;
   readonly path: string;
   readonly text: string;
 }
 
-/**
- * The entry file generation reads, then every other Markdown file under the skill directory in
- * sorted path order. The entry is read through `entryPath` even when it is a symbolic link,
- * because generation follows it too. Other symbolic links below `dir` are not followed, as
- * generation skips them when it copies support files. `dir` itself comes from discovery, which
- * lists only real directories, not symbolic links, under the manifest's skills directory.
- */
 export function skillMarkdown(skill: string, dir: string, entryPath: string): SkillMarkdown[] {
   const files: SkillMarkdown[] = [{ skill, path: "SKILL.md", text: readFileSync(entryPath, "utf8") }];
   const visit = (current: string) => {
@@ -88,7 +71,6 @@ export function skillMarkdown(skill: string, dir: string, entryPath: string): Sk
   return files;
 }
 
-/** The Cursor column of every table row in a host mapping document. */
 export function mappedCursorNames(mapping: string): string[] {
   return mapping
     .split(/\r?\n/)
@@ -99,10 +81,6 @@ export function mappedCursorNames(mapping: string): string[] {
     });
 }
 
-/**
- * One warning per term that an upstream skill uses and no host mapping row names, in term order
- * with skills sorted, so a revision with new Cursor vocabulary fails certification.
- */
 export function vocabularyDiagnostics(
   files: readonly SkillMarkdown[],
   mapping: string,

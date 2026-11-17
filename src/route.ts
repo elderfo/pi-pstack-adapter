@@ -15,14 +15,8 @@ import type { ModelFilter } from "./filter.ts";
 import { resolveRole } from "./pools.ts";
 import { MODEL_ROLES, PANEL_DEFAULT_ROLES, isPanelRole } from "./registry.ts";
 
-/** A model string with this prefix names a pstack role, and the adapter picks the model. */
 export const ROLE_REFERENCE_PREFIX = "pstack:";
 
-/**
- * A delegation's model string. `pstack:<role>` picks by the role's ranking, `pstack:<role>@<model>`
- * overrides it, and either may end in `:<level>` to lower the thinking level. Any other string is a
- * concrete model, which only the model filter checks.
- */
 export type ModelRequest =
   | { readonly kind: "concrete" }
   | { readonly kind: "role"; readonly text: string; readonly role: string; readonly override?: string; readonly thinking?: ThinkingLevel }
@@ -47,33 +41,20 @@ export function parseModelRequest(value: unknown): ModelRequest {
   return { kind: "role", text, role, ...(override !== undefined ? { override } : {}), ...(thinking !== undefined ? { thinking } : {}) };
 }
 
-/**
- * What a pick strategy sees. `choices` holds only the models the filter allows, in ranked order,
- * and `task` is the text the child receives.
- */
 export interface PickRequest {
   readonly role: string;
   readonly choices: readonly ModelSpec[];
   readonly task: string;
 }
 
-/**
- * The seam for choosing a pool model. It returns an index into `request.choices`; ranked takes the
- * first. It may return a promise, so a strategy that asks a service can replace it.
- */
 export function pickModel(_request: PickRequest): number | Promise<number> {
   return 0;
 }
 
-/** The choice a pick returned, or undefined when the index is not one of the choices. */
 export function validatePick(index: number, choices: readonly ModelSpec[]): ModelSpec | undefined {
   return Number.isInteger(index) && index >= 0 && index < choices.length ? choices[index] : undefined;
 }
 
-/**
- * The thinking level a child runs at. A requested level can only lower the configured one, and an
- * entry with no configured level keeps the backend default whatever was requested.
- */
 export function effectiveThinking(requested: ThinkingLevel | undefined, configured: ThinkingLevel | undefined): ThinkingLevel | undefined {
   if (configured === undefined) return undefined;
   if (requested === undefined) return configured;
@@ -87,14 +68,10 @@ function lowest(a: ThinkingLevel | undefined, b: ThinkingLevel | undefined): Thi
 }
 
 export interface RouteContext {
-  /** Undefined when the adapter did not start, so no role can be resolved. */
   readonly config: AdapterConfig | undefined;
   readonly filter?: ModelFilter;
-  /** `provider/id` of the session's model. */
   readonly parentModel?: string;
-  /** The session's thinking level, which an inheriting `subagent` child keeps. */
   readonly parentThinking?: ThinkingLevel;
-  /** Maps a model to its registry `provider/id`, or undefined when Pi does not know it. */
   readonly resolveModel: (model: string) => string | undefined;
 }
 
@@ -110,10 +87,6 @@ type ChildRoute =
 
 const UNCHANGED: RouteDecision = { kind: "unchanged" };
 
-/**
- * Replaces each role reference in a `delegate_task` or `subagent` call with the model and thinking
- * the adapter picks. The result is a rewritten copy; concrete models and other tools are unchanged.
- */
 export async function routeDelegation(toolName: string, input: unknown, context: RouteContext): Promise<RouteDecision> {
   if (!isRecord(input)) return UNCHANGED;
   if (toolName === T3_DELEGATE_TOOL) return routeT3(input, context);
@@ -131,7 +104,6 @@ function blockReason(where: string, text: string, problem: string): string {
   return `Blocked by the pstack adapter: ${where} asks for ${text}, but ${problem} This call was not retried.`;
 }
 
-/** A parsed reference holds only role and model-id characters; anything else is echoed safely. */
 function quoted(request: Exclude<ModelRequest, { kind: "concrete" }>): string {
   return request.kind === "role" ? `\`${request.text}\`` : safeEcho(request.text);
 }
@@ -181,7 +153,6 @@ async function routeReference(reference: RoleReference, where: string, requested
   }
 }
 
-/** A T3 target names a Pi model, so a role reference only works with the `pi` provider. */
 async function routeT3(args: Record<string, unknown>, context: RouteContext): Promise<RouteDecision> {
   const target = args.target;
   if (!isRecord(target)) return UNCHANGED;
@@ -210,15 +181,8 @@ async function routeT3(args: Record<string, unknown>, context: RouteContext): Pr
   const next = structuredClone(args);
   const nextTarget = next.target as Record<string, unknown>;
   if (route.kind === "inherit") {
-    // The provider selector goes too, because it would pick that instance's model instead of the
-    // parent's. Other fields stay for the filter gate to check. Omitted options inherit the parent's.
-    delete nextTarget.model;
-    delete nextTarget.providerInstanceId;
-    delete nextTarget.driverKind;
     const lowered = requested !== undefined && context.parentThinking !== undefined ? lowest(requested, context.parentThinking) : undefined;
-    const options = writeThinkingOption(nextTarget.options, lowered);
-    if (options === undefined) delete nextTarget.options;
-    else nextTarget.options = options;
+    inheritTarget(nextTarget, lowered);
     if (Object.keys(nextTarget).length === 0) delete next.target;
     return { kind: "rewrite", input: next };
   }
@@ -234,6 +198,15 @@ async function routeT3(args: Record<string, unknown>, context: RouteContext): Pr
 type OptionEntry = { readonly id?: unknown; readonly value?: unknown };
 
 /** T3 options are an object keyed by option id, or a list of `{ id, value }`. */
+function inheritTarget(target: Record<string, unknown>, thinking: ThinkingLevel | undefined): void {
+  delete target.model;
+  delete target.providerInstanceId;
+  delete target.driverKind;
+  const options = writeThinkingOption(target.options, thinking);
+  if (options === undefined) delete target.options;
+  else target.options = options;
+}
+
 function readThinkingOption(options: unknown): ThinkingLevel | undefined | "invalid" {
   const value = Array.isArray(options)
     ? (options as OptionEntry[]).find((entry) => isRecord(entry) && entry.id === "thinking")?.value
@@ -262,7 +235,6 @@ interface ModelSlot {
   readonly task: string;
 }
 
-/** Every place a `subagent` call names a child's model: one agent, a task list, or a chain. */
 function subagentSlots(args: Record<string, unknown>): ModelSlot[] {
   const topTask = typeof args.task === "string" ? args.task : "";
   const taskOf = (holder: Record<string, unknown>, fallback: string) => (typeof holder.task === "string" ? holder.task : fallback);

@@ -110,7 +110,6 @@ export class BootstrapRequiredError extends Error {
 export interface ResolveOptions {
   readonly config: AdapterConfig;
   readonly git?: GitRunner;
-  /** True when the adapter may reach the network without further permission. */
   readonly mayBootstrap: boolean;
 }
 
@@ -119,15 +118,13 @@ export async function resolveSource(options: ResolveOptions): Promise<ResolvedSo
   const git = options.git ?? systemGit;
   const selection = selectionOf(config);
   const trust = trustOf(config);
-  // Validate before either branch touches the filesystem, so a local checkout cannot be
-  // escaped through the plugin path any more than a Git one can.
   const pluginPath = validateContainedPath(config.pluginPath, "the upstream plugin path");
 
   if (selection.kind === "local") {
     const checkout = resolve(selection.path);
     const pluginDir = locatePluginDir(checkout, pluginPath);
-    const head = await git(["rev-parse", "HEAD"], checkout);
-    return { selection, trust, commit: head.code === 0 ? head.stdout.trim() : "", checkoutDir: checkout, pluginDir };
+    const head = await headCommit(git, checkout);
+    return { selection, trust, commit: head || undefined, checkoutDir: checkout, pluginDir };
   }
 
   const repo = validateRepo(config.repo);
@@ -143,8 +140,8 @@ export async function resolveSource(options: ResolveOptions): Promise<ResolvedSo
     if (!candidate) continue;
     const warm = await reuseCheckout(git, dir, candidate, pluginPath);
     if (warm) {
-      recordCommit(root, repo, wanted, warm.commit);
-      return { selection, trust, commit: warm.commit, checkoutDir: dir, pluginDir: warm.pluginDir };
+      recordCommitBestEffort(root, repo, wanted, warm.commit);
+      return { selection, trust, commit: warm.commit || undefined, checkoutDir: dir, pluginDir: warm.pluginDir };
     }
   }
 
@@ -153,8 +150,8 @@ export async function resolveSource(options: ResolveOptions): Promise<ResolvedSo
   await bootstrap(git, dir, repo, wanted, pluginPath);
   const pluginDir = locatePluginDir(dir, pluginPath);
   const commit = await headCommit(git, dir);
-  recordCommit(root, repo, wanted, commit);
-  return { selection, trust, commit, checkoutDir: dir, pluginDir };
+  recordCommitBestEffort(root, repo, wanted, commit);
+  return { selection, trust, commit: commit || undefined, checkoutDir: dir, pluginDir };
 }
 
 type CommitRecord = Record<string, string>;
@@ -174,7 +171,7 @@ function readRecordedCommit(root: string, repo: string, ref: string): string | u
   }
 }
 
-function recordCommit(root: string, repo: string, ref: string, commit: string): void {
+function recordCommitBestEffort(root: string, repo: string, ref: string, commit: string): void {
   if (!/^[0-9a-f]{40}$/i.test(commit) || /^[0-9a-f]{40}$/i.test(ref)) return;
   let current: CommitRecord = {};
   try {
@@ -187,15 +184,9 @@ function recordCommit(root: string, repo: string, ref: string, commit: string): 
     mkdirSync(root, { recursive: true });
     writeFileSync(stateFile(root), `${JSON.stringify({ ...current, [recordKey(repo, ref)]: commit }, null, 2)}\n`, "utf8");
   } catch {
-    // A read-only cache still works; it just refetches. Never fail startup over bookkeeping.
   }
 }
 
-/**
- * A cached commit object is not a usable checkout. An interrupted bootstrap can leave the
- * object present and the worktree empty, so the manifest has to resolve before the cache counts
- * as warm. Otherwise the caller falls through to a forced re-bootstrap instead of wedging.
- */
 async function reuseCheckout(
   git: GitRunner,
   dir: string,
@@ -205,16 +196,10 @@ async function reuseCheckout(
   if (!(await isCacheCheckout(git, dir))) return undefined;
   if ((await git(["cat-file", "-e", `${wanted}^{commit}`], dir)).code !== 0) return undefined;
 
-  // A read-only cache cannot take the setting. That is fine while its files are already LF, and
-  // the line-ending check below refuses it otherwise.
-  const pinError = await pinLineEndings(git, dir).then(
-    () => undefined,
-    (error: Error) => error,
-  );
+  const pinError = await tryPinLineEndings(git, dir);
 
   // Skipping a no-op checkout avoids contending on .git/index.lock with a concurrent session.
-  const head = await headCommit(git, dir);
-  if (head.toLowerCase() !== wanted.toLowerCase() || !existsSync(join(dir, pluginPath))) {
+  if (!(await isWarmCheckout(git, dir, wanted, pluginPath))) {
     if ((await git(["checkout", "--quiet", "--force", wanted], dir)).code !== 0) return undefined;
   }
 
@@ -228,6 +213,18 @@ async function reuseCheckout(
   }
   await ensureUpstreamBytes(git, dir, pluginPath, pinError);
   return { commit, pluginDir };
+}
+
+function tryPinLineEndings(git: GitRunner, dir: string): Promise<Error | undefined> {
+  return pinLineEndings(git, dir).then(
+    () => undefined,
+    (error: Error) => error,
+  );
+}
+
+async function isWarmCheckout(git: GitRunner, dir: string, wanted: string, pluginPath: string): Promise<boolean> {
+  const head = await headCommit(git, dir);
+  return head.toLowerCase() === wanted.toLowerCase() && existsSync(join(dir, pluginPath));
 }
 
 /**
@@ -262,10 +259,6 @@ async function ensureUpstreamBytes(
   );
 }
 
-/**
- * Plugin files that are not upstream's bytes: a CRLF working copy of an LF blob that upstream
- * did not mark `eol=crlf`, or an index entry that differs from HEAD after an interrupted repair.
- */
 async function filesNeedingRepair(git: GitRunner, dir: string, pluginPath: string): Promise<string[]> {
   const listing = await scan(git, dir, ["--literal-pathspecs", "ls-files", "-z", "--eol", "--", pluginPath]);
   const converted = listing
@@ -337,7 +330,6 @@ async function bootstrap(git: GitRunner, dir: string, repo: string, ref: string,
   if (await isCacheCheckout(git, dir)) {
     await git(["remote", "set-url", "origin", repo], dir);
   } else {
-    // A half-created or damaged cache is disposable. Start it over rather than repairing it.
     rmSync(dir, { recursive: true, force: true });
     mkdirSync(dir, { recursive: true });
     await expect(git(["init", "--quiet", "."], dir), "initialize the adapter cache checkout");
@@ -368,8 +360,6 @@ async function expect(result: Promise<GitResult>, what: string): Promise<GitResu
 function locatePluginDir(checkout: string, pluginPath: string): string {
   const nested = join(checkout, pluginPath);
   if (existsSync(join(nested, MANIFEST_RELATIVE_PATH))) {
-    // The plugin path is textually contained, but a symbolic link inside the checkout could
-    // still lead outside it. Compare resolved paths so the link target decides.
     const root = realpathSync(checkout);
     const target = realpathSync(nested);
     const inside = relative(root, target);
@@ -386,7 +376,6 @@ function locatePluginDir(checkout: string, pluginPath: string): string {
   );
 }
 
-/** Resolve a branch or tag to the commit it currently points at. Used only by explicit setup. */
 export async function resolveRefToCommit(repo: string, ref: string, git: GitRunner = systemGit): Promise<string> {
   const safeRepo = validateRepo(repo);
   const safeRef = validateRef(ref);

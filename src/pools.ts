@@ -2,10 +2,8 @@ import { type AdapterConfig, type ModelSpec, panelEntries, poolEntries, splitMod
 import { type ModelFilter, isRestricting, modelAllowed } from "./filter.ts";
 import { GENERAL_ROLE, PANEL_DEFAULT_ROLES } from "./registry.ts";
 
-/** What the model filter knows about the model of the agent that starts a delegation. */
 export interface ResolutionContext {
   readonly filter?: ModelFilter;
-  /** `provider/id` of the parent session's model, when Pi reports one. */
   readonly parentModel?: string;
 }
 
@@ -14,17 +12,11 @@ export interface PoolChoice {
   readonly eligible: boolean;
 }
 
-/**
- * How a role resolves. `from` names the role whose value applies, which is `general` for an
- * unset role when `general` is set. A configured pool whose choices are all excluded is blocked:
- * it never falls back to `general` or the parent.
- */
 export type RoleResolution =
   | { readonly kind: "inherit"; readonly from: string }
   | { readonly kind: "pool"; readonly from: string; readonly choices: readonly PoolChoice[] }
   | { readonly kind: "blocked"; readonly from: string; readonly reason: string; readonly choices: readonly PoolChoice[] };
 
-/** Why the parent's model cannot run under the filter, or undefined when it can. */
 export function parentProblem(context: ResolutionContext): string | undefined {
   if (!isRestricting(context.filter)) return undefined;
   if (context.parentModel === undefined) return "the parent session's model is unknown, so the model filter cannot allow it";
@@ -53,7 +45,6 @@ export function resolveRole(config: AdapterConfig, role: string, context: Resolu
   };
 }
 
-/** One seat of a panel. Seats keep their meaning; a pool seat picks one eligible choice. */
 export type PanelSeat =
   | { readonly kind: "model"; readonly spec: ModelSpec; readonly from?: string }
   | { readonly kind: "parent"; readonly from?: string }
@@ -86,7 +77,6 @@ export function resolvePanel(config: AdapterConfig, role: string, context: Resol
   return { role, configured: false, seats: defaultSeats(config, context) };
 }
 
-/** The seats an unset panel gets, one per default role, each drawing one choice from that role's pool. */
 export function defaultSeats(config: AdapterConfig, context: ResolutionContext = {}): PanelSeat[] {
   return PANEL_DEFAULT_ROLES.map((name): PanelSeat => {
     const resolved = resolveRole(config, name, context);
