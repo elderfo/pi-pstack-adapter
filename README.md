@@ -160,9 +160,10 @@ agent that starts it. A `strongest-judgment` delegate at `xhigh` would then star
 
 ### Panels
 
-Some workflows run several models side by side: `arena`'s runners, `architect`'s runners, and
-`interrogate`'s adversaries. Their panel roles are `arena-runners`, `architect-runners`, and
-`interrogate-reviewers`. A panel lists up to eight models, and each one gets a seat. An `inherit`
+Some workflows run several models side by side: `arena`'s runners and `interrogate`'s
+adversaries. Their panel roles are `arena-runners` and `interrogate-reviewers`. Since pstack
+0.15.43, `architect` runs `arena` for a large design instead of its own panel, so no workflow reads
+`architect-runners`. It stays a valid setting so existing configurations still load. A panel lists up to eight models, and each one gets a seat. An `inherit`
 seat uses the model and thinking level of the agent that starts the panel, which is your session
 unless a delegate runs the workflow.
 

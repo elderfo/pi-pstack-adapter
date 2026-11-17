@@ -24,7 +24,7 @@ export const CURSOR_TERMS: readonly CursorTerm[] = [
   { key: "`run_in_background: true`", pattern: /run_in_background/ },
   { key: "`resume`", pattern: /`resume`/ },
   { key: "`file_attachments`", pattern: /file_attachments/ },
-  { key: "`claude-opus-5-5-xhigh`", pattern: /\bclaude-[a-z]+-\d/ },
+  { key: "`claude-opus-5-5-xhigh-fast`", pattern: /\bclaude-[a-z]+-\d/ },
   { key: "`grok-*`", pattern: /\bgrok-\d/ },
   { key: "`gpt-*`", pattern: /\bgpt-\d/ },
   { key: "`gemini-4-carbon-high`", pattern: /\bgemini-\d/ },
@@ -45,7 +45,10 @@ export const CURSOR_TERMS: readonly CursorTerm[] = [
   { key: "Cursor `/loop`", pattern: /(^|[\s(`])\/loop\b/ },
   { key: "a skill under `plugins/cache/`", pattern: /plugins\/cache\// },
   { key: "a Custom Mode", pattern: /Custom Mode/ },
-  { key: "`# defaults: 2`", pattern: /# defaults: \d/ },
+  { key: "`# defaults: 3`", pattern: /# defaults: \d/ },
+  { key: "<path>/worker.md", pattern: /\/worker\.md/ },
+  { key: "a Project worker", pattern: /Project worker/ },
+  { key: "poteto-agent defaults to", pattern: /`poteto-agent` defaults to/ },
 ];
 
 export interface SkillMarkdown {

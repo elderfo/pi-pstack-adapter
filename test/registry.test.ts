@@ -107,7 +107,9 @@ test("arena is adapted after a pstack 0.15.36 run with a cross-family judge, and
   assert.match(entry.note ?? "", /When no entry qualifies, arena tries `judgment`, then `general`, and only when neither is from another vendor does it skip the judge/);
   assert.match(entry.note ?? "", /When the parent does not know its model, arena tries the pool in order anyway and says the vendor check did not run\./);
   assert.match(entry.note ?? "", /since pstack 0\.15\.42 from another vendor, where Fable and the other Claude models are one vendor/);
-  assert.match(entry.note ?? "", /The pstack 0\.15\.42 vendor rule has not run in Pi\./);
+  assert.match(entry.note ?? "", /since pstack 0\.15\.43 its default judge pool is one Opus and one Gemini model/);
+  assert.match(entry.note ?? "", /the body no longer says to try its default pool when no configured entry qualifies/);
+  assert.match(entry.note ?? "", /Neither the pstack 0\.15\.42 vendor rule nor the pstack 0\.15\.43 text has run in Pi\./);
   assert.equal(docsRow("arena"), `| \`arena\` | \`/skill:pistack-arena\` | \`delegation\` | \`git\` | ${entry.note} |`);
 });
 
@@ -125,17 +127,28 @@ test("interrogate is adapted after a pstack 0.15.36 run whose adversaries proved
   assert.equal(docsRow("interrogate"), `| \`interrogate\` | \`/skill:pistack-interrogate\` | \`delegation\` | \`git\` | ${entry.note} |`);
 });
 
-test("poteto-mode stays experimental and states that Orchestrate has no scripts since pstack 0.15.36", () => {
+test("poteto-mode stays experimental, names the worker kickoff, and says Orchestrate is gone since pstack 0.15.43", () => {
   const entry = entryFor("poteto-mode");
   assert.equal(entry.tier, "experimental");
   assert.deepEqual(entry.capabilities, ["delegation", "structured-question"]);
   assert.deepEqual(entry.executables, ["git", "gh"]);
-  assert.match(entry.note ?? "", /the `orch` helpers are gone/);
-  assert.match(entry.note ?? "", /Pi standalone has none; a T3 Code host can provide them when it exposes `mcp__t3-code__watch_pull_request`/);
-  assert.match(entry.note ?? "", /a host capability, not a guarantee of either delegation backend/);
+  assert.match(entry.note ?? "", /Since pstack 0\.15\.43 the Orchestrate playbook and the multi-phase plan's `check-plan\.mjs` script are gone\./);
+  assert.match(entry.note ?? "", /`Read <path>\/worker\.md before anything else\.`.*puts Pi policy, the host's safety rules, the user's instructions, and the brief above `worker\.md`/);
   assert.match(entry.note ?? "", /Project tracker and Project store, and forking a worker with its built state, have no Pi equivalent/);
-  assert.match(entry.note ?? "", /Orchestrate ran a two-unit program in a linked worktree.*Its other playbooks and sticky mode were not rerun\./);
+  assert.match(entry.note ?? "", /the since-deleted Orchestrate playbook ran a two-unit program in a linked worktree.*no pstack 0\.15\.43 playbook has run in Pi\./);
+  assert.match(entry.note ?? "", /`# defaults: 3` since pstack 0\.15\.43/);
   assert.equal(docsRow("poteto-mode"), `| \`poteto-mode\` | \`/skill:pistack-poteto-mode\` | \`delegation\`, \`structured-question\` | \`git\`, \`gh\` | ${entry.note} |`);
+});
+
+test("architect keeps its delegation gate at pstack 0.15.43, and its arena run reads arena's panels", async () => {
+  const { SKILL_PANELS } = await import("../src/registry.ts");
+  const entry = entryFor("architect");
+  assert.equal(entry.tier, "dependency-gated");
+  assert.deepEqual(entry.capabilities, ["delegation"]);
+  assert.match(entry.note ?? "", /runs the arena skill only for a large or contested design\. Check arena's prerequisites too\./);
+  assert.match(entry.note ?? "", /Neither path has run in Pi\./);
+  assert.deepEqual(SKILL_PANELS.architect, ["arena-runners", "arena-cross-judge-pool"]);
+  assert.equal(docsRow("architect"), `| \`architect\` | \`/skill:pistack-architect\` | \`delegation\` | - | ${entry.note} |`);
 });
 
 test("show-me-your-work is adapted after a pstack 0.15.36 run whose cross-family reviewer read the Pi session file", () => {
@@ -157,15 +170,19 @@ test("recall is dependency-gated after a pstack 0.15.36 run read Pi session file
   assert.ok(docsSection("dependency-gated")?.includes(docsRow("recall") ?? "\0"));
 });
 
-test("reflect and automate-me stay experimental, because their create-skill steps have not run in Pi", () => {
+test("reflect loses its delegation gate at pstack 0.15.43 and stays experimental, and automate-me's create-skill step has not run in Pi", () => {
   const reflect = entryFor("reflect");
   assert.equal(reflect.tier, "experimental");
+  assert.deepEqual(reflect.capabilities, []);
+  assert.match(reflect.note ?? "", /Since pstack 0\.15\.43 it spawns no subagents\./);
+  assert.match(reflect.note ?? "", /Its create-skill routing is gone\./);
   assert.match(reflect.note ?? "", /copied the upstream skill from the plugin directory to a Pi skill location under a new name and edited only the copy/);
-  assert.match(reflect.note ?? "", /create-skill routing for a new skill is Cursor-specific and has not run in Pi/);
+  assert.match(reflect.note ?? "", /The inline path has not run in Pi\./);
   const automate = entryFor("automate-me");
   assert.equal(automate.tier, "experimental");
   assert.match(automate.note ?? "", /it read only this workspace's sessions/);
   assert.match(automate.note ?? "", /create-skill skill it drafts with has no Pi equivalent, and that step has not run in Pi/);
+  assert.equal(docsRow("reflect"), `| \`reflect\` | \`/skill:pistack-reflect\` | - | - | ${reflect.note} |`);
   for (const name of ["reflect", "automate-me"]) {
     assert.equal(docsRow(name)?.endsWith(` | ${entryFor(name).note} |`), true, name);
     assert.ok(docsSection("experimental")?.includes(docsRow(name) ?? "\0"), name);

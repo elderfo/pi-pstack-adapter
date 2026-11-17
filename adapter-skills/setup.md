@@ -34,10 +34,11 @@ keeps them as panel roles.
 | --- | --- |
 | `arena-runners` | `arena`'s candidates |
 | `arena-cross-judge-pool` | `arena`'s one judge, which `architect` uses too |
-| `architect-runners` | `architect`'s design candidates |
+| `architect-runners` | no workflow since pstack 0.15.43. `architect` now runs `arena` for a large design, which uses `arena-runners`. The role stays so existing settings still load. |
 | `interrogate-reviewers` | `interrogate`'s adversaries |
 
-Upstream defaults each panel to one Claude Fable, one Claude Opus, and one Gemini model. A panel
+Upstream defaults the runner and reviewer panels to one Claude Fable, one Claude Opus, and one
+Gemini model, and the judge pool to one Claude Opus and one Gemini model. A panel
 left unset uses `judgment`, then `general`, so it spans two families only when those roles do.
 `arena` takes its judge from the pool only when the model is from a vendor other than the
 session model's, and it counts Fable and the other Claude models as one vendor. When no pool entry

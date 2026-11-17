@@ -33,7 +33,7 @@ test("every Cursor term matches the upstream wording it was ported for", () => {
     "`run_in_background: true`": ["`run_in_background: true`"],
     "`resume`": ["pass `resume` with the agent id"],
     "`file_attachments`": ["file_attachments"],
-    "`claude-opus-5-5-xhigh`": ["default `claude-opus-5-5-xhigh`"],
+    "`claude-opus-5-5-xhigh-fast`": ["default `claude-opus-5-5-xhigh-fast`", "default `claude-opus-5-5-xhigh`"],
     "`grok-*`": ["default `grok-4.7-xhigh-fast`"],
     "`gpt-*`": ["gpt-5.6-sol-max"],
     "`gemini-4-carbon-high`": ["one runner each on `claude-fable-5-2-high`, `claude-opus-5-5-high-fast`, and `gemini-4-carbon-high`"],
@@ -54,7 +54,10 @@ test("every Cursor term matches the upstream wording it was ported for", () => {
     "Cursor `/loop`": ["using Cursor's `/loop` command", "arm `/loop 1h` to audit", "/loop until done."],
     "a skill under `plugins/cache/`": ["a skill under plugins/cache/"],
     "a Custom Mode": ["a Custom Mode"],
-    "`# defaults: 2`": ["If the rule has no `# defaults: 2` line, an older setup wrote it."],
+    "`# defaults: 3`": ["If the rule has no `# defaults: 3` line, an older setup wrote it.", "the `# defaults: 2` line"],
+    "<path>/worker.md": ["the first line of its kickoff is `Read <path>/worker.md before anything else.`"],
+    "a Project worker": ["whether a Task subagent or a Project worker"],
+    "poteto-agent defaults to": ["spawn `generalPurpose`, because `poteto-agent` defaults to Opus 5.5"],
   };
   assert.deepEqual(Object.keys(examples).sort(), CURSOR_TERMS.map((term) => term.key).sort(), "one example list per term");
   for (const term of CURSOR_TERMS) {

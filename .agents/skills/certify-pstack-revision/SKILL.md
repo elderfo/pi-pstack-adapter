@@ -82,11 +82,11 @@ Keep scratch work in `.work/`; ensure `.work/` is in `.git/info/exclude`. Leave 
 
 Re-check these on each bump and say whether they changed:
 
-- Delegating skills: at pstack 0.15.36, `interrogate`, `arena`, `show-me-your-work`, `reflect`, `recall`, `automate-me`, and `poteto-mode`'s Orchestrate playbook ran with pi-subagents. The other delegating skills (`architect`, `figure-it-out`, `how`, `maintain-verification-skill`, `no-comments`, `teach`, `why`, `swarm`) have not. Run each changed one with the delegation sandbox above.
+- Delegating skills: at pstack 0.15.36, `interrogate`, `arena`, `show-me-your-work`, `reflect`, `recall`, `automate-me`, and `poteto-mode`'s Orchestrate playbook ran with pi-subagents. Since 0.15.43 the Orchestrate playbook is gone and `reflect` no longer delegates. The other delegating skills (`architect`, `figure-it-out`, `how`, `maintain-verification-skill`, `no-comments`, `teach`, `why`, `swarm`) have not. Run each changed one with the delegation sandbox above.
 - Transcript reading: at 0.15.36, `show-me-your-work`'s reviewer, `recall`, `reflect`, and `automate-me` read this workspace's Pi session files and nothing else. poteto-mode's eval and session-pickup playbooks have not. Say whether Pi's session layout or format changed.
-- Create-skill: `reflect`'s route for a new skill and `automate-me`'s draft step use Cursor's built-in create-skill, which has no Pi equivalent and has not run.
+- Create-skill: `automate-me`'s draft step uses Cursor's built-in create-skill, which has no Pi equivalent and has not run. `reflect` dropped its create-skill route at 0.15.43.
 - `ketchup-video` embeds its video as an HTML `video` tag, and no Pi client has been shown to play it inline.
-- Upstream names no `/goal` command at 0.15.36. If a body starts using one, add a mapping row and a `CURSOR_TERMS` entry, as `/loop` has.
+- Upstream names no `/goal` command at 0.15.43. If a body starts using one, add a mapping row and a `CURSOR_TERMS` entry, as `/loop` has.
 
 ## Report
 

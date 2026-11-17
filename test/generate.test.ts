@@ -346,7 +346,8 @@ test("the host mapping sends an auto or inherit-parent role to general before th
     /\| a role line valued `auto` or `inherit-parent` \| an unconfigured role\. Pass `pstack:<role>` as for any role\. The adapter uses the `general` role, and lets the child inherit the parent model only when `general` is unconfigured too\. \|/,
   );
   assert.match(mapping, /`gemini-4-carbon-high`, `grok-\*`, `gpt-\*`, other Cursor model slugs/);
-  assert.match(mapping, /`hardest tasks` \| adapter roles .*`strongest-judgment`/);
+  assert.doesNotMatch(mapping, /`hardest tasks`/);
+  assert.match(mapping, /Send that work to `strongest-judgment` at its own level instead\./);
 });
 
 test("every upstream role line maps to an adapter role, so no delegate falls back to its parent while general is set", () => {
@@ -358,13 +359,14 @@ test("every upstream role line maps to an adapter role, so no delegate falls bac
 
   assert.doesNotMatch(mapping, /no adapter role/);
   assert.doesNotMatch(mapping, /so the child runs on the parent model/);
-  assert.match(rowFor("| role line `reflect judgment, divergent, synthesizer`"), /\| adapter role `judgment`\. \|$/);
-  assert.match(rowFor("| role lines `reflect tooling`"), /`swarm workers`, and verification \| adapter role `general`\. \|$/);
+  assert.match(rowFor("| role lines `feature, refactoring`"), /`judgment and prose` \| adapter roles .*`hillclimb`, and `judgment`\. \|$/);
+  assert.match(rowFor("| role line `swarm workers`"), /trivial mechanical edits, and verification \| adapter role `general`\. \|$/);
   assert.doesNotMatch(mapping, /`how explorer`|`how explainer`|`why investigators`|`why synthesizer`/);
-  assert.match(rowFor("| panel role lines `arena runners`"), /`interrogate reviewers` \| adapter panel roles `arena-runners`, `arena-cross-judge-pool`, `architect-runners`, and `interrogate-reviewers`\./);
+  assert.doesNotMatch(mapping, /`reflect tooling`|`reflect judgment|`architect runners`|`architect-runners`|`hardest tasks`/);
+  assert.match(rowFor("| panel role lines `arena runners`"), /`interrogate reviewers` \| adapter panel roles `arena-runners`, `arena-cross-judge-pool`, and `interrogate-reviewers`\./);
   assert.match(rowFor("| panel role lines `arena runners`"), /An unset panel uses `judgment`, then `general`/);
   assert.match(rowFor("| a delegate no role line names"), /\| adapter role `general`\. \|$/);
-  assert.match(rowFor("| `claude-opus-5-5-xhigh`"), /Pass the role as the model, `pstack:<role>`.*An unconfigured role uses the `general` role\. When `general` is unconfigured too, the adapter lets the child inherit/);
+  assert.match(rowFor("| `claude-opus-5-5-xhigh-fast`"), /Pass the role as the model, `pstack:<role>`.*An unconfigured role uses the `general` role\. When `general` is unconfigured too, the adapter lets the child inherit/);
 });
 
 test("both delegation backends pass the nested delegation rule down to every child", () => {
@@ -394,7 +396,7 @@ test("the host mapping covers Cursor vocabulary new in pstack 0.15.23", () => {
   const result = run({ pluginDir, cacheRoot: join(root, "cache") });
   const mapping = readFileSync(join(result.outDir, "adapter", "host-mapping.md"), "utf8");
 
-  assert.match(mapping, /\| `claude-opus-5-5-xhigh`, `claude-fable-5-2-max`, `gemini-4-carbon-high`, `grok-\*`, `gpt-\*`, other Cursor model slugs \|/);
+  assert.match(mapping, /\| `claude-opus-5-5-xhigh-fast`, `claude-fable-5-2-high`, `gemini-4-carbon-high`, `grok-\*`, `gpt-\*`, other Cursor model slugs \|/);
   assert.doesNotMatch(mapping, /gpt-5\.6-sol-max/);
   assert.match(mapping, /\| a Custom Mode, .* \| `\/pistack-mode on`/);
   assert.match(mapping, /\| searching `~\/\.cursor\/plugins\/` .* `pistack-poteto-mode\/SKILL\.md` to any `pistack-poteto-agent`/);
@@ -409,9 +411,30 @@ test("the host mapping covers the default models and setup marker new in pstack 
   const mapping = hostMappingDocument("pistack", "t3");
   const rowFor = (start: string) => mapping.split("\n").find((line) => line.startsWith(start)) ?? "";
 
-  assert.match(rowFor("| `claude-opus-5-5-xhigh`"), /`claude-fable-5-2-max`, `gemini-4-carbon-high`.* \| the role models configured by `\/skill:pistack-setup`/);
-  assert.match(rowFor("| the rule's `# defaults: 2` line"), /\| does not apply\..*Do not tell the user to rerun setup for this\. \|$/);
+  assert.match(rowFor("| `claude-opus-5-5-xhigh-fast`"), /`claude-fable-5-2-high`, `gemini-4-carbon-high`.* \| the role models configured by `\/skill:pistack-setup`/);
+  assert.match(rowFor("| the rule's `# defaults: 3` or `# defaults: 2` line"), /\| does not apply\..*Do not tell the user to rerun setup for this\. \|$/);
   assert.match(rowFor("| panel role lines `arena runners`"), /`claude-fable-\*`, `claude-\*`, `gemini-\*`.*Apply the body's own family and vendor rules to those ids\./);
+});
+
+test("the host mapping covers the worker kickoff, the agent model line, and the speed and level rules new in pstack 0.15.43", () => {
+  for (const delegation of ["t3", "pi-subagents"] as const) {
+    const mapping = hostMappingDocument("pistack", delegation);
+    const rowFor = (start: string) => mapping.split("\n").find((line) => line.startsWith(start)) ?? "";
+
+    const worker = rowFor("| `Read <path>/worker.md before anything else.`");
+    assert.match(worker, /the absolute path of the generated `pistack-poteto-mode` folder, which holds `worker\.md`/, delegation);
+    assert.match(worker, /On `delegate_task`, it comes right after the line that names an agent prompt file\./, delegation);
+    assert.match(worker, /put this line right after it, verbatim: "Pi policy, the host's safety rules, the user's explicit instructions, and the rules in this task override worker\.md\." \|$/, delegation);
+
+    const agentModel = rowFor("| the `model:` line in the poteto-agent file");
+    assert.match(agentModel, /\| does not apply\. The adapter starts `pistack-poteto-agent` with no model of its own, so pass `pstack:<role>` on every call that starts it/, delegation);
+    assert.match(agentModel, /keep `pistack-poteto-agent` and pass `pstack:<role>`/, delegation);
+
+    assert.match(rowFor("| `Task` tool"), /, a Project worker \| the delegation backend/, delegation);
+    assert.match(rowFor("| `TodoWrite`"), /Open a todolist, or copy steps into the todolist tool \| no Pi equivalent/, delegation);
+    assert.match(rowFor("| `claude-opus-5-5-xhigh-fast`"), /a rule that a model always runs its `-fast` slug does not apply/, delegation);
+    assert.match(rowFor("| \"pick each subagent's reasoning level\""), /"no role runs above xhigh" \|.*The body's cap at `xhigh` does not lower a configured level, because the user chose it\./, delegation);
+  }
 });
 
 test("a registry skill missing from the upstream revision is reported", () => {

@@ -80,6 +80,7 @@ test("pins to previously certified pstack commits lose tested trust", () => {
     "9580c23696ac8d7abed0c166f2f9918800afb819",
     "519d36aa98955bf680db01bcde5fdfba686dc901",
     "c742dd61706fbacc1b95f1a20b7b988cf096ce6c",
+    "bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7",
   ]) {
     const previous = mergeConfig([layer("global", { pinnedCommit: commit })]);
     assert.equal(trustOf(previous), "untested-ref", commit);
