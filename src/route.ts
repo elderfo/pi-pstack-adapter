@@ -197,7 +197,6 @@ async function routeT3(args: Record<string, unknown>, context: RouteContext): Pr
 
 type OptionEntry = { readonly id?: unknown; readonly value?: unknown };
 
-/** T3 options are an object keyed by option id, or a list of `{ id, value }`. */
 function inheritTarget(target: Record<string, unknown>, thinking: ThinkingLevel | undefined): void {
   delete target.model;
   delete target.providerInstanceId;
@@ -207,6 +206,7 @@ function inheritTarget(target: Record<string, unknown>, thinking: ThinkingLevel 
   else target.options = options;
 }
 
+/** T3 options are an object keyed by option id, or a list of `{ id, value }`. */
 function readThinkingOption(options: unknown): ThinkingLevel | undefined | "invalid" {
   const value = Array.isArray(options)
     ? (options as OptionEntry[]).find((entry) => isRecord(entry) && entry.id === "thinking")?.value

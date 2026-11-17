@@ -181,14 +181,14 @@ function describeSeat(seat: PanelSeat): string {
 
 const PARENT_MODEL = "the model of the agent that starts the panel";
 
-function seatModel(seat: PanelSeat, choice: "ranked" | "open"): string | undefined {
+function seatModel(seat: PanelSeat, pick: "ranked" | "open"): string | undefined {
   switch (seat.kind) {
     case "parent":
       return PARENT_MODEL;
     case "model":
       return seat.spec.model;
     case "choice": {
-      if (choice === "ranked") return seat.choices[0]?.model;
+      if (pick === "ranked") return seat.choices[0]?.model;
       const models = new Set(seat.choices.map((choice) => choice.model));
       return models.size === 1 ? [...models][0] : undefined;
     }
@@ -197,10 +197,10 @@ function seatModel(seat: PanelSeat, choice: "ranked" | "open"): string | undefin
   }
 }
 
-function seatModels(seats: readonly PanelSeat[], choice: "ranked" | "open"): Set<string> | undefined {
+function seatModels(seats: readonly PanelSeat[], pick: "ranked" | "open"): Set<string> | undefined {
   const models = new Set<string>();
   for (const seat of seats) {
-    const model = seatModel(seat, choice);
+    const model = seatModel(seat, pick);
     if (model !== undefined) models.add(model);
     else if (seat.kind === "choice") return undefined;
   }

@@ -664,14 +664,14 @@ function buildState(
   root: string,
   bootstrapped: boolean,
 ): AdapterState {
-  const localCheckoutNeverCached = source.selection.kind === "local";
+  const localCheckoutNeverReused = source.selection.kind === "local";
   const generation = generate({
     source,
     namespace: config.namespace,
     cacheRoot: root,
     adapterVersion: ADAPTER_VERSION,
     delegation: config.delegation,
-    force: localCheckoutNeverCached,
+    force: localCheckoutNeverReused,
   });
 
   return {

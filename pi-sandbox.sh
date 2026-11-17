@@ -27,6 +27,9 @@ gives Pi the same write access it normally has there, so use a branch you can th
 PISTACK_SANDBOX_WORK sets the default directory. Copies only auth.json and the default
 model from your real config, plus your global AGENTS.md unless --no-agents-md. The copied
 credential is removed when Pi exits. Delete ~/.pistack-sandbox to revert the sandbox itself.
+
+Any pstack skill you run here has the same shell and file access Pi always has. The sandbox
+separates configuration, not privilege.
 EOF
 }
 
