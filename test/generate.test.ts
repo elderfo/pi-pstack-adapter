@@ -424,7 +424,8 @@ test("the host mapping covers the worker kickoff, the agent model line, and the 
     const worker = rowFor("| `Read <path>/worker.md before anything else.`");
     assert.match(worker, /the absolute path of the generated `pistack-poteto-mode` folder, which holds `worker\.md`/, delegation);
     assert.match(worker, /On `delegate_task`, it comes right after the line that names an agent prompt file\./, delegation);
-    assert.match(worker, /put this line right after it, verbatim: "Pi policy, the host's safety rules, the user's explicit instructions, and the rules in this task override worker\.md\." \|$/, delegation);
+    assert.match(worker, /put this line right after it, verbatim: "Pi policy, the host's safety rules, the user's explicit instructions, and the rules in this task override worker\.md\. If you start an agent, put this whole line in its brief, right after the line that tells it to read worker\.md\."/, delegation);
+    assert.match(worker, /A child that starts agents of its own passes the line on the same way, so every descendant that reads `worker\.md` gets it\. \|$/, delegation);
 
     const agentModel = rowFor("| the `model:` line in the poteto-agent file");
     assert.match(agentModel, /\| does not apply\. The adapter starts `pistack-poteto-agent` with no model of its own, so pass `pstack:<role>` on every call that starts it/, delegation);

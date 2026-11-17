@@ -123,9 +123,10 @@ test("the status report lists each panel apart from the model roles, and warns w
   assert.match(report, /\| arena-runners \| anthropic\/one at high; openai\/two at high \| configured \|/);
   assert.match(report, /\| architect-runners \| anthropic\/one at medium \(judgment\); anthropic\/one at medium \(general\) \| unset, so judgment, general \|/);
   assert.doesNotMatch(report, /Every seat of `arena-runners`/);
-  for (const panel of ["arena-cross-judge-pool", "architect-runners", "interrogate-reviewers"]) {
+  for (const panel of ["arena-cross-judge-pool", "interrogate-reviewers"]) {
     assert.match(report, new RegExp(`> Warning\\. Every seat of \`${panel}\` runs on \`anthropic/one\``));
   }
+  assert.doesNotMatch(report, /Every seat of `architect-runners`/, "no workflow reads architect-runners since pstack 0.15.43");
 });
 
 test("check lists a workflow's panels with their seats and any warning", () => {

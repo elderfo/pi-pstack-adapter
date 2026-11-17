@@ -110,7 +110,8 @@ Follow these steps.
    families from step 1, as upstream's defaults do. For `arena-cross-judge-pool`, suggest models
    from two vendors, because a Fable and an Opus model are one vendor, so that pool has no eligible
    judge for a Claude session, and arena falls back to `judgment`, then `general`. Never say a family is missing unless the
-   step 1 list shows it. Ask whether to keep each panel or set it. For each panel the user sets,
+   step 1 list shows it. Skip `architect-runners`, which no workflow reads since pstack 0.15.43. Ask whether to keep each
+   other panel or set it. For each panel the user sets,
    call `set_model` with the panel role and its entries in `model`, separated by commas, for
    example `model: "provider/model-a, provider/model-b"`. Pass `thinking` for the level of the
    `judgment` column in step 3, unless the user picked another. An entry with its own `:level`

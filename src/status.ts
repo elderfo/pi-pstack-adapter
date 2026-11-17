@@ -1,5 +1,5 @@
 import { CERTIFIED } from "./certified.ts";
-import { CAPABILITY_LABELS, MODEL_ROLES, PANEL_DEFAULT_ROLES, PANEL_ROLES, TIER_ORDER } from "./registry.ts";
+import { CAPABILITY_LABELS, MODEL_ROLES, PANEL_DEFAULT_ROLES, PANEL_ROLES, SKILL_PANELS, TIER_ORDER } from "./registry.ts";
 import type { AdapterConfig, ModelSpec } from "./config.ts";
 import { trustWarning } from "./config.ts";
 import { type FilterOrigin, briefLine, describeOrigin, filterOf, isRestricting } from "./filter.ts";
@@ -121,7 +121,9 @@ export function renderStatus(input: StatusInput): string {
     lines.push(`| ${panel.role} | ${panel.seats.map(describeSeat).join("; ")} | ${panel.configured ? "configured" : `unset, so ${PANEL_DEFAULT_ROLES.join(", ")}`} |`);
   }
   lines.push("");
+  const readPanels = new Set(Object.values(SKILL_PANELS).flat());
   for (const panel of panels) {
+    if (!readPanels.has(panel.role)) continue;
     const warning = panelWarning(panel, config, context);
     if (warning) {
       lines.push(`> Warning. ${warning}`);
