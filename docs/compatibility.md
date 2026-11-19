@@ -4,7 +4,7 @@ The compatibility registry in `src/registry.ts` assigns one support tier to ever
 certified pstack revision. Generation reads it, the wrapper frontmatter publishes it, and
 `/pistack-status` reports it.
 
-Certified revision: pstack `0.15.43` at `e1cc03121a0e71129a4fb730d7c5528a0a3e43c8` in
+Certified revision: pstack `0.15.44` at `e58dd043600587dbaf58ba315e7f2b38373eeb43` in
 `https://github.com/cursor/plugins`.
 
 ## Platforms
@@ -20,6 +20,15 @@ The tiers below apply on every supported platform. `/pistack-check` looks for pe
 executables in the shell the skills run in, with Pi's `shellCommandPrefix` applied. On Windows
 that matters most, because Git Bash adds `/usr/bin` and `/mingw64/bin` to the `PATH` Pi
 started with. A shell that is missing, inactive, or cannot run a command blocks every workflow.
+
+pstack `0.15.44` was certified on Linux by the unattended release check. No skill or agent was
+added or removed, no tier changed, and no helper script changed. Upstream replaced the Gemini
+panel seat, `gemini-4-carbon-high`, with `gemini-4-neon-high` in the `arena`, `poteto-mode`, and
+`setup-pstack` defaults. `poteto-mode` now says only that a Gemini seat never runs above
+`gemini-4-neon-high`, and `setup-pstack` gained a step that rewrites an older `gemini-4-*` panel
+entry in the Cursor rule. The adapter replaces `setup-pstack` with its own setup, and its roles hold
+Pi model ids, not Cursor slugs, so that step does not apply. The host mapping's model slug row now
+names `gemini-4-neon-high`. No `0.15.44` skill ran end to end.
 
 pstack `0.15.43` was certified on Linux by the unattended release check. No skill or agent was
 added or removed, and no tier changed. Upstream shortened many skills. `reflect` now mines the
