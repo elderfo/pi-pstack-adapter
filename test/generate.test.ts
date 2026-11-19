@@ -424,6 +424,9 @@ test("the host mapping names the Gemini 4 Neon panel slug new in pstack 0.15.44,
     assert.match(row, /`gemini-4-neon-high`.* \| the role models configured by `\/skill:pistack-setup`/);
     assert.match(row, /An effort word in a slug, such as `-xhigh` or `-max`, is not a model id\./);
     assert.doesNotMatch(mapping, /gemini-4-carbon/);
+    const levels = mapping.split("\n").find((line) => line.startsWith("| \"pick each subagent's reasoning level\"")) ?? "";
+    assert.match(levels, /a Gemini seat's top level, "no role runs above xhigh" \|/);
+    assert.match(levels, /Neither does a cap on one family's slug, such as a Gemini seat never running above `gemini-4-neon-high`: a panel seat runs at the thinking its `panel roles` row shows\./);
   }
 });
 
