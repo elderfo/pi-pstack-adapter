@@ -347,7 +347,7 @@ test("the host mapping sends an auto or inherit-parent role to general before th
   );
   assert.match(mapping, /`gemini-4-neon-high`, `grok-\*`, `gpt-\*`, other Cursor model slugs/);
   assert.doesNotMatch(mapping, /`hardest tasks`/);
-  assert.match(mapping, /Send that work to `strongest-judgment` at its own level instead\./);
+  assert.match(mapping, /Send that work to `strongest-judgment` at its own level instead, unless it is a panel seat\./);
 });
 
 test("every upstream role line maps to an adapter role, so no delegate falls back to its parent while general is set", () => {
@@ -426,7 +426,7 @@ test("the host mapping names the Gemini 4 Neon panel slug new in pstack 0.15.44,
     assert.doesNotMatch(mapping, /gemini-4-carbon/);
     const levels = mapping.split("\n").find((line) => line.startsWith("| \"pick each subagent's reasoning level\"")) ?? "";
     assert.match(levels, /a Gemini seat's top level, "no role runs above xhigh" \|/);
-    assert.match(levels, /Neither does a cap on one family's slug, such as a Gemini seat never running above `gemini-4-neon-high`: a panel seat runs at the thinking its `panel roles` row shows\./);
+    assert.match(levels, /at its own level instead, unless it is a panel seat\. A cap on one family's slug, such as a Gemini seat never running above `gemini-4-neon-high`, does not lower a configured level either\. A panel seat always runs on its own `panel roles` row, at the thinking that row shows, and never moves to `strongest-judgment`\./);
   }
 });
 

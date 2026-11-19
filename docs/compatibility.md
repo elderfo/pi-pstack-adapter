@@ -33,19 +33,20 @@ panel seat. `arena` stays `adapted` and `poteto-mode` stays `experimental`. No `
 ran end to end.
 
 On 2026-11-19 the release check verified pstack `0.15.44` at
-`e58dd043600587dbaf58ba315e7f2b38373eeb43` on native Windows (host `DESKTOP-Q6BA21A`, whose `hostname` prints
-`iracing-ui`, Git Bash 5.2.37 on MINGW64_NT-10.0-26300) with Git for Windows 2.53.0.windows.2, Node 22.23.2, and Pi 1.5.2, at
+`e58dd043600587dbaf58ba315e7f2b38373eeb43` on native Windows (machine label `DESKTOP-Q6BA21A`, where
+`hostname` prints `iracing-ui`, Git Bash 5.2.37 on MINGW64_NT-10.0-26300) with Git for Windows 2.53.0.windows.2, Node 22.23.2, and Pi 1.5.2, at
 adapter commit `287753668cf6bab863c47b1b78cfc5d517a6ebcd`:
 
 - The type check passes. The unit suite runs 260 tests: 256 pass, none fail, and 4 skip. The
-  integration suite runs 19 tests: 17 pass, none fail, and 2 skip. Each skip needs symbolic
-  links, which Windows allows only in Developer Mode or for an administrator.
+  integration suite runs 19 tests: 17 pass, none fail, and 2 skip. All six skips are
+  symbolic-link tests, which narrow on Windows because it allows symbolic links only in Developer
+  Mode or for an administrator.
 - The probe on an LF export of the certified commit matches Linux: 59 skills, two agents, no
   diagnostics, 57 bodies byte-identical, `setup-pstack` replaced, and none mismatched. The only
   files in the export holding a CR byte are its seven images.
 - The isolated install passes with the CLIProxyAPI scratch copy described below: 59 skills, with
-  no `subagent` or `ask_user`. The cold run needs `PISTACK_ALLOW_BOOTSTRAP` unset in the calling
-  shell, because the script passes it through.
+  no `subagent` or `ask_user`. The cold run needs `PISTACK_ALLOW_BOOTSTRAP` unset or `0` in the
+  calling shell, because the script passes it through.
 - No `executables` entry changed. `git` is bundled with Git for Windows; `gh`, which
   `poteto-mode` needs, is a separate GitHub CLI install there.
 
