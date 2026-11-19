@@ -45,8 +45,8 @@ adapter commit `287753668cf6bab863c47b1b78cfc5d517a6ebcd`:
   diagnostics, 57 bodies byte-identical, `setup-pstack` replaced, and none mismatched. The only
   files in the export holding a CR byte are its seven images.
 - The isolated install passes with the CLIProxyAPI scratch copy described below: 59 skills, with
-  no `subagent` or `ask_user`. The cold run needs `PISTACK_ALLOW_BOOTSTRAP` unset or `0` in the
-  calling shell, because the script passes it through.
+  no `subagent` or `ask_user`. The cold run must run without bootstrap permission, and the script
+  passes `PISTACK_ALLOW_BOOTSTRAP` through, so unset it or set it to `0` in the calling shell.
 - No `executables` entry changed. `git` is bundled with Git for Windows; `gh`, which
   `poteto-mode` needs, is a separate GitHub CLI install there.
 
