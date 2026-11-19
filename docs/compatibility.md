@@ -35,7 +35,7 @@ ran end to end.
 On 2026-11-19 the release check verified pstack `0.15.44` at
 `e58dd043600587dbaf58ba315e7f2b38373eeb43` on native Windows (machine label `DESKTOP-Q6BA21A`, where
 `hostname` prints `iracing-ui`, Git Bash 5.2.37 on MINGW64_NT-10.0-26300) with Git for Windows 2.53.0.windows.2, Node 22.23.2, and Pi 1.5.2, at
-adapter commit `287753668cf6bab863c47b1b78cfc5d517a6ebcd`:
+adapter commit `61a658c225052592910a8cb4ccf71dfbb4696edd`:
 
 - The type check passes. The unit suite runs 260 tests: 256 pass, none fail, and 4 skip. The
   integration suite runs 19 tests: 17 pass, none fail, and 2 skip. All six skips are
