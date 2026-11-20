@@ -44,7 +44,7 @@ test("statechart stays experimental at pstack 0.15.46, whose scripts start no /b
   assert.deepEqual(entry.executables, ["node", "sh", "dirname", "sed"]);
   assert.match(entry.note ?? "", /^Lowered from dependency-gated at pstack 0\.15\.34, because its new scripts crashed on native Windows/);
   assert.match(entry.note ?? "", /`spawn \/bin\/sh ENOENT`/);
-  assert.match(entry.note ?? "", /Since pstack 0\.15\.46 the scripts start no `\/bin\/sh`\. A Node helper stops TLC, with `taskkill` on Windows/);
+  assert.match(entry.note ?? "", /Since pstack 0\.15\.46 the scripts start no `\/bin\/sh`\. A Node helper force-stops TLC's process tree, with `taskkill \/t \/f` on Windows.*process-group `SIGKILL` elsewhere, then recursively deletes both staging folders, never the output folder\./);
   assert.match(entry.note ?? "", /`node --disable-warning=ExperimentalWarning <skill dir>\/scripts\/statechart\.ts` on native Windows/);
   assert.match(entry.note ?? "", /That fix has not run in Pi on any platform, so the tier stays experimental\./);
   assert.match(entry.note ?? "", /Verified end to end on a Linux checkout fixture at pstack 0\.15\.34, and again at pstack 0\.15\.36/);
