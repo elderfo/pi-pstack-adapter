@@ -35,6 +35,24 @@ process tree, with `taskkill /t /f` on Windows, and the body gives a `node` comm
 with Windows and runs only there, so it is not gated. `statechart` stays `experimental` until a
 Pi run shows the fix works. No `0.15.46` skill ran end to end.
 
+On 2026-11-20 the release check verified pstack `0.15.46` at
+`aaeb0ea3a0584995aa8f55ce44c6c5259414b896` on native Windows (machine label `DESKTOP-Q6BA21A`, where
+`hostname` prints `iracing-ui`, from Git Bash on MINGW64) with Git for Windows 2.53.0.windows.2,
+Node 22.23.2, and Pi 1.5.2, at adapter commit `1dd2c8d8a9f37e210ec9c511b527c5adfdd4daad`:
+
+- The type check passes. The unit suite runs 260 tests: 256 pass, none fail, and 4 skip. The
+  integration suite runs 19 tests: 17 pass, none fail, and 2 skip. All six skips are
+  symbolic-link tests, which narrow on Windows because it allows symbolic links only in Developer
+  Mode or for an administrator.
+- The probe on an LF export of the certified commit matches Linux: 59 skills, two agents, no
+  diagnostics, 57 bodies byte-identical, `setup-pstack` replaced, and none mismatched.
+- The isolated install passes with the CLIProxyAPI scratch copy described below, run with
+  `PISTACK_ALLOW_BOOTSTRAP` unset: 59 skills, with no `subagent` or `ask_user`.
+- No `executables` entry changed. Git Bash finds every gated executable of the changed skills.
+  Git for Windows bundles `git`, `sh`, `dirname`, and `sed`; `gh` and `node` are separate installs
+  there. `statechart`'s new cleanup runs `taskkill`, which ships with Windows in `system32`.
+  No `statechart` run on Windows has tested the fix.
+
 pstack `0.15.44` was certified on Linux by the unattended release check. No skill or agent was
 added or removed, no tier changed, and no helper script changed. Upstream replaced the Gemini
 panel seat, `gemini-4-carbon-high`, with `gemini-4-neon-high` in the `arena`, `poteto-mode`, and
