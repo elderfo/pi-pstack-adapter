@@ -109,7 +109,8 @@ test("arena is adapted after a pstack 0.15.36 run with a cross-family judge, and
   assert.match(entry.note ?? "", /since pstack 0\.15\.42 from another vendor, where Fable and the other Claude models are one vendor/);
   assert.match(entry.note ?? "", /since pstack 0\.15\.43 its default judge pool is one Opus and one Gemini model/);
   assert.match(entry.note ?? "", /the body no longer says to try its default pool when no configured entry qualifies/);
-  assert.match(entry.note ?? "", /Neither the pstack 0\.15\.42 vendor rule nor the pstack 0\.15\.43 text has run in Pi\./);
+  assert.match(entry.note ?? "", /Since pstack 0\.15\.44 its default Gemini seat in both lists is `gemini-4-neon-high` instead of `gemini-4-carbon-high`\. In Pi the seats come from the configured panels/);
+  assert.match(entry.note ?? "", /Neither the pstack 0\.15\.42 vendor rule nor the pstack 0\.15\.43 and 0\.15\.44 text has run in Pi\./);
   assert.equal(docsRow("arena"), `| \`arena\` | \`/skill:pistack-arena\` | \`delegation\` | \`git\` | ${entry.note} |`);
 });
 
@@ -137,6 +138,7 @@ test("poteto-mode stays experimental, names the worker kickoff, and says Orchest
   assert.match(entry.note ?? "", /Project tracker and Project store, and forking a worker with its built state, have no Pi equivalent/);
   assert.match(entry.note ?? "", /the since-deleted Orchestrate playbook ran a two-unit program in a linked worktree.*no pstack 0\.15\.43 playbook has run in Pi\./);
   assert.match(entry.note ?? "", /`# defaults: 3` since pstack 0\.15\.43/);
+  assert.match(entry.note ?? "", /Since pstack 0\.15\.44 its default panel's Gemini seat is `gemini-4-neon-high`.*that cap does not lower a configured Pi seat.*That text has not run in Pi\./);
   assert.equal(docsRow("poteto-mode"), `| \`poteto-mode\` | \`/skill:pistack-poteto-mode\` | \`delegation\`, \`structured-question\` | \`git\`, \`gh\` | ${entry.note} |`);
 });
 

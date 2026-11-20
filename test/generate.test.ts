@@ -345,9 +345,9 @@ test("the host mapping sends an auto or inherit-parent role to general before th
     mapping,
     /\| a role line valued `auto` or `inherit-parent` \| an unconfigured role\. Pass `pstack:<role>` as for any role\. The adapter uses the `general` role, and lets the child inherit the parent model only when `general` is unconfigured too\. \|/,
   );
-  assert.match(mapping, /`gemini-4-carbon-high`, `grok-\*`, `gpt-\*`, other Cursor model slugs/);
+  assert.match(mapping, /`gemini-4-neon-high`, `grok-\*`, `gpt-\*`, other Cursor model slugs/);
   assert.doesNotMatch(mapping, /`hardest tasks`/);
-  assert.match(mapping, /Send that work to `strongest-judgment` at its own level instead\./);
+  assert.match(mapping, /Send the hardest non-panel work to `strongest-judgment` at its own level instead\./);
 });
 
 test("every upstream role line maps to an adapter role, so no delegate falls back to its parent while general is set", () => {
@@ -396,7 +396,7 @@ test("the host mapping covers Cursor vocabulary new in pstack 0.15.23", () => {
   const result = run({ pluginDir, cacheRoot: join(root, "cache") });
   const mapping = readFileSync(join(result.outDir, "adapter", "host-mapping.md"), "utf8");
 
-  assert.match(mapping, /\| `claude-opus-5-5-xhigh-fast`, `claude-fable-5-2-high`, `gemini-4-carbon-high`, `grok-\*`, `gpt-\*`, other Cursor model slugs \|/);
+  assert.match(mapping, /\| `claude-opus-5-5-xhigh-fast`, `claude-fable-5-2-high`, `gemini-4-neon-high`, `grok-\*`, `gpt-\*`, other Cursor model slugs \|/);
   assert.doesNotMatch(mapping, /gpt-5\.6-sol-max/);
   assert.match(mapping, /\| a Custom Mode, .* \| `\/pistack-mode on`/);
   assert.match(mapping, /\| searching `~\/\.cursor\/plugins\/` .* `pistack-poteto-mode\/SKILL\.md` to any `pistack-poteto-agent`/);
@@ -411,9 +411,23 @@ test("the host mapping covers the default models and setup marker new in pstack 
   const mapping = hostMappingDocument("pistack", "t3");
   const rowFor = (start: string) => mapping.split("\n").find((line) => line.startsWith(start)) ?? "";
 
-  assert.match(rowFor("| `claude-opus-5-5-xhigh-fast`"), /`claude-fable-5-2-high`, `gemini-4-carbon-high`.* \| the role models configured by `\/skill:pistack-setup`/);
+  assert.match(rowFor("| `claude-opus-5-5-xhigh-fast`"), /`claude-fable-5-2-high`, `gemini-4-neon-high`.* \| the role models configured by `\/skill:pistack-setup`/);
   assert.match(rowFor("| the rule's `# defaults: 3` or `# defaults: 2` line"), /\| does not apply\..*Do not tell the user to rerun setup for this\. \|$/);
   assert.match(rowFor("| panel role lines `arena runners`"), /`claude-fable-\*`, `claude-\*`, `gemini-\*`.*Apply the body's own family and vendor rules to those ids\./);
+});
+
+test("the host mapping names the Gemini 4 Neon panel slug new in pstack 0.15.44, not the retired Carbon slug", () => {
+  for (const delegation of ["t3", "pi-subagents"] as const) {
+    const mapping = hostMappingDocument("pistack", delegation);
+    const row = mapping.split("\n").find((line) => line.startsWith("| `claude-opus-5-5-xhigh-fast`")) ?? "";
+
+    assert.match(row, /`gemini-4-neon-high`.* \| the role models configured by `\/skill:pistack-setup`/);
+    assert.match(row, /An effort word in a slug, such as `-xhigh` or `-max`, is not a model id\./);
+    assert.doesNotMatch(mapping, /gemini-4-carbon/);
+    const levels = mapping.split("\n").find((line) => line.startsWith("| \"pick each subagent's reasoning level\"")) ?? "";
+    assert.match(levels, /a Gemini seat's top level, "no role runs above xhigh" \|/);
+    assert.match(levels, /Send the hardest non-panel work to `strongest-judgment` at its own level instead\. A cap on one family's slug, such as a Gemini seat never running above `gemini-4-neon-high`, does not lower a configured level either\. When a panel seat runs, use its own `panel roles` entry and the thinking shown there, never `strongest-judgment`\./);
+  }
 });
 
 test("the host mapping covers the worker kickoff, the agent model line, and the speed and level rules new in pstack 0.15.43", () => {
