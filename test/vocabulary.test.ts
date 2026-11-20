@@ -36,7 +36,7 @@ test("every Cursor term matches the upstream wording it was ported for", () => {
     "`claude-opus-5-5-xhigh-fast`": ["default `claude-opus-5-5-xhigh-fast`", "default `claude-opus-5-5-xhigh`"],
     "`grok-*`": ["default `grok-4.7-xhigh-fast`"],
     "`gpt-*`": ["gpt-5.6-sol-max"],
-    "`gemini-4-neon-high`": ["one runner each on `claude-fable-5-2-high`, `claude-opus-5-5-high-fast`, and `gemini-4-neon-high`"],
+    "`gemini-4-neon-xhigh`": ["one runner each on `claude-fable-5-2-high`, `claude-opus-5-5-high-fast`, and `gemini-4-neon-xhigh`"],
     "`inherit-parent`": ["`auto` or `inherit-parent`"],
     "`~/.cursor/rules/pstack-models.mdc`": ["`~/.cursor/rules/pstack-models.mdc`"],
     "`.cursor/skills/`": ["under `.cursor/skills/`"],

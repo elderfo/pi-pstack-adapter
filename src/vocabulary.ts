@@ -27,7 +27,7 @@ export const CURSOR_TERMS: readonly CursorTerm[] = [
   { key: "`claude-opus-5-5-xhigh-fast`", pattern: /\bclaude-[a-z]+-\d/ },
   { key: "`grok-*`", pattern: /\bgrok-\d/ },
   { key: "`gpt-*`", pattern: /\bgpt-\d/ },
-  { key: "`gemini-4-neon-high`", pattern: /\bgemini-\d/ },
+  { key: "`gemini-4-neon-xhigh`", pattern: /\bgemini-\d/ },
   { key: "`inherit-parent`", pattern: /inherit-parent/ },
   { key: "`~/.cursor/rules/pstack-models.mdc`", pattern: /pstack-models\.mdc/ },
   { key: "`.cursor/skills/`", pattern: /\.cursor\/skills/ },
