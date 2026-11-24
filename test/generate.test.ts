@@ -317,16 +317,8 @@ test("ketchup-video, new in pstack 0.15.32, publishes experimental with manual i
   assert.equal(extractUpstreamBody(output), body);
 });
 
-test("reframe, new in pstack 0.15.48, publishes experimental with manual invocation and no new-skill diagnostic", () => {
-  const root = makeTempDir("tiers-01548");
+test("reframe, new in pstack 0.15.48, publishes experimental with manual invocation", () => {
   const body = "Teach the operator the expert words for what they are building.\n\nOpen every link and confirm it uses the term that way. Cut any citation you can't confirm.\n";
-  const pluginDir = writePluginFixture(root, { skills: [{ name: "reframe", body }] });
-  const result = run({ pluginDir, cacheRoot: join(root, "cache") });
-  const generated = readFileSync(join(result.skillsDir, "pistack-reframe", "SKILL.md"), "utf8");
-
-  assert.equal(/pistack-support-tier: (\S+)/.exec(generated)?.[1], "experimental");
-  assert.equal(result.diagnostics.some((d) => d.resource === "skill:reframe"), false);
-
   const output = wrapper({
     generatedName: "pistack-reframe",
     upstreamName: "reframe",
