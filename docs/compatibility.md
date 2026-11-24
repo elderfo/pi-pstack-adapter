@@ -30,6 +30,22 @@ needs a web extension or a command such as `curl`. `poteto-help`'s routing table
 `reframe` row. Upstream's `TERMS` list and Claude Code harness did not change, so the host
 mapping did not change. No `0.15.48` skill ran end to end.
 
+On 2026-11-24 the release check verified pstack `0.15.48` at
+`ca782ed8b3c2c521cead8e1720d55c3a5dbf2347` on native Windows (machine label `DESKTOP-Q6BA21A`, where
+`hostname` prints `iracing-ui`, from Git Bash on MINGW64) with Git for Windows 2.53.0.windows.2,
+Node 22.23.2, and Pi 1.6.0, at adapter commit `629f14cc58bc85fbd4e67e03b4e5cf9b7a51ab29`:
+
+- The type check passes. The unit suite runs 262 tests: 258 pass, none fail, and 4 skip. The
+  integration suite runs 20 tests: 18 pass, none fail, and 2 skip. All six skips are
+  symbolic-link tests, which narrow on Windows because it allows symbolic links only in Developer
+  Mode or for an administrator.
+- The probe on an LF export of the certified commit matches Linux: 60 skills, two agents, no
+  diagnostics, 58 bodies byte-identical, `setup-pstack` replaced, and none mismatched.
+- The isolated install passes with the CLIProxyAPI scratch copy described below, run with
+  `PISTACK_ALLOW_BOOTSTRAP` unset: 60 skills, with no `subagent` or `ask_user`.
+- No `executables` entry changed; `reframe` gates on none. Its note names `curl` as one way to
+  check its links, and Git for Windows bundles `curl` in `/mingw64/bin`.
+
 pstack `0.15.46` was certified on Linux by the unattended release check. No skill or agent was
 added or removed, and no tier changed. Upstream moved the default Gemini panel seat from
 `gemini-4-neon-high` to `gemini-4-neon-xhigh` in the `arena`, `poteto-mode`, and `setup-pstack`
