@@ -317,6 +317,24 @@ test("ketchup-video, new in pstack 0.15.32, publishes experimental with manual i
   assert.equal(extractUpstreamBody(output), body);
 });
 
+test("reframe, new in pstack 0.15.48, publishes experimental with manual invocation", () => {
+  const body = "Teach the operator the expert words for what they are building.\n\nOpen every link and confirm it uses the term that way. Cut any citation you can't confirm.\n";
+  const output = wrapper({
+    generatedName: "pistack-reframe",
+    upstreamName: "reframe",
+    frontmatter: { name: "reframe", description: "Teach the expert words. Use for /reframe.", "disable-model-invocation": "true" },
+    entry: entryFor("reframe"),
+    namespace: "pistack",
+    adapterVersion: "test",
+    body,
+  });
+  assert.match(output, /^  pistack-support-tier: experimental$/m);
+  assert.match(output, /^disable-model-invocation: true$/m);
+  assert.match(output, /Stock Pi has no web tool/);
+  assert.doesNotMatch(output, /Requires these executables on PATH/);
+  assert.equal(extractUpstreamBody(output), body);
+});
+
 test("the host mapping covers Cursor vocabulary new in pstack 0.15.25", () => {
   const root = makeTempDir("host-mapping-01525");
   const pluginDir = writePluginFixture(root, { skills: [{ name: "unslop", body: "b\n" }] });

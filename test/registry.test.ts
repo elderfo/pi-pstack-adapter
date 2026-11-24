@@ -87,6 +87,21 @@ test("ketchup-video, new in pstack 0.15.32, stays experimental with no gates", (
   assert.ok(tables.find((section) => section.startsWith("experimental"))?.includes(row ?? ""));
 });
 
+test("reframe, new in pstack 0.15.48, stays experimental with no gates and names its unrun link check", () => {
+  const entry = entryFor("reframe");
+  assert.equal(entry.tier, "experimental");
+  assert.deepEqual(entry.capabilities, []);
+  assert.deepEqual(entry.executables, []);
+  assert.match(entry.note ?? "", /^New in pstack 0\.15\.48\. Manual invocation only/);
+  assert.match(entry.note ?? "", /It does not do the task\./);
+  assert.match(entry.note ?? "", /Stock Pi has no web tool/);
+  assert.match(entry.note ?? "", /It has not run in Pi\.$/);
+  assert.equal(docsRow("reframe"), `| \`reframe\` | \`/skill:pistack-reframe\` | - | - | ${entry.note} |`);
+  assert.ok(docsSection("experimental")?.includes(docsRow("reframe") ?? "\0"));
+  assert.match(entryFor("poteto-help").note ?? "", /Since pstack 0\.15\.48 its routing table also sends .* to reframe, which is experimental\./);
+  assert.equal(docsRow("poteto-help"), `| \`poteto-help\` | \`/skill:pistack-poteto-help\` | - | - | ${entryFor("poteto-help").note} |`);
+});
+
 function docsRow(name: string): string | undefined {
   const docs = readFileSync(join(import.meta.dirname, "..", "docs", "compatibility.md"), "utf8");
   return docs.split("\n").find((line) => line.startsWith(`| \`${name}\` |`));
