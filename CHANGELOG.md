@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. release-please writes new entries from Conventional Commit PR titles.
 
+## [0.13.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.12.0...v0.13.0) (2026-11-24)
+
+
+### Features
+
+* **pstack:** certify pstack 0.15.48 with reframe ([#52](https://github.com/elderfo/pi-pstack-adapter/issues/52)) ([74176b7](https://github.com/elderfo/pi-pstack-adapter/commit/74176b7558e48fa5eeef4934b48bfa960bc64e8a))
+
 ## [0.12.0](https://github.com/elderfo/pi-pstack-adapter/compare/v0.11.0...v0.12.0) (2026-11-21)
 
 
